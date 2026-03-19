@@ -80,10 +80,10 @@ async def get_channel_info_bot_api(channel_username: str) -> dict | None:
         return None
 
 
-async def get_channel_stats_telethon(channel_username: str, message_limit: int = 200) -> dict | None:
+async def get_channel_stats_telethon(channel_username: str, message_limit: int = 1000) -> dict | None:
     """Get detailed channel stats using Telethon (MTProto).
 
-    Collects historical daily stats from messages for graphs.
+    Collects historical daily stats from messages for graphs (~30 days).
     Returns: {avg_views, er, avg_reach, adv_reach_12h, adv_reach_24h, adv_reach_48h,
               channel_age_months, daily_stats: [{date, views, subscribers}]}
     """

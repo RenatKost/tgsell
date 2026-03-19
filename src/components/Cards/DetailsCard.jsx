@@ -27,14 +27,14 @@ const DetailsCard = ({ channel, onBuy }) => {
 						{channel.channel_name?.[0] || '?'}
 					</div>
 				)}
-				<div>
+				<div className='min-w-0'>
 					<h5 className='font-bold mb-6'>{channel.channel_name}</h5>
 					{channel.telegram_link && (
 						<a
 							href={channel.telegram_link}
 							target='_blank'
 							rel='noopener noreferrer'
-							className='border-2 border-sky-500 p-2 rounded-md text-sky-500 hover:bg-sky-500 hover:text-white duration-500'
+							className='border-2 border-sky-500 px-3 py-2 rounded-md text-sky-500 hover:bg-sky-500 hover:text-white duration-500 whitespace-nowrap text-sm'
 						>
 							переглянути канал
 						</a>
@@ -55,18 +55,18 @@ const DetailsCard = ({ channel, onBuy }) => {
 				</div>
 				<p className='text-gray-500'>{formatAge(channel.age)}</p>
 			</div>
-			<div className='border-b-[1px] border-gray-400 p-2 grid lg:grid-cols-2 mt-2'>
-				<div className='border-gray-400 lg:border-r-[1px] border-b-[1px] lg:border-b-[0]'>
-					<div className='flex gap-2 mb-2'>
+			<div className='border-b-[1px] border-gray-400 p-2 grid grid-cols-2 gap-4 mt-2'>
+				<div className='border-r-[1px] border-gray-400 pr-4'>
+					<div className='flex items-center gap-2 mb-2'>
 						<FontAwesomeIcon icon={faEye} />
 						<p className='font-bold'>Переглядів</p>
 					</div>
-					<p className='text-gray-500 mb-2 lg:mb-0'>
+					<p className='text-gray-500'>
 						{channel.avg_views?.toLocaleString('uk-UA') || '—'}
 					</p>
 				</div>
-				<div className='sm:pl-2 pt-2 mt-2 lg:pt-0 lg:mt-0'>
-					<div className='flex gap-2 mb-2 '>
+				<div>
+					<div className='flex items-center gap-2 mb-2'>
 						<FontAwesomeIcon icon={faBarChart} />
 						<p className='font-bold'>ER</p>
 					</div>
