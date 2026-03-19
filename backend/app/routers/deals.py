@@ -8,9 +8,9 @@ from sqlalchemy.orm import selectinload
 from app.config import settings
 from app.database import get_db
 from app.models.channel import Channel, ChannelStatus
-from app.models.deal import Deal, DealStatus
+from app.models.deal import Deal, DealMessage, DealStatus
 from app.models.user import User
-from app.schemas.deal import DealCreate, DealDisputeRequest, DealResponse
+from app.schemas.deal import DealCreate, DealDisputeRequest, DealMessageCreate, DealMessageResponse, DealResponse
 from app.services.escrow import generate_escrow_wallet
 from app.utils.security import get_current_user
 
@@ -195,3 +195,86 @@ async def open_dispute(
     await db.refresh(deal)
 
     return _deal_to_response(deal, deal.channel, deal.buyer, deal.seller)
+
+
+# ===== Deal Messages (Chat) =====
+
+@router.get("/{deal_id}/messages", response_model=list[DealMessageResponse])
+async def get_deal_messages(
+    deal_id: int,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Get all messages for a deal."""
+    result = await db.execute(select(Deal).where(Deal.id == deal_id))
+    deal = result.scalar_one_or_none()
+    if not deal:
+        raise HTTPException(status_code=404, detail="Deal not found")
+    if deal.buyer_id != user.id and deal.seller_id != user.id and user.role not in ("admin", "moderator"):
+        raise HTTPException(status_code=403, detail="Access denied")
+
+    result = await db.execute(
+        select(DealMessage)
+        .where(DealMessage.deal_id == deal_id)
+        .order_by(DealMessage.created_at.asc())
+    )
+    messages = result.scalars().all()
+
+    # Load sender names
+    sender_ids = {m.sender_id for m in messages}
+    senders = {}
+    if sender_ids:
+        res = await db.execute(select(User).where(User.id.in_(sender_ids)))
+        senders = {u.id: u for u in res.scalars().all()}
+
+    return [
+        DealMessageResponse(
+            id=m.id,
+            deal_id=m.deal_id,
+            sender_id=m.sender_id,
+            sender_name=senders.get(m.sender_id, None) and senders[m.sender_id].first_name,
+            text=m.text,
+            created_at=m.created_at,
+        )
+        for m in messages
+    ]
+
+
+@router.post("/{deal_id}/messages", response_model=DealMessageResponse, status_code=status.HTTP_201_CREATED)
+async def send_deal_message(
+    deal_id: int,
+    body: DealMessageCreate,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Send a message in deal chat."""
+    result = await db.execute(select(Deal).where(Deal.id == deal_id))
+    deal = result.scalar_one_or_none()
+    if not deal:
+        raise HTTPException(status_code=404, detail="Deal not found")
+    if deal.buyer_id != user.id and deal.seller_id != user.id and user.role not in ("admin", "moderator"):
+        raise HTTPException(status_code=403, detail="Access denied")
+
+    text = body.text.strip()
+    if not text:
+        raise HTTPException(status_code=400, detail="Message cannot be empty")
+    if len(text) > 2000:
+        raise HTTPException(status_code=400, detail="Message too long")
+
+    message = DealMessage(
+        deal_id=deal_id,
+        sender_id=user.id,
+        text=text,
+    )
+    db.add(message)
+    await db.commit()
+    await db.refresh(message)
+
+    return DealMessageResponse(
+        id=message.id,
+        deal_id=message.deal_id,
+        sender_id=message.sender_id,
+        sender_name=user.first_name,
+        text=message.text,
+        created_at=message.created_at,
+    )

@@ -35,3 +35,18 @@ class DealDisputeRequest(BaseModel):
 class DealResolveRequest(BaseModel):
     resolution: str  # "refund_buyer" or "release_seller"
     comment: str | None = None
+
+
+class DealMessageCreate(BaseModel):
+    text: str
+
+
+class DealMessageResponse(BaseModel):
+    id: int
+    deal_id: int
+    sender_id: int
+    sender_name: str | None = None
+    text: str
+    created_at: datetime
+
+    model_config = {"from_attributes": True}

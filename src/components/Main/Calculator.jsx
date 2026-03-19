@@ -109,20 +109,18 @@ const Calculator = () => {
 	};
 
 	const formatCurrency = number => {
-		const formattedNumber = new Intl.NumberFormat('uk-UA', {
-			style: 'currency',
-			currency: 'UAH',
-		}).format(number);
-
-		return formattedNumber;
+		return new Intl.NumberFormat('uk-UA', {
+			minimumFractionDigits: 0,
+			maximumFractionDigits: 2,
+		}).format(number) + ' USDT';
 	};
 
 	return (
 		<div className='mt-10'>
 			<div className='mb-10'>
-				<h3 className='font-bold text-xl'>
-					TgSalle допоможе тобі визначити вартість каналу
-				</h3>
+				<h2 className='font-bold text-xl'>
+					Калькулятор вартості Telegram каналу
+				</h2>
 			</div>
 			<form className='grid sm:grid-cols-2 gap-8'>
 				<div>
@@ -186,12 +184,12 @@ const Calculator = () => {
 					/>
 				</div>
 				<div>
-					<label>Місячний дохід (грн):</label>
+					<label>Місячний дохід (USDT):</label>
 					<input
 						className='focus:border-[#3498db] block border-gray-300 border px-3 py-4 rounded-md mt-1 w-full '
 						name='applications'
 						type='text'
-						placeholder='0 грн'
+						placeholder='0 USDT'
 						data-coef={1}
 						onChange={handleIncomeChange}
 					/>

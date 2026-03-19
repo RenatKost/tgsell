@@ -4,7 +4,7 @@ import {
 	faClock,
 	faEye,
 	faHeart,
-	faHryvniaSign,
+	faDollarSign,
 	faListAlt,
 	faUsers,
 	faWallet,
@@ -92,10 +92,10 @@ const CatalogCard = ({ channel }) => {
 			{channel.monthly_income != null && (
 				<div className='border-b-[1px] border-gray-400 p-2 mt-2'>
 					<div className='flex items-center gap-2 mb-2'>
-						<FontAwesomeIcon icon={faHryvniaSign} />
-						<p className='font-bold'>Прибуток в місяць</p>
-					</div>
-					<p className='text-gray-500'>{channel.monthly_income?.toLocaleString('uk-UA')} ₴</p>
+					<FontAwesomeIcon icon={faDollarSign} />
+					<p className='font-bold'>Прибуток в місяць</p>
+				</div>
+				<p className='text-gray-500'>{channel.monthly_income?.toLocaleString('uk-UA')} USDT</p>
 				</div>
 			)}
 			<div className='border-b-[1px] border-gray-400 p-2 mt-2'>
@@ -103,7 +103,7 @@ const CatalogCard = ({ channel }) => {
 					<FontAwesomeIcon icon={faWallet} />
 					<p className='font-bold'>Ціна</p>
 				</div>
-				<p className='text-gray-500'>{channel.price?.toLocaleString('uk-UA') || '—'} ₴</p>
+				<p className='text-gray-500'>{channel.price?.toLocaleString('uk-UA') || '—'} USDT</p>
 			</div>
 			<div className='flex justify-center my-6'>
 				<NavLink

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { dealsAPI } from '../services/api';
 import { useAuth } from '../context/AppContext';
@@ -11,6 +11,114 @@ const STATUS_LABELS = {
 	completed: { text: 'Завершено', color: 'bg-green-500' },
 	disputed: { text: 'Спір', color: 'bg-red-500' },
 	cancelled: { text: 'Скасовано', color: 'bg-gray-500' },
+};
+
+const DealChat = ({ dealId, userId }) => {
+	const [messages, setMessages] = useState([]);
+	const [newMessage, setNewMessage] = useState('');
+	const [sending, setSending] = useState(false);
+	const messagesEndRef = useRef(null);
+
+	const fetchMessages = async () => {
+		try {
+			const { data } = await dealsAPI.getMessages(dealId);
+			setMessages(data);
+		} catch (err) {
+			// silent
+		}
+	};
+
+	useEffect(() => {
+		fetchMessages();
+		const interval = setInterval(fetchMessages, 5000);
+		return () => clearInterval(interval);
+	}, [dealId]);
+
+	useEffect(() => {
+		messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+	}, [messages]);
+
+	const handleSend = async (e) => {
+		e.preventDefault();
+		const text = newMessage.trim();
+		if (!text || sending) return;
+		setSending(true);
+		try {
+			await dealsAPI.sendMessage(dealId, text);
+			setNewMessage('');
+			await fetchMessages();
+		} catch (err) {
+			// silent
+		} finally {
+			setSending(false);
+		}
+	};
+
+	return (
+		<div className='bg-white rounded-md shadow-lg p-6 mb-6'>
+			<h3 className='font-bold text-lg mb-4'>💬 Чат угоди</h3>
+			<div className='bg-gray-50 rounded-md p-4 h-80 overflow-y-auto mb-4'>
+				{messages.length === 0 && (
+					<p className='text-gray-400 text-center mt-20 text-sm'>
+						Повідомлень ще немає. Напишіть першими!
+					</p>
+				)}
+				{messages.map((msg) => {
+					const isOwn = msg.sender_id === userId;
+					return (
+						<div
+							key={msg.id}
+							className={`mb-3 flex ${isOwn ? 'justify-end' : 'justify-start'}`}
+						>
+							<div
+								className={`max-w-[75%] px-4 py-2 rounded-lg ${
+									isOwn
+										? 'bg-[#3498db] text-white rounded-br-none'
+										: 'bg-gray-200 text-gray-800 rounded-bl-none'
+								}`}
+							>
+								{!isOwn && (
+									<p className='text-xs font-bold mb-1 opacity-70'>
+										{msg.sender_name || 'Користувач'}
+									</p>
+								)}
+								<p className='text-sm whitespace-pre-wrap break-words'>{msg.text}</p>
+								<p className={`text-xs mt-1 ${isOwn ? 'text-blue-100' : 'text-gray-400'}`}>
+									{new Date(msg.created_at).toLocaleString('uk-UA', {
+										hour: '2-digit',
+										minute: '2-digit',
+										day: '2-digit',
+										month: '2-digit',
+									})}
+								</p>
+							</div>
+						</div>
+					);
+				})}
+				<div ref={messagesEndRef} />
+			</div>
+			<form onSubmit={handleSend} className='flex gap-2'>
+				<input
+					type='text'
+					value={newMessage}
+					onChange={(e) => setNewMessage(e.target.value)}
+					placeholder='Напишіть повідомлення...'
+					maxLength={2000}
+					className='flex-1 border border-gray-300 rounded-md px-4 py-2 focus:border-[#3498db] focus:outline-none'
+				/>
+				<button
+					type='submit'
+					disabled={sending || !newMessage.trim()}
+					className='bg-[#3498db] text-white px-6 py-2 rounded-md font-bold hover:bg-blue-600 duration-300 disabled:opacity-50'
+				>
+					{sending ? '...' : 'Надіслати'}
+				</button>
+			</form>
+			<p className='text-gray-400 text-xs mt-2'>
+				Усі повідомлення зберігаються для арбітражу
+			</p>
+		</div>
+	);
 };
 
 const DealPage = () => {
@@ -176,7 +284,7 @@ const DealPage = () => {
 			{/* Telegram Deal Group */}
 			{deal.deal_group_chat_id && (
 				<div className='bg-white rounded-md shadow-lg p-6 mb-6 text-center'>
-					<h3 className='font-bold text-lg mb-4'>💬 Чат угоди</h3>
+					<h3 className='font-bold text-lg mb-4'>Чат в Telegram</h3>
 					<p className='text-gray-500 mb-4'>Перейдіть до групи угоди в Telegram для спілкування з іншою стороною та ботом.</p>
 					<a
 						href={`https://t.me/c/${deal.deal_group_chat_id}`}
@@ -188,6 +296,9 @@ const DealPage = () => {
 					</a>
 				</div>
 			)}
+
+			{/* Deal Chat */}
+			<DealChat dealId={deal.id} userId={user?.id} />
 
 			{/* Timeline */}
 			<div className='bg-white rounded-md shadow-lg p-6'>

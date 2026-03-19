@@ -60,6 +60,7 @@ class Deal(Base):
     buyer = relationship("User", back_populates="deals_as_buyer", foreign_keys=[buyer_id])
     seller = relationship("User", back_populates="deals_as_seller", foreign_keys=[seller_id])
     transactions = relationship("Transaction", back_populates="deal", cascade="all, delete-orphan")
+    messages = relationship("DealMessage", back_populates="deal", cascade="all, delete-orphan", order_by="DealMessage.created_at")
 
 
 class Transaction(Base):
@@ -78,3 +79,16 @@ class Transaction(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
 
     deal = relationship("Deal", back_populates="transactions")
+
+
+class DealMessage(Base):
+    __tablename__ = "deal_messages"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    deal_id: Mapped[int] = mapped_column(ForeignKey("deals.id", ondelete="CASCADE"), index=True)
+    sender_id: Mapped[int] = mapped_column(ForeignKey("users.id"))
+    text: Mapped[str] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+
+    deal = relationship("Deal", back_populates="messages")
+    sender = relationship("User")

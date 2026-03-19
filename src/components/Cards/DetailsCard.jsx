@@ -3,7 +3,7 @@ import {
 	faClock,
 	faEye,
 	faHeart,
-	faHryvniaSign,
+	faDollarSign,
 	faListAlt,
 	faWallet,
 } from '@fortawesome/free-solid-svg-icons';
@@ -77,12 +77,12 @@ const DetailsCard = ({ channel, onBuy }) => {
 			</div>
 			<div className='border-b-[1px] border-gray-400 p-2 mt-2'>
 				<div className='flex items-center gap-2 mb-2'>
-					<FontAwesomeIcon icon={faHryvniaSign} />
+					<FontAwesomeIcon icon={faDollarSign} />
 					<p className='font-bold'>Прибуток в місяць</p>
 				</div>
 				<p className='text-gray-500'>
 					{channel.monthly_income
-						? `${channel.monthly_income.toLocaleString('uk-UA')} ₴`
+						? `${channel.monthly_income.toLocaleString('uk-UA')} USDT`
 						: '—'}
 				</p>
 			</div>

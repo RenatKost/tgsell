@@ -103,6 +103,12 @@ export const dealsAPI = {
 
 	dispute: (id, reason) =>
 		api.post(`/deals/${id}/dispute`, { reason }),
+
+	getMessages: (id) =>
+		api.get(`/deals/${id}/messages`),
+
+	sendMessage: (id, text) =>
+		api.post(`/deals/${id}/messages`, { text }),
 };
 
 // ===== Admin =====
