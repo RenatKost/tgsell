@@ -40,7 +40,7 @@ async def collect_stats_once():
                 # Save historical stats
                 stat_record = ChannelStats(
                     channel_id=channel.id,
-                    date=datetime.now(timezone.utc),
+                    date=datetime.utcnow(),
                     subscribers=stats.get("subscribers_count", 0),
                     avg_views=stats.get("avg_views", 0),
                     avg_reach=stats.get("avg_views", 0),

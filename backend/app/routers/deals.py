@@ -155,7 +155,7 @@ async def confirm_transfer(
         raise HTTPException(status_code=400, detail="Deal is not in paid status")
 
     deal.status = DealStatus.completed
-    deal.completed_at = datetime.now(timezone.utc)
+    deal.completed_at = datetime.utcnow()
 
     # Mark channel as sold
     deal.channel.status = ChannelStatus.sold

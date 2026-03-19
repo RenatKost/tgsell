@@ -41,7 +41,7 @@ async def check_payments_once():
 
                 if balance >= deal.amount_usdt:
                     deal.status = DealStatus.paid
-                    deal.paid_at = datetime.now(timezone.utc)
+                    deal.paid_at = datetime.utcnow()
 
                     # Record transaction
                     tx = Transaction(

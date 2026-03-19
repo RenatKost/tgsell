@@ -75,7 +75,7 @@ async def approve_channel(
     try:
         channel.status = ChannelStatus.approved
         channel.moderator_id = admin.id
-        channel.moderated_at = datetime.now(timezone.utc)
+        channel.moderated_at = datetime.utcnow()
         await db.commit()
         await db.refresh(channel)
         return ChannelResponse.model_validate(channel)
@@ -102,7 +102,7 @@ async def reject_channel(
     try:
         channel.status = ChannelStatus.rejected
         channel.moderator_id = admin.id
-        channel.moderated_at = datetime.now(timezone.utc)
+        channel.moderated_at = datetime.utcnow()
         channel.rejection_reason = reason
         await db.commit()
         await db.refresh(channel)
@@ -166,7 +166,7 @@ async def resolve_deal(
         deal.channel.status = ChannelStatus.approved
     elif body.resolution == "release_seller":
         deal.status = DealStatus.completed
-        deal.completed_at = datetime.now(timezone.utc)
+        deal.completed_at = datetime.utcnow()
         deal.channel.status = ChannelStatus.sold
         # TODO: release USDT to seller
     else:
