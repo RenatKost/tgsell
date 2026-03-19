@@ -142,6 +142,24 @@ async def create_channel(
             channel.avatar_url = stats["avatar_url"]
         if stats.get("channel_name"):
             channel.channel_name = stats["channel_name"]
+        if stats.get("adv_reach_12h"):
+            channel.adv_reach_12h = stats["adv_reach_12h"]
+        if stats.get("adv_reach_24h"):
+            channel.adv_reach_24h = stats["adv_reach_24h"]
+        if stats.get("adv_reach_48h"):
+            channel.adv_reach_48h = stats["adv_reach_48h"]
+
+        # Save initial ChannelStats record for graphs
+        from datetime import datetime as dt
+        stat_record = ChannelStats(
+            channel_id=channel.id,
+            date=dt.utcnow(),
+            subscribers=stats.get("subscribers_count", 0),
+            avg_views=stats.get("avg_views", 0),
+            avg_reach=stats.get("avg_views", 0),
+            er=stats.get("er", 0.0),
+        )
+        db.add(stat_record)
         await db.commit()
         await db.refresh(channel)
     except Exception as e:

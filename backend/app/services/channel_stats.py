@@ -159,6 +159,9 @@ async def collect_channel_stats(telegram_link: str) -> dict:
         "avg_views": None,
         "er": None,
         "avatar_url": None,
+        "adv_reach_12h": None,
+        "adv_reach_24h": None,
+        "adv_reach_48h": None,
     }
 
     # Step 1: Bot API (safe, always works)
@@ -174,5 +177,8 @@ async def collect_channel_stats(telegram_link: str) -> dict:
         result["subscribers_count"] = telethon_stats["subscribers"]
         result["avg_views"] = telethon_stats["avg_views"]
         result["er"] = telethon_stats["er"]
+        result["adv_reach_12h"] = telethon_stats.get("adv_reach_12h")
+        result["adv_reach_24h"] = telethon_stats.get("adv_reach_24h")
+        result["adv_reach_48h"] = telethon_stats.get("adv_reach_48h")
 
     return result

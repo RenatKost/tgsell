@@ -37,6 +37,9 @@ class Channel(Base):
     er: Mapped[float | None] = mapped_column(Float, nullable=True)
     daily_growth: Mapped[int | None] = mapped_column(Integer, nullable=True)
     age: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    adv_reach_12h: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    adv_reach_24h: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    adv_reach_48h: Mapped[int | None] = mapped_column(Integer, nullable=True)
 
     status: Mapped[ChannelStatus] = mapped_column(
         Enum(ChannelStatus), default=ChannelStatus.pending

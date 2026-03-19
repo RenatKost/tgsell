@@ -14,10 +14,12 @@ logger = logging.getLogger(__name__)
 
 
 async def collect_stats_once():
-    """Collect fresh stats for all approved channels."""
+    """Collect fresh stats for all active channels (pending + approved)."""
     async with async_session() as db:
         result = await db.execute(
-            select(Channel).where(Channel.status == ChannelStatus.approved)
+            select(Channel).where(
+                Channel.status.in_([ChannelStatus.approved, ChannelStatus.pending])
+            )
         )
         channels = result.scalars().all()
 
@@ -36,6 +38,12 @@ async def collect_stats_once():
                     channel.avatar_url = stats["avatar_url"]
                 if stats.get("channel_name"):
                     channel.channel_name = stats["channel_name"]
+                if stats.get("adv_reach_12h"):
+                    channel.adv_reach_12h = stats["adv_reach_12h"]
+                if stats.get("adv_reach_24h"):
+                    channel.adv_reach_24h = stats["adv_reach_24h"]
+                if stats.get("adv_reach_48h"):
+                    channel.adv_reach_48h = stats["adv_reach_48h"]
 
                 # Save historical stats
                 stat_record = ChannelStats(

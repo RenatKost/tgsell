@@ -78,7 +78,47 @@ async def approve_channel(
         channel.moderated_at = datetime.utcnow()
         await db.commit()
         await db.refresh(channel)
+
+        # Refresh stats from Telegram on approve
+        try:
+            from app.services.channel_stats import collect_channel_stats
+            from app.models.channel import ChannelStats
+
+            stats = await collect_channel_stats(channel.telegram_link)
+            if stats.get("subscribers_count"):
+                channel.subscribers_count = stats["subscribers_count"]
+            if stats.get("avg_views"):
+                channel.avg_views = stats["avg_views"]
+            if stats.get("er"):
+                channel.er = stats["er"]
+            if stats.get("avatar_url"):
+                channel.avatar_url = stats["avatar_url"]
+            if stats.get("channel_name"):
+                channel.channel_name = stats["channel_name"]
+            if stats.get("adv_reach_12h"):
+                channel.adv_reach_12h = stats["adv_reach_12h"]
+            if stats.get("adv_reach_24h"):
+                channel.adv_reach_24h = stats["adv_reach_24h"]
+            if stats.get("adv_reach_48h"):
+                channel.adv_reach_48h = stats["adv_reach_48h"]
+
+            stat_record = ChannelStats(
+                channel_id=channel.id,
+                date=datetime.utcnow(),
+                subscribers=stats.get("subscribers_count", 0),
+                avg_views=stats.get("avg_views", 0),
+                avg_reach=stats.get("avg_views", 0),
+                er=stats.get("er", 0.0),
+            )
+            db.add(stat_record)
+            await db.commit()
+            await db.refresh(channel)
+        except Exception as e:
+            logger.warning(f"Stats refresh on approve failed for channel #{channel_id}: {e}")
+
         return ChannelResponse.model_validate(channel)
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error(f"Approve channel #{channel_id} failed: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Помилка підтвердження: {e}")

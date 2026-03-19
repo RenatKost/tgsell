@@ -38,6 +38,9 @@ class ChannelResponse(BaseModel):
     er: float | None
     daily_growth: int | None
     age: str | None
+    adv_reach_12h: int | None
+    adv_reach_24h: int | None
+    adv_reach_48h: int | None
     status: str
     created_at: datetime
 
