@@ -12,6 +12,13 @@ class Settings(BaseSettings):
     database_url: str = "postgresql+asyncpg://tgsell:tgsell@localhost:5432/tgsell"
     redis_url: str = "redis://localhost:6379/0"
 
+    @property
+    def async_database_url(self) -> str:
+        url = self.database_url
+        if url.startswith("postgresql://"):
+            url = url.replace("postgresql://", "postgresql+asyncpg://", 1)
+        return url
+
     # JWT
     jwt_secret_key: str = "change-me"
     jwt_algorithm: str = "HS256"
