@@ -1,0 +1,94 @@
+from fastapi import APIRouter, Depends, HTTPException, status
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.database import get_db
+from app.models.user import User
+from app.schemas.auth import (
+    RefreshRequest,
+    TelegramAuthData,
+    TokenResponse,
+    UserResponse,
+)
+from app.utils.security import (
+    create_access_token,
+    create_refresh_token,
+    get_current_user,
+    verify_telegram_auth,
+    verify_token,
+)
+
+router = APIRouter(prefix="/auth", tags=["auth"])
+
+
+@router.post("/telegram", response_model=TokenResponse)
+async def telegram_login(data: TelegramAuthData, db: AsyncSession = Depends(get_db)):
+    """Authenticate via Telegram Login Widget."""
+    # In production, verify the hash. Skip for demo mode.
+    auth_dict = data.model_dump()
+    is_demo = data.hash == "demo"
+
+    if not is_demo and not verify_telegram_auth(auth_dict):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid Telegram auth data",
+        )
+
+    # Find or create user
+    result = await db.execute(select(User).where(User.telegram_id == data.id))
+    user = result.scalar_one_or_none()
+
+    if not user:
+        user = User(
+            telegram_id=data.id,
+            username=data.username,
+            first_name=data.first_name,
+            avatar_url=data.photo_url,
+        )
+        db.add(user)
+        await db.commit()
+        await db.refresh(user)
+    else:
+        # Update profile info
+        user.username = data.username or user.username
+        user.first_name = data.first_name or user.first_name
+        user.avatar_url = data.photo_url or user.avatar_url
+        await db.commit()
+        await db.refresh(user)
+
+    access_token = create_access_token({"sub": str(user.id)})
+    refresh_token = create_refresh_token({"sub": str(user.id)})
+
+    return TokenResponse(
+        access_token=access_token,
+        refresh_token=refresh_token,
+        user=UserResponse.model_validate(user),
+    )
+
+
+@router.get("/me", response_model=UserResponse)
+async def get_me(user: User = Depends(get_current_user)):
+    """Get current authenticated user."""
+    return UserResponse.model_validate(user)
+
+
+@router.post("/refresh", response_model=TokenResponse)
+async def refresh_tokens(body: RefreshRequest, db: AsyncSession = Depends(get_db)):
+    """Refresh JWT tokens."""
+    payload = verify_token(body.refresh_token, expected_type="refresh")
+    user_id = payload.get("sub")
+
+    result = await db.execute(select(User).where(User.id == int(user_id)))
+    user = result.scalar_one_or_none()
+
+    if not user or not user.is_active:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="User not found")
+
+    access_token = create_access_token({"sub": str(user.id)})
+    refresh_token = create_refresh_token({"sub": str(user.id)})
+
+    return TokenResponse(
+        access_token=access_token,
+        refresh_token=refresh_token,
+        user=UserResponse.model_validate(user),
+    )
