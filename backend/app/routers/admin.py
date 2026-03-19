@@ -1,7 +1,8 @@
+import logging
 from datetime import datetime, timezone
 import os
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Body, Depends, HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
@@ -13,6 +14,8 @@ from app.models.user import User, UserRole
 from app.schemas.channel import ChannelResponse
 from app.schemas.deal import DealResolveRequest, DealResponse
 from app.utils.security import get_admin_user
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/admin", tags=["admin"])
 
@@ -69,19 +72,22 @@ async def approve_channel(
     if channel.status != ChannelStatus.pending:
         raise HTTPException(status_code=400, detail="Channel is not pending")
 
-    channel.status = ChannelStatus.approved
-    channel.moderator_id = admin.id
-    channel.moderated_at = datetime.now(timezone.utc)
-    await db.commit()
-    await db.refresh(channel)
-
-    return ChannelResponse.model_validate(channel)
+    try:
+        channel.status = ChannelStatus.approved
+        channel.moderator_id = admin.id
+        channel.moderated_at = datetime.now(timezone.utc)
+        await db.commit()
+        await db.refresh(channel)
+        return ChannelResponse.model_validate(channel)
+    except Exception as e:
+        logger.error(f"Approve channel #{channel_id} failed: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Помилка підтвердження: {e}")
 
 
 @router.post("/channels/{channel_id}/reject", response_model=ChannelResponse)
 async def reject_channel(
     channel_id: int,
-    reason: str = "",
+    reason: str = Body("", embed=True),
     admin: User = Depends(get_admin_user),
     db: AsyncSession = Depends(get_db),
 ):
@@ -93,14 +99,17 @@ async def reject_channel(
     if channel.status != ChannelStatus.pending:
         raise HTTPException(status_code=400, detail="Channel is not pending")
 
-    channel.status = ChannelStatus.rejected
-    channel.moderator_id = admin.id
-    channel.moderated_at = datetime.now(timezone.utc)
-    channel.rejection_reason = reason
-    await db.commit()
-    await db.refresh(channel)
-
-    return ChannelResponse.model_validate(channel)
+    try:
+        channel.status = ChannelStatus.rejected
+        channel.moderator_id = admin.id
+        channel.moderated_at = datetime.now(timezone.utc)
+        channel.rejection_reason = reason
+        await db.commit()
+        await db.refresh(channel)
+        return ChannelResponse.model_validate(channel)
+    except Exception as e:
+        logger.error(f"Reject channel #{channel_id} failed: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Помилка відхилення: {e}")
 
 
 @router.get("/deals", response_model=list[DealResponse])

@@ -29,10 +29,21 @@ async def list_channels(
     sort: str = Query("newest"),
     page: int = Query(1, ge=1),
     limit: int = Query(12, ge=1, le=100),
+    seller_id: int | None = Query(None),
+    status_filter: str | None = Query(None, alias="status"),
     db: AsyncSession = Depends(get_db),
 ):
-    """List approved channels with filters, search, sorting and pagination."""
-    query = select(Channel).where(Channel.status == ChannelStatus.approved)
+    """List channels with filters, search, sorting and pagination."""
+    query = select(Channel)
+
+    if seller_id:
+        # Show all channels for a specific seller (any status)
+        query = query.where(Channel.seller_id == seller_id)
+        if status_filter:
+            query = query.where(Channel.status == status_filter)
+    else:
+        # Public listing — only approved
+        query = query.where(Channel.status == ChannelStatus.approved)
 
     if search:
         query = query.where(Channel.channel_name.ilike(f"%{search}%"))
@@ -116,7 +127,25 @@ async def create_channel(
         logger.error(f"Channel creation failed: {e}")
         raise HTTPException(status_code=500, detail=f"Помилка збереження: {e}")
 
-    # TODO: trigger background task to fetch channel stats via Telethon/Bot API
+    # Fetch channel stats from Telegram
+    try:
+        from app.services.channel_stats import collect_channel_stats
+
+        stats = await collect_channel_stats(channel.telegram_link)
+        if stats.get("subscribers_count"):
+            channel.subscribers_count = stats["subscribers_count"]
+        if stats.get("avg_views"):
+            channel.avg_views = stats["avg_views"]
+        if stats.get("er"):
+            channel.er = stats["er"]
+        if stats.get("avatar_url"):
+            channel.avatar_url = stats["avatar_url"]
+        if stats.get("channel_name"):
+            channel.channel_name = stats["channel_name"]
+        await db.commit()
+        await db.refresh(channel)
+    except Exception as e:
+        logger.warning(f"Stats fetching failed for channel #{channel.id}: {e}")
 
     return ChannelResponse.model_validate(channel)
 
