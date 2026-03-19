@@ -9,7 +9,11 @@ import {
 } from '@fortawesome/free-solid-svg-icons';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 
+import { useAuth } from '../../context/AppContext';
+
 const DetailsCard = ({ channel, onBuy }) => {
+	const { isAuthenticated, favoriteIds, toggleFavorite } = useAuth();
+	const isFav = favoriteIds.has(channel.id);
 	const formatAge = (months) => {
 		if (!months) return '—';
 		const m = typeof months === 'string' ? parseInt(months, 10) : months;
@@ -104,7 +108,12 @@ const DetailsCard = ({ channel, onBuy }) => {
 				>
 					Купити
 				</button>
-				<button className='font-bold bg-[#3498db] text-white py-2 px-6 rounded-md shadow-md hover:text-red-500 duration-500'>
+				<button
+					onClick={() => isAuthenticated ? toggleFavorite(channel.id) : alert('Увійдіть щоб додати в обране')}
+					className={`font-bold py-2 px-6 rounded-md shadow-md duration-500 ${
+						isFav ? 'bg-red-500 text-white hover:bg-red-600' : 'bg-[#3498db] text-white hover:text-red-500'
+					}`}
+				>
 					<FontAwesomeIcon icon={faHeart} />
 				</button>
 			</div>

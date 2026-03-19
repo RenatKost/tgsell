@@ -1,5 +1,5 @@
 import { createContext, useCallback, useContext, useEffect, useState } from 'react';
-import { authAPI } from '../services/api';
+import { authAPI, favoritesAPI } from '../services/api';
 
 const AppContext = createContext();
 
@@ -8,6 +8,7 @@ const AppContextProvider = ({ children }) => {
 	const [user, setUser] = useState(null);
 	const [isAuthenticated, setIsAuthenticated] = useState(false);
 	const [loading, setLoading] = useState(true);
+	const [favoriteIds, setFavoriteIds] = useState(new Set());
 
 	// Check auth on mount
 	useEffect(() => {
@@ -17,7 +18,9 @@ const AppContextProvider = ({ children }) => {
 				.then(({ data }) => {
 					setUser(data);
 					setIsAuthenticated(true);
+					return favoritesAPI.getIds();
 				})
+				.then(({ data }) => setFavoriteIds(new Set(data)))
 				.catch(() => {
 					localStorage.removeItem('access_token');
 					localStorage.removeItem('refresh_token');
@@ -33,6 +36,7 @@ const AppContextProvider = ({ children }) => {
 		localStorage.setItem('refresh_token', tokens.refresh_token);
 		setUser(userData);
 		setIsAuthenticated(true);
+		favoritesAPI.getIds().then(({ data }) => setFavoriteIds(new Set(data))).catch(() => {});
 	}, []);
 
 	const logout = useCallback(() => {
@@ -40,7 +44,24 @@ const AppContextProvider = ({ children }) => {
 		localStorage.removeItem('refresh_token');
 		setUser(null);
 		setIsAuthenticated(false);
+		setFavoriteIds(new Set());
 	}, []);
+
+	const toggleFavorite = useCallback(async (channelId) => {
+		if (!isAuthenticated) return;
+		const isFav = favoriteIds.has(channelId);
+		try {
+			if (isFav) {
+				await favoritesAPI.remove(channelId);
+				setFavoriteIds(prev => { const s = new Set(prev); s.delete(channelId); return s; });
+			} else {
+				await favoritesAPI.add(channelId);
+				setFavoriteIds(prev => new Set(prev).add(channelId));
+			}
+		} catch (err) {
+			console.error('Favorite toggle error:', err);
+		}
+	}, [isAuthenticated, favoriteIds]);
 
 	return (
 		<AppContext.Provider value={{
@@ -49,6 +70,7 @@ const AppContextProvider = ({ children }) => {
 			isAuthenticated,
 			loading,
 			login, logout,
+			favoriteIds, toggleFavorite,
 		}}>
 			{children}
 		</AppContext.Provider>
@@ -56,8 +78,8 @@ const AppContextProvider = ({ children }) => {
 };
 
 const useAuth = () => {
-	const { user, isAuthenticated, loading, login, logout } = useContext(AppContext);
-	return { user, isAuthenticated, loading, login, logout };
+	const { user, isAuthenticated, loading, login, logout, favoriteIds, toggleFavorite } = useContext(AppContext);
+	return { user, isAuthenticated, loading, login, logout, favoriteIds, toggleFavorite };
 };
 
 const useAppContext = () => useContext(AppContext);

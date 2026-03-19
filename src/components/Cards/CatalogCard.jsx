@@ -16,7 +16,9 @@ import { dealsAPI } from '../../services/api';
 
 const CatalogCard = ({ channel }) => {
 	const navigate = useNavigate();
-	const { isAuthenticated } = useAuth();
+	const { isAuthenticated, favoriteIds, toggleFavorite } = useAuth();
+
+	const isFav = favoriteIds.has(channel.id);
 
 	const formatAge = (months) => {
 		if (!months) return '—';
@@ -129,7 +131,12 @@ const CatalogCard = ({ channel }) => {
 				>
 					Купити
 				</button>
-				<button className='font-bold bg-[#3498db] text-white py-2 px-6 rounded-md shadow-md hover:text-red-500 duration-500'>
+				<button
+					onClick={() => isAuthenticated ? toggleFavorite(channel.id) : alert('Увійдіть щоб додати в обране')}
+					className={`font-bold py-2 px-6 rounded-md shadow-md duration-500 ${
+						isFav ? 'bg-red-500 text-white hover:bg-red-600' : 'bg-[#3498db] text-white hover:text-red-500'
+					}`}
+				>
 					<FontAwesomeIcon icon={faHeart} />
 				</button>
 			</div>

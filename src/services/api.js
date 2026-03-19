@@ -138,6 +138,21 @@ export const adminAPI = {
 		api.post(`/admin/deals/${id}/resolve`, resolution),
 };
 
+// ===== Favorites =====
+export const favoritesAPI = {
+	getAll: () =>
+		api.get('/favorites'),
+
+	getIds: () =>
+		api.get('/favorites/ids'),
+
+	add: (channelId) =>
+		api.post(`/favorites/${channelId}`),
+
+	remove: (channelId) =>
+		api.delete(`/favorites/${channelId}`),
+};
+
 // ===== Users =====
 export const usersAPI = {
 	getProfile: (id) =>

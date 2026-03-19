@@ -11,7 +11,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 
 from app.config import settings
-from app.routers import auth, channels, deals, admin, users
+from app.routers import auth, channels, deals, admin, users, favorites
 from app.tasks.payment_checker import run_payment_checker
 from app.tasks.stats_collector import run_stats_collector
 
@@ -63,7 +63,7 @@ app.include_router(channels.router, prefix="/api")
 app.include_router(deals.router, prefix="/api")
 app.include_router(admin.router, prefix="/api")
 app.include_router(users.router, prefix="/api")
-
+app.include_router(favorites.router, prefix="/api")
 
 @app.get("/api/health")
 async def health():
