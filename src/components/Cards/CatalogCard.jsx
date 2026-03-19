@@ -18,6 +18,15 @@ const CatalogCard = ({ channel }) => {
 	const navigate = useNavigate();
 	const { isAuthenticated } = useAuth();
 
+	const formatAge = (months) => {
+		if (!months) return '—';
+		const m = typeof months === 'string' ? parseInt(months, 10) : months;
+		if (isNaN(m)) return '—';
+		const y = Math.floor(m / 12);
+		const rem = m % 12;
+		return y > 0 ? `${y} р. ${rem} міс.` : `${rem} міс.`;
+	};
+
 	const handleBuy = async () => {
 		if (!isAuthenticated) {
 			alert('Увійдіть для покупки каналу');
@@ -70,7 +79,7 @@ const CatalogCard = ({ channel }) => {
 						<FontAwesomeIcon icon={faClock} />
 						<p className='font-bold'>Вік</p>
 					</div>
-					<p className='text-gray-500'>{channel.age}</p>
+					<p className='text-gray-500'>{formatAge(channel.age)}</p>
 				</div>
 			)}
 			<div className='border-b-[1px] border-gray-400 p-2 grid lg:grid-cols-2 mt-2'>

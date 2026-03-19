@@ -12,9 +12,11 @@ import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 const DetailsCard = ({ channel, onBuy }) => {
 	const formatAge = (months) => {
 		if (!months) return '—';
-		const y = Math.floor(months / 12);
-		const m = months % 12;
-		return y > 0 ? `${y} р. ${m} міс.` : `${m} міс.`;
+		const m = typeof months === 'string' ? parseInt(months, 10) : months;
+		if (isNaN(m)) return '—';
+		const y = Math.floor(m / 12);
+		const rem = m % 12;
+		return y > 0 ? `${y} р. ${rem} міс.` : `${rem} міс.`;
 	};
 
 	return (

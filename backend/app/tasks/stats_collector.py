@@ -66,7 +66,7 @@ async def collect_stats_once():
                 logger.error(f"Stats collection failed for channel #{channel.id}: {e}")
 
 
-async def run_stats_collector(interval_hours: int = 6):
+async def run_stats_collector(interval_hours: int = 24):
     """Run stats collector loop."""
     interval_seconds = interval_hours * 3600
     logger.info(f"Stats collector started (interval: {interval_hours}h)")
