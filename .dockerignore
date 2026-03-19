@@ -1,5 +1,7 @@
 node_modules/
 dist/
-.env
 .git/
-backend/
+.venv/
+backend/.env
+backend/venv/
+backend/__pycache__/
