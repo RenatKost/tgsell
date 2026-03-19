@@ -24,14 +24,20 @@ router = APIRouter(prefix="/auth", tags=["auth"])
 @router.post("/telegram", response_model=TokenResponse)
 async def telegram_login(data: TelegramAuthData, db: AsyncSession = Depends(get_db)):
     """Authenticate via Telegram Login Widget."""
-    # In production, verify the hash. Skip for demo mode.
+    import logging
+    logger = logging.getLogger(__name__)
+
     auth_dict = data.model_dump()
     is_demo = data.hash == "demo"
 
     if not is_demo and not verify_telegram_auth(auth_dict):
+        logger.warning(
+            f"Telegram auth HASH MISMATCH for user {data.id} ({data.username}). "
+            f"auth_date={data.auth_date}, keys={sorted(k for k, v in auth_dict.items() if k != 'hash' and v is not None)}"
+        )
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid Telegram auth data",
+            detail="Invalid Telegram auth data — hash mismatch",
         )
 
     # Find or create user

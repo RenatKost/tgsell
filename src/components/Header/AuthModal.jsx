@@ -16,6 +16,7 @@ const AuthModal = ({ show, setShow }) => {
 		// Telegram Login Widget callback
 		window.onTelegramAuth = async (telegramUser) => {
 			try {
+				console.log('Telegram auth data:', telegramUser);
 				const { data } = await authAPI.loginTelegram(telegramUser);
 				login(data.user, {
 					access_token: data.access_token,
@@ -24,6 +25,8 @@ const AuthModal = ({ show, setShow }) => {
 				setShow(false);
 			} catch (error) {
 				console.error('Telegram auth failed:', error);
+				const msg = error.response?.data?.detail || 'Помилка авторизації';
+				alert(`Помилка входу: ${msg}`);
 			}
 		};
 
