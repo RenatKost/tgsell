@@ -1,4 +1,5 @@
 from datetime import datetime, timezone
+import os
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import select
@@ -14,6 +15,29 @@ from app.schemas.deal import DealResolveRequest, DealResponse
 from app.utils.security import get_admin_user
 
 router = APIRouter(prefix="/admin", tags=["admin"])
+
+
+@router.post("/setup")
+async def initial_admin_setup(
+    telegram_id: int,
+    secret: str,
+    db: AsyncSession = Depends(get_db),
+):
+    """One-time admin setup. Requires ADMIN_SETUP_SECRET env var."""
+    setup_secret = os.getenv("ADMIN_SETUP_SECRET", "")
+    if not setup_secret or secret != setup_secret:
+        raise HTTPException(status_code=403, detail="Invalid setup secret")
+
+    result = await db.execute(select(User).where(User.telegram_id == telegram_id))
+    user = result.scalar_one_or_none()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found. Login via Telegram first.")
+
+    user.role = UserRole.admin
+    await db.commit()
+    await db.refresh(user)
+
+    return {"ok": True, "user_id": user.id, "username": user.username, "role": user.role.value}
 
 
 @router.get("/channels/pending", response_model=list[ChannelResponse])

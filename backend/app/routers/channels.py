@@ -1,3 +1,4 @@
+import logging
 import math
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
@@ -15,6 +16,8 @@ from app.schemas.channel import (
     ChannelUpdate,
 )
 from app.utils.security import get_current_user
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/channels", tags=["channels"])
 
@@ -94,20 +97,24 @@ async def create_channel(
     db: AsyncSession = Depends(get_db),
 ):
     """Create a new channel listing (goes to moderation)."""
-    channel = Channel(
-        seller_id=user.id,
-        telegram_link=body.telegram_link,
-        channel_name=body.channel_name,
-        category=body.category,
-        price=body.price,
-        monthly_income=body.monthly_income,
-        description=body.description,
-        resources=body.resources,
-        status=ChannelStatus.pending,
-    )
-    db.add(channel)
-    await db.commit()
-    await db.refresh(channel)
+    try:
+        channel = Channel(
+            seller_id=user.id,
+            telegram_link=body.telegram_link,
+            channel_name=body.channel_name,
+            category=body.category,
+            price=body.price,
+            monthly_income=body.monthly_income,
+            description=body.description,
+            resources=body.resources,
+            status=ChannelStatus.pending,
+        )
+        db.add(channel)
+        await db.commit()
+        await db.refresh(channel)
+    except Exception as e:
+        logger.error(f"Channel creation failed: {e}")
+        raise HTTPException(status_code=500, detail=f"Помилка збереження: {e}")
 
     # TODO: trigger background task to fetch channel stats via Telethon/Bot API
 
