@@ -112,7 +112,8 @@ async def create_channel(
         channel = Channel(
             seller_id=user.id,
             telegram_link=body.telegram_link,
-            channel_name=body.channel_name,
+            channel_name=body.channel_name or body.telegram_link,
+            seller_telegram=body.seller_telegram,
             category=body.category,
             price=body.price,
             monthly_income=body.monthly_income,
@@ -130,6 +131,7 @@ async def create_channel(
     # Fetch channel stats from Telegram
     try:
         from app.services.channel_stats import collect_channel_stats
+        from datetime import datetime as dt
 
         stats = await collect_channel_stats(channel.telegram_link)
         if stats.get("subscribers_count"):
@@ -148,18 +150,33 @@ async def create_channel(
             channel.adv_reach_24h = stats["adv_reach_24h"]
         if stats.get("adv_reach_48h"):
             channel.adv_reach_48h = stats["adv_reach_48h"]
+        if stats.get("channel_age_months"):
+            channel.age = f"{stats['channel_age_months']}"
 
-        # Save initial ChannelStats record for graphs
-        from datetime import datetime as dt
-        stat_record = ChannelStats(
-            channel_id=channel.id,
-            date=dt.utcnow(),
-            subscribers=stats.get("subscribers_count", 0),
-            avg_views=stats.get("avg_views", 0),
-            avg_reach=stats.get("avg_views", 0),
-            er=stats.get("er", 0.0),
-        )
-        db.add(stat_record)
+        # Save historical daily stats for graphs
+        daily_stats = stats.get("daily_stats", [])
+        if daily_stats:
+            for ds in daily_stats:
+                stat_record = ChannelStats(
+                    channel_id=channel.id,
+                    date=dt.strptime(ds["date"], "%Y-%m-%d"),
+                    subscribers=ds.get("subscribers", 0),
+                    avg_views=ds.get("avg_views", 0),
+                    avg_reach=ds.get("avg_views", 0),
+                    er=ds.get("er", 0.0),
+                )
+                db.add(stat_record)
+        else:
+            # Fallback: save single current record
+            stat_record = ChannelStats(
+                channel_id=channel.id,
+                date=dt.utcnow(),
+                subscribers=stats.get("subscribers_count", 0),
+                avg_views=stats.get("avg_views", 0),
+                avg_reach=stats.get("avg_views", 0),
+                er=stats.get("er", 0.0),
+            )
+            db.add(stat_record)
         await db.commit()
         await db.refresh(channel)
     except Exception as e:

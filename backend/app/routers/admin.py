@@ -11,7 +11,7 @@ from app.database import get_db
 from app.models.channel import Channel, ChannelStatus
 from app.models.deal import Deal, DealStatus
 from app.models.user import User, UserRole
-from app.schemas.channel import ChannelResponse
+from app.schemas.channel import ChannelResponse, ChannelUpdate
 from app.schemas.deal import DealResolveRequest, DealResponse
 from app.utils.security import get_admin_user
 
@@ -101,16 +101,32 @@ async def approve_channel(
                 channel.adv_reach_24h = stats["adv_reach_24h"]
             if stats.get("adv_reach_48h"):
                 channel.adv_reach_48h = stats["adv_reach_48h"]
+            if stats.get("channel_age_months"):
+                channel.age = f"{stats['channel_age_months']}"
 
-            stat_record = ChannelStats(
-                channel_id=channel.id,
-                date=datetime.utcnow(),
-                subscribers=stats.get("subscribers_count", 0),
-                avg_views=stats.get("avg_views", 0),
-                avg_reach=stats.get("avg_views", 0),
-                er=stats.get("er", 0.0),
-            )
-            db.add(stat_record)
+            # Save historical daily stats for graphs
+            daily_stats = stats.get("daily_stats", [])
+            if daily_stats:
+                for ds in daily_stats:
+                    stat_record = ChannelStats(
+                        channel_id=channel.id,
+                        date=datetime.strptime(ds["date"], "%Y-%m-%d"),
+                        subscribers=ds.get("subscribers", 0),
+                        avg_views=ds.get("avg_views", 0),
+                        avg_reach=ds.get("avg_views", 0),
+                        er=ds.get("er", 0.0),
+                    )
+                    db.add(stat_record)
+            else:
+                stat_record = ChannelStats(
+                    channel_id=channel.id,
+                    date=datetime.utcnow(),
+                    subscribers=stats.get("subscribers_count", 0),
+                    avg_views=stats.get("avg_views", 0),
+                    avg_reach=stats.get("avg_views", 0),
+                    er=stats.get("er", 0.0),
+                )
+                db.add(stat_record)
             await db.commit()
             await db.refresh(channel)
         except Exception as e:
@@ -272,3 +288,55 @@ async def list_users(
         }
         for u in users
     ]
+
+
+@router.get("/channels", response_model=list[ChannelResponse])
+async def list_all_channels(
+    status: str | None = None,
+    admin: User = Depends(get_admin_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """List all channels for admin (any status). Includes seller_telegram."""
+    query = select(Channel).order_by(Channel.created_at.desc())
+    if status:
+        query = query.where(Channel.status == status)
+    result = await db.execute(query)
+    channels = result.scalars().all()
+    return [ChannelResponse.model_validate(c) for c in channels]
+
+
+@router.put("/channels/{channel_id}", response_model=ChannelResponse)
+async def admin_update_channel(
+    channel_id: int,
+    body: ChannelUpdate,
+    admin: User = Depends(get_admin_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Admin: update any channel."""
+    result = await db.execute(select(Channel).where(Channel.id == channel_id))
+    channel = result.scalar_one_or_none()
+    if not channel:
+        raise HTTPException(status_code=404, detail="Channel not found")
+
+    update_data = body.model_dump(exclude_unset=True)
+    for field, value in update_data.items():
+        setattr(channel, field, value)
+
+    await db.commit()
+    await db.refresh(channel)
+    return ChannelResponse.model_validate(channel)
+
+
+@router.delete("/channels/{channel_id}", status_code=204)
+async def admin_delete_channel(
+    channel_id: int,
+    admin: User = Depends(get_admin_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Admin: delete any channel."""
+    result = await db.execute(select(Channel).where(Channel.id == channel_id))
+    channel = result.scalar_one_or_none()
+    if not channel:
+        raise HTTPException(status_code=404, detail="Channel not found")
+    await db.delete(channel)
+    await db.commit()

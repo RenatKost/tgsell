@@ -23,7 +23,7 @@ const SellForm = () => {
 	} = useFormik({
 		initialValues: {
 			telegram_link: '',
-			channel_name: '',
+			seller_telegram: '',
 			category: '',
 			price: '',
 			monthly_income: '',
@@ -35,7 +35,7 @@ const SellForm = () => {
 			telegram_link: Yup.string()
 				.matches(/^\S*$/, 'Не повинен містити пробілів')
 				.required('Поле обов\'язкове для заповнення'),
-			channel_name: Yup.string()
+			seller_telegram: Yup.string()
 				.required('Поле обов\'язкове для заповнення'),
 			category: Yup.string()
 				.required('Оберіть тематику'),
@@ -54,7 +54,7 @@ const SellForm = () => {
 				const resources = [vals.resource1, vals.resource2].filter(Boolean).join('\n');
 				await channelsAPI.create({
 					telegram_link: vals.telegram_link,
-					channel_name: vals.channel_name,
+					seller_telegram: vals.seller_telegram,
 					category: vals.category,
 					price: parseFloat(vals.price),
 					monthly_income: vals.monthly_income ? parseFloat(vals.monthly_income) : null,
@@ -99,18 +99,18 @@ const SellForm = () => {
 						)}
 					</div>
 					<div className='h-28'>
-						<label className='text-sm block'>Назва каналу</label>
+						<label className='text-sm block'>Ваш телеграм</label>
 						<input
 							className='focus:border-[#3498db] block mb-1 border-gray-300 border px-3 py-4 rounded-md mt-1 w-full'
-							name='channel_name'
-							value={values.channel_name}
+							name='seller_telegram'
+							value={values.seller_telegram}
 							onChange={handleChange}
 							onBlur={handleBlur}
 							type='text'
-							placeholder='Назва вашого каналу'
+							placeholder='@username'
 						/>
-						{touched.channel_name && errors.channel_name && (
-							<span className='text-sm text-red-500'>{errors.channel_name}</span>
+						{touched.seller_telegram && errors.seller_telegram && (
+							<span className='text-sm text-red-500'>{errors.seller_telegram}</span>
 						)}
 					</div>
 					<div className='h-28'>

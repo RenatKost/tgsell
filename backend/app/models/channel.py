@@ -24,6 +24,7 @@ class Channel(Base):
     seller_id: Mapped[int] = mapped_column(ForeignKey("users.id"))
     telegram_link: Mapped[str] = mapped_column(String(255))
     channel_name: Mapped[str] = mapped_column(String(255))
+    seller_telegram: Mapped[str | None] = mapped_column(String(255), nullable=True)
     category: Mapped[str] = mapped_column(String(100))
     subscribers_count: Mapped[int] = mapped_column(Integer, default=0)
     price: Mapped[float] = mapped_column(Float)

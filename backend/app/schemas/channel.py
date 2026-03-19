@@ -5,7 +5,8 @@ from pydantic import BaseModel
 
 class ChannelCreate(BaseModel):
     telegram_link: str
-    channel_name: str
+    channel_name: str = ""
+    seller_telegram: str | None = None
     category: str
     price: float
     monthly_income: float | None = None
@@ -15,6 +16,7 @@ class ChannelCreate(BaseModel):
 
 class ChannelUpdate(BaseModel):
     channel_name: str | None = None
+    seller_telegram: str | None = None
     category: str | None = None
     price: float | None = None
     monthly_income: float | None = None
@@ -27,6 +29,7 @@ class ChannelResponse(BaseModel):
     seller_id: int
     telegram_link: str
     channel_name: str
+    seller_telegram: str | None
     category: str
     subscribers_count: int
     price: float

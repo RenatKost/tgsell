@@ -9,24 +9,33 @@ import {
 	faBarChart,
 	faExternalLinkAlt,
 	faGavel,
+	faTrash,
+	faPen,
+	faSave,
+	faList,
 } from '@fortawesome/free-solid-svg-icons';
 
 const TABS = [
 	{ text: 'Канали на модерації', value: 'channels' },
+	{ text: 'Всі канали', value: 'all_channels' },
 	{ text: 'Спірні угоди', value: 'disputes' },
 ];
 
 const ModerCabinet = () => {
 	const [activeTab, setActiveTab] = useState(TABS[0]);
 	const [pendingChannels, setPendingChannels] = useState([]);
+	const [allChannels, setAllChannels] = useState([]);
 	const [disputes, setDisputes] = useState([]);
 	const [loading, setLoading] = useState(true);
 	const [rejectId, setRejectId] = useState(null);
 	const [rejectReason, setRejectReason] = useState('');
+	const [editId, setEditId] = useState(null);
+	const [editData, setEditData] = useState({});
+	const [statusFilter, setStatusFilter] = useState('');
 
 	useEffect(() => {
 		loadData();
-	}, [activeTab]);
+	}, [activeTab, statusFilter]);
 
 	const loadData = async () => {
 		setLoading(true);
@@ -34,6 +43,10 @@ const ModerCabinet = () => {
 			if (activeTab.value === 'channels') {
 				const { data } = await adminAPI.getPendingChannels();
 				setPendingChannels(Array.isArray(data) ? data : data.items || []);
+			} else if (activeTab.value === 'all_channels') {
+				const params = statusFilter ? { status: statusFilter } : {};
+				const { data } = await adminAPI.getAllChannels(params);
+				setAllChannels(Array.isArray(data) ? data : data.items || []);
 			} else {
 				const { data } = await adminAPI.getAllDeals({ status: 'disputed' });
 				setDisputes(Array.isArray(data) ? data : data.items || []);
@@ -76,6 +89,55 @@ const ModerCabinet = () => {
 		} catch (err) {
 			alert(err.response?.data?.detail || 'Помилка');
 		}
+	};
+
+	const handleDeleteChannel = async (id) => {
+		if (!confirm('Видалити канал?')) return;
+		try {
+			await adminAPI.deleteChannel(id);
+			setAllChannels(prev => prev.filter(c => c.id !== id));
+		} catch (err) {
+			alert(err.response?.data?.detail || 'Помилка видалення');
+		}
+	};
+
+	const startEdit = (channel) => {
+		setEditId(channel.id);
+		setEditData({
+			category: channel.category || '',
+			price: channel.price || '',
+			monthly_income: channel.monthly_income || '',
+			description: channel.description || '',
+		});
+	};
+
+	const handleSaveEdit = async (id) => {
+		try {
+			const payload = {
+				...editData,
+				price: parseFloat(editData.price) || 0,
+				monthly_income: editData.monthly_income ? parseFloat(editData.monthly_income) : null,
+			};
+			const { data } = await adminAPI.updateChannel(id, payload);
+			setAllChannels(prev => prev.map(c => (c.id === id ? data : c)));
+			setEditId(null);
+		} catch (err) {
+			alert(err.response?.data?.detail || 'Помилка збереження');
+		}
+	};
+
+	const STATUS_LABELS = {
+		pending: 'На модерації',
+		approved: 'Опубліковано',
+		rejected: 'Відхилено',
+		sold: 'Продано',
+	};
+
+	const STATUS_COLORS = {
+		pending: 'bg-yellow-100 text-yellow-700',
+		approved: 'bg-green-100 text-green-700',
+		rejected: 'bg-red-100 text-red-700',
+		sold: 'bg-blue-100 text-blue-700',
 	};
 
 	return (
@@ -204,6 +266,126 @@ const ModerCabinet = () => {
 								))}
 							</div>
 						)
+					) : activeTab.value === 'all_channels' ? (
+						<>
+							<div className='flex gap-2 mb-4 flex-wrap'>
+								{['', 'pending', 'approved', 'rejected', 'sold'].map(s => (
+									<button
+										key={s}
+										onClick={() => setStatusFilter(s)}
+										className={`px-3 py-1 rounded-full text-sm font-semibold duration-300 ${
+											statusFilter === s
+												? 'bg-blue-500 text-white'
+												: 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+										}`}
+									>
+										{s ? STATUS_LABELS[s] : 'Всі'}
+									</button>
+								))}
+							</div>
+							{allChannels.length === 0 ? (
+								<p className='text-lg text-gray-500'>Немає каналів</p>
+							) : (
+								<div className='grid gap-4'>
+									{allChannels.map(channel => (
+										<div key={channel.id} className='bg-white rounded-lg shadow-md p-5'>
+											<div className='flex flex-col md:flex-row md:items-center justify-between gap-3 mb-3'>
+												<div className='flex items-center gap-3'>
+													{channel.avatar_url ? (
+														<img className='w-12 h-12 rounded-full object-cover' src={channel.avatar_url} alt='' />
+													) : (
+														<div className='w-12 h-12 rounded-full bg-blue-100 flex items-center justify-center text-lg font-bold text-blue-500'>
+															{channel.channel_name?.[0] || '?'}
+														</div>
+													)}
+													<div>
+														<h3 className='font-bold'>{channel.channel_name}</h3>
+														<a href={channel.telegram_link} target='_blank' rel='noopener noreferrer' className='text-blue-500 text-sm hover:underline'>
+															{channel.telegram_link} <FontAwesomeIcon icon={faExternalLinkAlt} size='xs' />
+														</a>
+													</div>
+												</div>
+												<div className='flex items-center gap-2'>
+													<span className={`text-xs px-2 py-1 rounded-full font-semibold ${STATUS_COLORS[channel.status] || 'bg-gray-100'}`}>
+														{STATUS_LABELS[channel.status] || channel.status}
+													</span>
+													<button onClick={() => editId === channel.id ? setEditId(null) : startEdit(channel)} className='text-blue-500 hover:text-blue-700 p-1'>
+														<FontAwesomeIcon icon={faPen} />
+													</button>
+													<button onClick={() => handleDeleteChannel(channel.id)} className='text-red-500 hover:text-red-700 p-1'>
+														<FontAwesomeIcon icon={faTrash} />
+													</button>
+												</div>
+											</div>
+
+											<div className='grid grid-cols-2 md:grid-cols-5 gap-2 text-sm'>
+												<div className='bg-gray-50 p-2 rounded'>
+													<FontAwesomeIcon icon={faUsers} className='text-gray-400 mr-1' />
+													<span className='font-semibold'>{channel.subscribers_count?.toLocaleString('uk-UA') || '—'}</span>
+													<p className='text-gray-400 text-xs'>підписників</p>
+												</div>
+												<div className='bg-gray-50 p-2 rounded'>
+													<FontAwesomeIcon icon={faEye} className='text-gray-400 mr-1' />
+													<span className='font-semibold'>{channel.avg_views?.toLocaleString('uk-UA') || '—'}</span>
+													<p className='text-gray-400 text-xs'>переглядів</p>
+												</div>
+												<div className='bg-gray-50 p-2 rounded'>
+													<FontAwesomeIcon icon={faBarChart} className='text-gray-400 mr-1' />
+													<span className='font-semibold'>{channel.er != null ? `${channel.er.toFixed(1)}%` : '—'}</span>
+													<p className='text-gray-400 text-xs'>ER</p>
+												</div>
+												<div className='bg-gray-50 p-2 rounded'>
+													<span className='font-semibold text-green-600'>{channel.price?.toLocaleString('uk-UA')} USDT</span>
+													<p className='text-gray-400 text-xs'>ціна</p>
+												</div>
+												<div className='bg-gray-50 p-2 rounded'>
+													<FontAwesomeIcon icon={faList} className='text-gray-400 mr-1' />
+													<span className='font-semibold'>{channel.category || '—'}</span>
+													<p className='text-gray-400 text-xs'>категорія</p>
+												</div>
+											</div>
+
+											{channel.seller_telegram && (
+												<p className='mt-2 text-sm bg-purple-50 p-2 rounded'>
+													<span className='font-semibold'>Telegram продавця:</span>{' '}
+													<a href={`https://t.me/${channel.seller_telegram.replace('@', '')}`} target='_blank' rel='noopener noreferrer' className='text-blue-500 hover:underline'>
+														{channel.seller_telegram}
+													</a>
+												</p>
+											)}
+
+											{channel.description && (
+												<p className='mt-2 text-gray-600 text-sm bg-blue-50 p-2 rounded'>{channel.description}</p>
+											)}
+
+											{editId === channel.id && (
+												<div className='mt-3 grid md:grid-cols-2 gap-3 bg-gray-50 p-3 rounded'>
+													<div>
+														<label className='text-xs text-gray-500'>Категорія</label>
+														<input value={editData.category} onChange={e => setEditData({ ...editData, category: e.target.value })} className='w-full border rounded px-2 py-1 text-sm' />
+													</div>
+													<div>
+														<label className='text-xs text-gray-500'>Ціна (USDT)</label>
+														<input value={editData.price} onChange={e => setEditData({ ...editData, price: e.target.value })} className='w-full border rounded px-2 py-1 text-sm' />
+													</div>
+													<div>
+														<label className='text-xs text-gray-500'>Дохід/міс (USDT)</label>
+														<input value={editData.monthly_income} onChange={e => setEditData({ ...editData, monthly_income: e.target.value })} className='w-full border rounded px-2 py-1 text-sm' />
+													</div>
+													<div>
+														<label className='text-xs text-gray-500'>Опис</label>
+														<input value={editData.description} onChange={e => setEditData({ ...editData, description: e.target.value })} className='w-full border rounded px-2 py-1 text-sm' />
+													</div>
+													<button onClick={() => handleSaveEdit(channel.id)} className='bg-green-500 text-white px-3 py-1 rounded text-sm font-semibold hover:bg-green-600 flex items-center gap-1 w-fit'>
+														<FontAwesomeIcon icon={faSave} /> Зберегти
+													</button>
+												</div>
+											)}
+										</div>
+									))}
+								</div>
+							)}
+						</>
 					) : disputes.length === 0 ? (
 						<p className='text-lg text-gray-500'>Немає спірних угод</p>
 					) : (

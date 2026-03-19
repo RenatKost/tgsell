@@ -116,11 +116,20 @@ export const adminAPI = {
 	getPendingChannels: () =>
 		api.get('/admin/channels/pending'),
 
+	getAllChannels: (params = {}) =>
+		api.get('/admin/channels', { params }),
+
 	approveChannel: (id) =>
 		api.post(`/admin/channels/${id}/approve`),
 
 	rejectChannel: (id, reason) =>
 		api.post(`/admin/channels/${id}/reject`, { reason }),
+
+	updateChannel: (id, data) =>
+		api.put(`/admin/channels/${id}`, data),
+
+	deleteChannel: (id) =>
+		api.delete(`/admin/channels/${id}`),
 
 	getAllDeals: (params = {}) =>
 		api.get('/admin/deals', { params }),

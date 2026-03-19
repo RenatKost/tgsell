@@ -80,10 +80,12 @@ async def get_channel_info_bot_api(channel_username: str) -> dict | None:
         return None
 
 
-async def get_channel_stats_telethon(channel_username: str, message_limit: int = 50) -> dict | None:
+async def get_channel_stats_telethon(channel_username: str, message_limit: int = 200) -> dict | None:
     """Get detailed channel stats using Telethon (MTProto).
 
-    Returns: {avg_views, er, avg_reach, adv_reach_12h, adv_reach_24h, adv_reach_48h}
+    Collects historical daily stats from messages for graphs.
+    Returns: {avg_views, er, avg_reach, adv_reach_12h, adv_reach_24h, adv_reach_48h,
+              channel_age_months, daily_stats: [{date, views, subscribers}]}
     """
     client = await _get_telethon_client()
     if not client:
@@ -92,13 +94,22 @@ async def get_channel_stats_telethon(channel_username: str, message_limit: int =
 
     try:
         from telethon.tl.functions.channels import GetFullChannelRequest
+        from collections import defaultdict
 
         entity = await client.get_entity(channel_username)
         full_channel = await client(GetFullChannelRequest(entity))
 
         subscribers = full_channel.full_chat.participants_count
 
-        # Get recent messages with views
+        # Calculate channel age
+        channel_age_months = None
+        if hasattr(entity, 'date') and entity.date:
+            created = entity.date.replace(tzinfo=timezone.utc)
+            now = datetime.now(timezone.utc)
+            diff = now - created
+            channel_age_months = max(1, int(diff.days / 30))
+
+        # Get messages for historical stats (more messages = more history)
         messages = await client.get_messages(entity, limit=message_limit)
 
         views_list = []
@@ -108,11 +119,15 @@ async def get_channel_stats_telethon(channel_username: str, message_limit: int =
         reach_24h = []
         reach_48h = []
 
+        # Group views by date for daily stats
+        daily_views = defaultdict(list)
+
         for msg in messages:
             if msg.views is not None:
                 views_list.append(msg.views)
+                msg_date = msg.date.replace(tzinfo=timezone.utc)
 
-                age_hours = (now - msg.date.replace(tzinfo=timezone.utc)).total_seconds() / 3600
+                age_hours = (now - msg_date).total_seconds() / 3600
                 if age_hours <= 12:
                     reach_12h.append(msg.views)
                 elif age_hours <= 24:
@@ -120,9 +135,23 @@ async def get_channel_stats_telethon(channel_username: str, message_limit: int =
                 elif age_hours <= 48:
                     reach_48h.append(msg.views)
 
+                # Store daily stats
+                day_key = msg_date.strftime("%Y-%m-%d")
+                daily_views[day_key].append(msg.views)
+
         avg_views = sum(views_list) // len(views_list) if views_list else 0
         er = round((avg_views / subscribers * 100), 2) if subscribers > 0 else 0.0
-        avg_reach = avg_views  # Simplified: avg_reach ≈ avg_views
+
+        # Build daily stats for graphs (sorted by date)
+        daily_stats = []
+        for date_str in sorted(daily_views.keys()):
+            day_views = daily_views[date_str]
+            daily_stats.append({
+                "date": date_str,
+                "avg_views": sum(day_views) // len(day_views),
+                "subscribers": subscribers,  # current value for all days
+                "er": er,
+            })
 
         # Add delay to avoid rate-limiting
         await asyncio.sleep(2)
@@ -131,10 +160,12 @@ async def get_channel_stats_telethon(channel_username: str, message_limit: int =
             "subscribers": subscribers,
             "avg_views": avg_views,
             "er": er,
-            "avg_reach": avg_reach,
+            "avg_reach": avg_views,
             "adv_reach_12h": sum(reach_12h) // len(reach_12h) if reach_12h else 0,
             "adv_reach_24h": sum(reach_24h) // len(reach_24h) if reach_24h else 0,
             "adv_reach_48h": sum(reach_48h) // len(reach_48h) if reach_48h else 0,
+            "channel_age_months": channel_age_months,
+            "daily_stats": daily_stats,
         }
     except Exception as e:
         logger.error(f"Telethon stats failed for @{channel_username}: {e}")
@@ -162,6 +193,8 @@ async def collect_channel_stats(telegram_link: str) -> dict:
         "adv_reach_12h": None,
         "adv_reach_24h": None,
         "adv_reach_48h": None,
+        "channel_age_months": None,
+        "daily_stats": [],
     }
 
     # Step 1: Bot API (safe, always works)
@@ -180,5 +213,7 @@ async def collect_channel_stats(telegram_link: str) -> dict:
         result["adv_reach_12h"] = telethon_stats.get("adv_reach_12h")
         result["adv_reach_24h"] = telethon_stats.get("adv_reach_24h")
         result["adv_reach_48h"] = telethon_stats.get("adv_reach_48h")
+        result["channel_age_months"] = telethon_stats.get("channel_age_months")
+        result["daily_stats"] = telethon_stats.get("daily_stats", [])
 
     return result
