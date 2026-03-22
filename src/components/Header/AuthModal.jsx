@@ -5,7 +5,7 @@ import { useEffect, useRef, useState, useCallback } from 'react';
 import { authAPI } from '../../services/api';
 import { useAuth } from '../../context/AppContext';
 
-const TELEGRAM_BOT_NAME = import.meta.env.VITE_TELEGRAM_BOT_NAME || 'TgSellBot';
+const TELEGRAM_BOT_NAME = import.meta.env.VITE_TELEGRAM_BOT_NAME || 'tgsell_auth_bot';
 const GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID || '';
 
 const AuthModal = ({ show, setShow }) => {
@@ -14,10 +14,12 @@ const AuthModal = ({ show, setShow }) => {
 	const { login } = useAuth();
 	const [widgetKey, setWidgetKey] = useState(0);
 	const [botAuth, setBotAuth] = useState({ status: 'idle' }); // idle | loading | waiting | error
+	const [authError, setAuthError] = useState('');
 	const pollRef = useRef(null);
 
 	// Google Sign-In callback
 	const handleGoogleResponse = useCallback(async (response) => {
+		setAuthError('');
 		try {
 			const { data } = await authAPI.loginGoogle(response.credential);
 			login(data.user, {
@@ -28,7 +30,7 @@ const AuthModal = ({ show, setShow }) => {
 		} catch (error) {
 			console.error('Google auth failed:', error);
 			const msg = error.response?.data?.detail || 'Помилка авторизації Google';
-			alert(`Помилка входу: ${msg}`);
+			setAuthError(msg);
 		}
 	}, [login, setShow]);
 
@@ -37,6 +39,7 @@ const AuthModal = ({ show, setShow }) => {
 		if (!show) {
 			stopPolling();
 			setBotAuth({ status: 'idle' });
+			setAuthError('');
 		}
 		return () => stopPolling();
 	}, [show]);
@@ -131,6 +134,7 @@ const AuthModal = ({ show, setShow }) => {
 
 		// Telegram Login Widget callback
 		window.onTelegramAuth = async (telegramUser) => {
+			setAuthError('');
 			try {
 				console.log('Telegram auth data:', telegramUser);
 				const { data } = await authAPI.loginTelegram(telegramUser);
@@ -142,7 +146,7 @@ const AuthModal = ({ show, setShow }) => {
 			} catch (error) {
 				console.error('Telegram auth failed:', error);
 				const msg = error.response?.data?.detail || 'Помилка авторизації';
-				alert(`Помилка входу: ${msg}`);
+				setAuthError(msg);
 			}
 		};
 
@@ -192,6 +196,12 @@ const AuthModal = ({ show, setShow }) => {
 				<div className='px-8 py-6'>
 					<h2 className='text-xl font-bold text-gray-800 mb-1'>Вхід в TgSell</h2>
 					<p className='text-gray-400 text-sm mb-6'>Оберіть спосіб авторизації</p>
+
+					{authError && (
+						<div className='bg-red-50 border border-red-200 rounded-xl px-4 py-3 mb-4 text-left'>
+							<p className='text-sm text-red-600'>{authError}</p>
+						</div>
+					)}
 
 					<div className='flex flex-col items-center gap-4'>
 						{/* Telegram Login Widget */}
