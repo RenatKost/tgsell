@@ -102,6 +102,32 @@ const CatalogCard = ({ channel }) => {
 				</div>
 			</div>
 
+			{/* Analytics */}
+			{(() => {
+				const cpm = channel.avg_views && channel.price ? Math.round(channel.price / channel.avg_views * 1000) : null;
+				const pricePerSub = channel.subscribers_count && channel.price ? (channel.price / channel.subscribers_count).toFixed(2) : null;
+				const payback = channel.monthly_income && channel.price ? (channel.price / channel.monthly_income).toFixed(1) : null;
+				if (!cpm && !pricePerSub && !payback) return null;
+				return (
+					<div className='px-5 pb-4'>
+						<div className='grid grid-cols-3 gap-2'>
+							<div className='bg-violet-50 rounded-xl p-2.5 text-center'>
+								<p className='text-violet-400 text-xs mb-0.5'>CPM</p>
+								<p className='font-bold text-violet-700 text-sm'>{cpm != null ? `$${cpm}` : '—'}</p>
+							</div>
+							<div className='bg-amber-50 rounded-xl p-2.5 text-center'>
+								<p className='text-amber-500 text-xs mb-0.5'>$/підписник</p>
+								<p className='font-bold text-amber-700 text-sm'>{pricePerSub ?? '—'}</p>
+							</div>
+							<div className='bg-emerald-50 rounded-xl p-2.5 text-center'>
+								<p className='text-emerald-500 text-xs mb-0.5'>Окупність</p>
+								<p className='font-bold text-emerald-700 text-sm'>{payback ? `${payback} міс.` : '—'}</p>
+							</div>
+						</div>
+					</div>
+				);
+			})()}
+
 			{/* Footer */}
 			<div className='border-t border-gray-100 px-5 py-4 flex items-center justify-between'>
 				<div>
