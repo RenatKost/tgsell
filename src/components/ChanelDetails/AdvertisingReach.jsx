@@ -1,6 +1,5 @@
 const AdvertisingReach = ({ channel }) => {
 	const avgReach = channel?.avg_views;
-	// These will be populated once the backend stats collector gathers this data
 	const reach12h = channel?.adv_reach_12h;
 	const reach24h = channel?.adv_reach_24h;
 	const reach48h = channel?.adv_reach_48h;
@@ -9,39 +8,33 @@ const AdvertisingReach = ({ channel }) => {
 
 	if (!hasAnyData) {
 		return (
-			<div className='bg-white rounded-md shadow-lg px-4 py-4 2xl:w-[425px] w-full'>
-				<h4 className='font-bold text-lg mb-4'>Рекламне охоплення</h4>
-				<p className='text-gray-400 text-center py-6'>Дані поки відсутні</p>
+			<div className='bg-white rounded-2xl border border-gray-100 shadow-sm px-5 py-5 w-full'>
+				<p className='text-gray-400 text-xs mb-1'>Рекламне охоплення</p>
+				<p className='text-gray-300 text-center py-8 text-sm'>Дані поки відсутні</p>
 			</div>
 		);
 	}
 
+	const rows = [
+		{ value: reach12h, label: 'за 12 годин', bg: 'bg-pink-50', text: 'text-pink-600' },
+		{ value: reach24h, label: 'за 24 годин', bg: 'bg-emerald-50', text: 'text-emerald-600' },
+		{ value: reach48h, label: 'за 48 годин', bg: 'bg-orange-50', text: 'text-orange-600' },
+	];
+
 	return (
-		<div className='bg-white rounded-md shadow-lg px-4 py-4 2xl:w-[425px] w-full'>
-			<div className='flex items-start justify-between mb-5'>
-				<p className='font-bold text-lg'>
-					{avgReach?.toLocaleString('uk-UA') || '—'}
-				</p>
-				<h4 className='font-bold text-end text-lg'>Рекламне охоплення</h4>
+		<div className='bg-white rounded-2xl border border-gray-100 shadow-sm px-5 py-5 w-full'>
+			<p className='text-gray-400 text-xs mb-0.5'>Рекламне охоплення</p>
+			<p className='font-bold text-xl text-gray-900 mb-4'>
+				{avgReach?.toLocaleString('uk-UA') || '—'}
+			</p>
+			<div className='space-y-2'>
+				{rows.map((r, idx) => r.value != null && (
+					<div key={idx} className={`flex items-center justify-between ${r.bg} rounded-xl px-4 py-3`}>
+						<p className={`font-bold ${r.text}`}>{r.value.toLocaleString('uk-UA')}</p>
+						<p className='text-gray-500 text-sm'>{r.label}</p>
+					</div>
+				))}
 			</div>
-			{reach12h != null && (
-				<div className='grid grid-cols-2 w-[75%] mx-auto mb-2 bg-pink-500 bg-opacity-30 p-2 rounded-md'>
-					<p className='font-bold'>{reach12h.toLocaleString('uk-UA')}</p>
-					<p>за 12 годин</p>
-				</div>
-			)}
-			{reach24h != null && (
-				<div className='grid grid-cols-2 w-[75%] mx-auto mb-2 bg-green-500 bg-opacity-30 p-2 rounded-md'>
-					<p className='font-bold'>{reach24h.toLocaleString('uk-UA')}</p>
-					<p>за 24 годин</p>
-				</div>
-			)}
-			{reach48h != null && (
-				<div className='grid grid-cols-2 w-[75%] mx-auto mb-2 bg-orange-500 bg-opacity-30 p-2 rounded-md'>
-					<p className='font-bold'>{reach48h.toLocaleString('uk-UA')}</p>
-					<p>за 48 годин</p>
-				</div>
-			)}
 		</div>
 	);
 };

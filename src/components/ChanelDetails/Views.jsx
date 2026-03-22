@@ -39,10 +39,12 @@ const Views = ({ stats = [], current }) => {
 	const formatted = (current || dataPoints[dataPoints.length - 1])?.toLocaleString('uk-UA') || '—';
 
 	return (
-		<div className='bg-white rounded-md shadow-lg px-4 pt-4 2xl:w-[425px] w-full'>
-			<div className='flex items-center justify-between'>
-				<p className='font-bold text-lg'>{formatted}</p>
-				<h4 className='font-bold text-lg'>Добовий перегляд</h4>
+		<div className='bg-white rounded-2xl border border-gray-100 shadow-sm px-5 pt-5 w-full'>
+			<div className='flex items-center justify-between mb-1'>
+				<div>
+					<p className='text-gray-400 text-xs'>Добовий перегляд</p>
+					<p className='font-bold text-xl text-gray-900'>{formatted}</p>
+				</div>
 			</div>
 			{chartData ? (
 				<ReactApexChart

@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, NavLink } from 'react-router-dom';
 import { channelsAPI, dealsAPI } from '../services/api';
 import { useAuth } from '../context/AppContext';
 import DetailsCard from '../components/Cards/DetailsCard';
@@ -52,59 +52,66 @@ const ChannelDetailsPage = () => {
 	if (loading) {
 		return (
 			<div className='mt-28 flex justify-center'>
-				<div className='animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500' />
+				<div className='animate-spin rounded-full h-10 w-10 border-2 border-gray-200 border-t-[#3498db]' />
 			</div>
 		);
 	}
 
 	if (!channel) return null;
 
-	// Parse resources
 	const resources = channel.resources ? channel.resources.split(',').map(r => r.trim()).filter(Boolean) : [];
 
 	return (
-		<section className='mt-28 flex flex-col lg:flex-row items-start gap-6'>
-			<div className='grid gap-6'>
-				<DetailsCard channel={channel} onBuy={handleBuy} />
-
-				{channel.description && (
-					<div className='w-full lg:w-[450px] flex flex-col items-center bg-white rounded-md shadow-lg px-4 py-4'>
-						<h4 className='font-bold mb-5 text-lg'>Коментарі від власника</h4>
-						<p className='rounded-md bg-blue-500 bg-opacity-[0.15] p-2 leading-normal w-full'>
-							{channel.description}
-						</p>
-					</div>
-				)}
-
-				{resources.length > 0 && (
-					<div className='w-full lg:w-[450px] flex items-center flex-col gap-4 bg-white rounded-md shadow-lg px-4 py-4'>
-						<h4 className='font-bold mb-2 text-lg'>Додаткові ресурси</h4>
-						<div className='flex items-center gap-4 flex-wrap'>
-							{resources.map((url, idx) => (
-								<a
-									key={idx}
-									href={url}
-									target='_blank'
-									rel='noopener noreferrer'
-									className={`text-white font-bold shadow-md text-xl px-4 w-36 text-center py-2 rounded-md duration-300 ${
-										idx % 2 === 0
-											? 'bg-[#27ae60] hover:shadow-[#27ae60]'
-											: 'bg-[#3498db] hover:shadow-[#3498db]'
-									}`}
-								>
-									Ресурс {idx + 1}
-								</a>
-							))}
-						</div>
-					</div>
-				)}
+		<section className='mt-28'>
+			{/* Breadcrumb */}
+			<div className='flex items-center gap-2 text-sm mb-6 px-1'>
+				<NavLink to='/catalog' className='text-gray-400 hover:text-[#3498db] transition-colors'>Каталог</NavLink>
+				<span className='text-gray-300'>/</span>
+				<span className='text-gray-600 font-medium'>{channel.channel_name || 'Канал'}</span>
 			</div>
-			<div className='grid 2xl:grid-cols-2 gap-6 w-full'>
-				<Subscribers stats={stats} current={channel.subscribers_count} />
-				<Coverage stats={stats} current={channel.avg_views} />
-				<Views stats={stats} current={channel.avg_views} />
-				<ER stats={stats} current={channel.er} />
-				<AdvertisingReach channel={channel} />
+
+			<div className='flex flex-col lg:flex-row items-start gap-6'>
+				{/* Left column */}
+				<div className='w-full lg:w-[460px] flex-shrink-0 space-y-5'>
+					<DetailsCard channel={channel} onBuy={handleBuy} />
+
+					{channel.description && (
+						<div className='bg-white rounded-2xl border border-gray-100 shadow-sm p-5'>
+							<h4 className='font-bold text-gray-900 mb-3'>Коментар власника</h4>
+							<p className='text-gray-600 text-sm leading-relaxed bg-blue-50 rounded-xl p-4'>
+								{channel.description}
+							</p>
+						</div>
+					)}
+
+					{resources.length > 0 && (
+						<div className='bg-white rounded-2xl border border-gray-100 shadow-sm p-5'>
+							<h4 className='font-bold text-gray-900 mb-3'>Додаткові ресурси</h4>
+							<div className='flex flex-wrap gap-2'>
+								{resources.map((url, idx) => (
+									<a
+										key={idx}
+										href={url}
+										target='_blank'
+										rel='noopener noreferrer'
+										className='inline-flex items-center gap-1.5 bg-gray-50 hover:bg-[#3498db] hover:text-white text-gray-600 font-semibold text-sm px-4 py-2.5 rounded-xl border border-gray-200 hover:border-[#3498db] transition-all duration-300'
+									>
+										<span>🔗</span> Ресурс {idx + 1}
+									</a>
+								))}
+							</div>
+						</div>
+					)}
+				</div>
+
+				{/* Right column — charts */}
+				<div className='grid 2xl:grid-cols-2 gap-5 w-full'>
+					<Subscribers stats={stats} current={channel.subscribers_count} />
+					<Coverage stats={stats} current={channel.avg_views} />
+					<Views stats={stats} current={channel.avg_views} />
+					<ER stats={stats} current={channel.er} />
+					<AdvertisingReach channel={channel} />
+				</div>
 			</div>
 		</section>
 	);

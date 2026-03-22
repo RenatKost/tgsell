@@ -1,19 +1,11 @@
-import {
-	faBarChart,
-	faClock,
-	faEye,
-	faHeart,
-	faDollarSign,
-	faListAlt,
-	faWallet,
-} from '@fortawesome/free-solid-svg-icons';
+import { faHeart } from '@fortawesome/free-solid-svg-icons';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
-
 import { useAuth } from '../../context/AppContext';
 
 const DetailsCard = ({ channel, onBuy }) => {
 	const { isAuthenticated, favoriteIds, toggleFavorite } = useAuth();
 	const isFav = favoriteIds.has(channel.id);
+
 	const formatAge = (months) => {
 		if (!months) return '—';
 		const m = typeof months === 'string' ? parseInt(months, 10) : months;
@@ -24,97 +16,89 @@ const DetailsCard = ({ channel, onBuy }) => {
 	};
 
 	return (
-		<div className='bg-white rounded-md shadow-lg px-4 py-8'>
-			<div className='flex items-center lg:flex-row flex-col gap-5 sm:gap-10 border-b-[1px] border-gray-400 pb-2'>
-				{channel.avatar_url ? (
-					<img className='w-20 h-20 rounded-full object-cover' src={channel.avatar_url} alt={channel.channel_name} />
-				) : (
-					<div className='w-20 h-20 rounded-full bg-blue-100 flex items-center justify-center text-2xl font-bold text-blue-500'>
-						{channel.channel_name?.[0] || '?'}
-					</div>
-				)}
-				<div className='min-w-0'>
-					<h5 className='font-bold mb-6'>{channel.channel_name}</h5>
-					{channel.telegram_link && (
-						<a
-							href={channel.telegram_link}
-							target='_blank'
-							rel='noopener noreferrer'
-							className='border-2 border-sky-500 px-3 py-2 rounded-md text-sky-500 hover:bg-sky-500 hover:text-white duration-500 whitespace-nowrap text-sm'
-						>
-							переглянути канал
-						</a>
+		<div className='bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden'>
+			{/* Header */}
+			<div className='p-5 pb-4'>
+				<div className='flex items-center gap-4'>
+					{channel.avatar_url ? (
+						<img className='w-16 h-16 rounded-xl object-cover flex-shrink-0' src={channel.avatar_url} alt={channel.channel_name} />
+					) : (
+						<div className='w-16 h-16 rounded-xl bg-gradient-to-br from-[#3498db] to-[#2573a7] flex items-center justify-center text-white text-2xl font-bold flex-shrink-0'>
+							{channel.channel_name?.[0] || '?'}
+						</div>
 					)}
-				</div>
-			</div>
-			<div className='border-b-[1px] border-gray-400 p-2 mt-2'>
-				<div className='flex items-center gap-2 mb-2'>
-					<FontAwesomeIcon icon={faListAlt} />
-					<p className='font-bold'>Категорія</p>
-				</div>
-				<p className='text-gray-500'>{channel.category || '—'}</p>
-			</div>
-			<div className='border-b-[1px] border-gray-400 p-2 mt-2'>
-				<div className='flex items-center gap-2 mb-2'>
-					<FontAwesomeIcon icon={faClock} />
-					<p className='font-bold'>Вік</p>
-				</div>
-				<p className='text-gray-500'>{formatAge(channel.age)}</p>
-			</div>
-			<div className='border-b-[1px] border-gray-400 p-2 grid grid-cols-2 gap-4 mt-2'>
-				<div className='border-r-[1px] border-gray-400 pr-4'>
-					<div className='flex items-center gap-2 mb-2'>
-						<FontAwesomeIcon icon={faEye} />
-						<p className='font-bold'>Переглядів</p>
+					<div className='min-w-0 flex-1'>
+						<h5 className='font-bold text-gray-900 text-lg'>{channel.channel_name}</h5>
+						<p className='text-gray-400 text-sm'>{channel.subscribers_count?.toLocaleString('uk-UA') || '0'} підписників</p>
 					</div>
-					<p className='text-gray-500'>
-						{channel.avg_views?.toLocaleString('uk-UA') || '—'}
-					</p>
+					<button
+						onClick={() => isAuthenticated ? toggleFavorite(channel.id) : alert('Увійдіть щоб додати в обране')}
+						className={`flex-shrink-0 w-10 h-10 rounded-full flex items-center justify-center transition-all duration-300 ${
+							isFav ? 'bg-red-50 text-red-500' : 'bg-gray-50 text-gray-300 hover:text-red-400 hover:bg-red-50'
+						}`}
+					>
+						<FontAwesomeIcon icon={faHeart} />
+					</button>
 				</div>
-				<div>
-					<div className='flex items-center gap-2 mb-2'>
-						<FontAwesomeIcon icon={faBarChart} />
-						<p className='font-bold'>ER</p>
+
+				{channel.telegram_link && (
+					<a
+						href={channel.telegram_link}
+						target='_blank'
+						rel='noopener noreferrer'
+						className='inline-flex items-center gap-1.5 mt-3 text-[#3498db] bg-blue-50 hover:bg-blue-100 text-sm font-semibold px-4 py-2 rounded-xl transition-all duration-300'
+					>
+						↗ Переглянути канал
+					</a>
+				)}
+
+				{channel.category && (
+					<span className='inline-block mt-3 bg-blue-50 text-[#3498db] text-xs font-semibold px-3 py-1 rounded-lg'>
+						{channel.category}
+					</span>
+				)}
+			</div>
+
+			{/* Stats grid */}
+			<div className='px-5 pb-4'>
+				<div className='grid grid-cols-2 gap-3'>
+					<div className='bg-gray-50 rounded-xl p-3'>
+						<p className='text-gray-400 text-xs mb-0.5'>Переглядів</p>
+						<p className='font-bold text-gray-800'>{channel.avg_views?.toLocaleString('uk-UA') || '—'}</p>
 					</div>
-					<p className='text-gray-500'>
-						{channel.er != null ? `${channel.er.toFixed(1)}%` : '—'}
-					</p>
+					<div className='bg-gray-50 rounded-xl p-3'>
+						<p className='text-gray-400 text-xs mb-0.5'>ER</p>
+						<p className='font-bold text-gray-800'>{channel.er != null ? `${channel.er.toFixed(1)}%` : '—'}</p>
+					</div>
+					<div className='bg-gray-50 rounded-xl p-3'>
+						<p className='text-gray-400 text-xs mb-0.5'>Вік</p>
+						<p className='font-bold text-gray-800'>{formatAge(channel.age)}</p>
+					</div>
+					<div className='bg-gray-50 rounded-xl p-3'>
+						<p className='text-gray-400 text-xs mb-0.5'>Прибуток / міс.</p>
+						<p className='font-bold text-gray-800'>
+							{channel.monthly_income ? `${channel.monthly_income.toLocaleString('uk-UA')} USDT` : '—'}
+						</p>
+					</div>
 				</div>
 			</div>
-			<div className='border-b-[1px] border-gray-400 p-2 mt-2'>
-				<div className='flex items-center gap-2 mb-2'>
-					<FontAwesomeIcon icon={faDollarSign} />
-					<p className='font-bold'>Прибуток в місяць</p>
+
+			{/* Price + Actions */}
+			<div className='border-t border-gray-100 px-5 py-4'>
+				<div className='flex items-center justify-between mb-4'>
+					<div>
+						<p className='text-gray-400 text-xs'>Ціна</p>
+						<p className='font-extrabold text-2xl text-gray-900'>
+							{channel.price?.toLocaleString('uk-UA')}
+							<span className='text-sm font-semibold text-gray-400 ml-1'>USDT</span>
+						</p>
+					</div>
 				</div>
-				<p className='text-gray-500'>
-					{channel.monthly_income
-						? `${channel.monthly_income.toLocaleString('uk-UA')} USDT`
-						: '—'}
-				</p>
-			</div>
-			<div className='border-b-[1px] border-gray-400 p-2 mt-2'>
-				<div className='flex items-center gap-2 mb-2'>
-					<FontAwesomeIcon icon={faWallet} />
-					<p className='font-bold'>Ціна</p>
-				</div>
-				<p className='text-gray-500'>
-					{channel.price?.toLocaleString('uk-UA')} USDT
-				</p>
-			</div>
-			<div className='flex flex-row sm:gap-0 gap-3 justify-between items-center mt-4'>
 				<button
 					onClick={onBuy}
-					className='font-bold bg-[#27ae60] sm:w-[65%] text-white py-2 px-6 rounded-md shadow-lg hover:shadow-green-400 duration-500'
+					className='w-full font-bold bg-[#27ae60] text-white py-3.5 rounded-xl shadow-lg shadow-green-100 hover:bg-green-600 transition-all duration-300 text-base'
 				>
-					Купити
-				</button>
-				<button
-					onClick={() => isAuthenticated ? toggleFavorite(channel.id) : alert('Увійдіть щоб додати в обране')}
-					className={`font-bold py-2 px-6 rounded-md shadow-md duration-500 ${
-						isFav ? 'bg-red-500 text-white hover:bg-red-600' : 'bg-[#3498db] text-white hover:text-red-500'
-					}`}
-				>
-					<FontAwesomeIcon icon={faHeart} />
+					Купити канал
 				</button>
 			</div>
 		</div>
