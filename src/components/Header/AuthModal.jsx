@@ -1,6 +1,7 @@
 import { faTelegram } from '@fortawesome/free-brands-svg-icons';
+import { faRightLeft } from '@fortawesome/free-solid-svg-icons';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState, useCallback } from 'react';
 import { authAPI } from '../../services/api';
 import { useAuth } from '../../context/AppContext';
 
@@ -9,9 +10,10 @@ const TELEGRAM_BOT_NAME = import.meta.env.VITE_TELEGRAM_BOT_NAME || 'TgSellBot';
 const AuthModal = ({ show, setShow }) => {
 	const telegramRef = useRef(null);
 	const { login } = useAuth();
+	const [widgetKey, setWidgetKey] = useState(0);
 
-	useEffect(() => {
-		if (!show || !telegramRef.current) return;
+	const loadWidget = useCallback(() => {
+		if (!telegramRef.current) return;
 
 		// Telegram Login Widget callback
 		window.onTelegramAuth = async (telegramUser) => {
@@ -40,11 +42,28 @@ const AuthModal = ({ show, setShow }) => {
 		script.setAttribute('data-request-access', 'write');
 		script.async = true;
 		telegramRef.current.appendChild(script);
+	}, [login, setShow]);
 
+	useEffect(() => {
+		if (!show) return;
+		loadWidget();
 		return () => {
 			delete window.onTelegramAuth;
 		};
-	}, [show, login, setShow]);
+	}, [show, widgetKey, loadWidget]);
+
+	const handleSwitchAccount = () => {
+		// Logout from Telegram OAuth via hidden iframe
+		const iframe = document.createElement('iframe');
+		iframe.src = `https://oauth.telegram.org/auth/logout?bot_id=${TELEGRAM_BOT_NAME}&origin=${encodeURIComponent(window.location.origin)}`;
+		iframe.style.display = 'none';
+		document.body.appendChild(iframe);
+		setTimeout(() => {
+			document.body.removeChild(iframe);
+			// Re-render widget so it shows fresh login
+			setWidgetKey((k) => k + 1);
+		}, 1500);
+	};
 
 	if (!show) return null;
 
@@ -59,9 +78,16 @@ const AuthModal = ({ show, setShow }) => {
 				<h2 className='text-2xl uppercase font-bold'>Вітаю 🙋‍♂️</h2>
 				<p className='text-gray-500 mt-2 mb-6'>Увійдіть через Telegram для продовження</p>
 				<div className='flex flex-col items-center gap-6'>
-					<div ref={telegramRef} className='flex justify-center'>
+					<div ref={telegramRef} key={widgetKey} className='flex justify-center'>
 						{/* Telegram Widget renders here */}
 					</div>
+					<button
+						onClick={handleSwitchAccount}
+						className='text-gray-500 hover:text-[#3498db] text-sm flex items-center gap-2 duration-300'
+					>
+						<FontAwesomeIcon icon={faRightLeft} className='text-xs' />
+						Вхід з іншого аккаунту
+					</button>
 					<div className='text-gray-400 text-sm'>— або —</div>
 					{import.meta.env.DEV && (
 						<button
