@@ -3,15 +3,62 @@ import { useParams } from 'react-router-dom';
 import { dealsAPI } from '../services/api';
 import { useAuth } from '../context/AppContext';
 
-const STATUS_LABELS = {
-	created: { text: 'Очікує підтвердження готовності', color: 'bg-yellow-500' },
-	payment_pending: { text: 'Очікує оплати', color: 'bg-yellow-500' },
-	paid: { text: 'Оплачено — передайте канал', color: 'bg-blue-500' },
-	channel_transferring: { text: 'Передача каналу', color: 'bg-blue-500' },
-	awaiting_payout: { text: 'Очікує виплати продавцю', color: 'bg-purple-500' },
-	completed: { text: 'Завершено', color: 'bg-green-500' },
-	disputed: { text: 'Спір', color: 'bg-red-500' },
-	cancelled: { text: 'Скасовано', color: 'bg-gray-500' },
+const STEPS = [
+	{ key: 'created', label: 'Готовність', icon: '🤝' },
+	{ key: 'payment_pending', label: 'Оплата', icon: '💰' },
+	{ key: 'paid', label: 'Передача', icon: '📤' },
+	{ key: 'awaiting_payout', label: 'Виплата', icon: '💳' },
+	{ key: 'completed', label: 'Завершено', icon: '✅' },
+];
+
+const STATUS_META = {
+	created: { stepIndex: 0 },
+	payment_pending: { stepIndex: 1 },
+	paid: { stepIndex: 2 },
+	channel_transferring: { stepIndex: 2 },
+	awaiting_payout: { stepIndex: 3 },
+	completed: { stepIndex: 4 },
+	disputed: { stepIndex: -1 },
+	cancelled: { stepIndex: -1 },
+};
+
+const StepProgress = ({ status }) => {
+	const meta = STATUS_META[status] || { stepIndex: -1 };
+	const currentIdx = meta.stepIndex;
+
+	if (currentIdx === -1) return null;
+
+	return (
+		<div className='flex items-center justify-between mb-8 px-2'>
+			{STEPS.map((step, i) => {
+				const done = i < currentIdx;
+				const active = i === currentIdx;
+				return (
+					<div key={step.key} className='flex items-center flex-1 last:flex-none'>
+						<div className='flex flex-col items-center'>
+							<div className={`w-10 h-10 rounded-full flex items-center justify-center text-lg font-bold transition-all duration-500 ${
+								done ? 'bg-green-500 text-white shadow-md shadow-green-200' :
+								active ? 'bg-[#3498db] text-white shadow-lg shadow-blue-200 scale-110' :
+								'bg-gray-100 text-gray-400'
+							}`}>
+								{done ? '✓' : step.icon}
+							</div>
+							<span className={`text-xs mt-1.5 font-medium whitespace-nowrap ${
+								active ? 'text-[#3498db]' : done ? 'text-green-600' : 'text-gray-400'
+							}`}>
+								{step.label}
+							</span>
+						</div>
+						{i < STEPS.length - 1 && (
+							<div className={`flex-1 h-0.5 mx-2 mt-[-16px] rounded-full transition-all duration-500 ${
+								i < currentIdx ? 'bg-green-400' : 'bg-gray-200'
+							}`} />
+						)}
+					</div>
+				);
+			})}
+		</div>
+	);
 };
 
 const DealChat = ({ dealId, userId, onCallAdmin, deal }) => {
@@ -77,20 +124,20 @@ const DealChat = ({ dealId, userId, onCallAdmin, deal }) => {
 	};
 
 	return (
-		<div className='bg-white rounded-2xl shadow-lg p-6 mb-6'>
-			<div className='flex items-center justify-between mb-4'>
-				<h3 className='font-bold text-lg'>💬 Чат угоди</h3>
+		<div className='bg-white rounded-2xl shadow-lg border border-gray-100 overflow-hidden mb-6'>
+			<div className='flex items-center justify-between px-6 py-4 border-b border-gray-100'>
+				<h3 className='font-bold text-lg'>Чат</h3>
 				{deal && !['completed', 'cancelled'].includes(deal.status) && (
 					<button
 						onClick={handleCallAdmin}
 						disabled={callingAdmin}
-						className='bg-yellow-500 text-white px-4 py-2 rounded-xl text-sm font-semibold hover:bg-yellow-600 duration-300 disabled:opacity-50'
+						className='bg-yellow-50 text-yellow-700 border border-yellow-200 px-4 py-2 rounded-xl text-sm font-semibold hover:bg-yellow-100 transition-all duration-300 disabled:opacity-50'
 					>
 						{callingAdmin ? '...' : '🛡️ Викликати адміна'}
 					</button>
 				)}
 			</div>
-			<div ref={chatContainerRef} className='bg-gray-50 rounded-xl p-4 h-80 overflow-y-auto mb-4'>
+			<div ref={chatContainerRef} className='bg-gray-50 p-4 h-80 overflow-y-auto'>
 				{messages.length === 0 && (
 					<p className='text-gray-400 text-center mt-20 text-sm'>
 						Повідомлень ще немає. Напишіть першими!
@@ -139,26 +186,23 @@ const DealChat = ({ dealId, userId, onCallAdmin, deal }) => {
 				})}
 				<div ref={messagesEndRef} />
 			</div>
-			<form onSubmit={handleSend} className='flex gap-2'>
+			<form onSubmit={handleSend} className='flex gap-2 p-4 border-t border-gray-100'>
 				<input
 					type='text'
 					value={newMessage}
 					onChange={(e) => setNewMessage(e.target.value)}
 					placeholder='Напишіть повідомлення...'
 					maxLength={2000}
-					className='flex-1 border border-gray-300 rounded-md px-4 py-2 focus:border-[#3498db] focus:outline-none'
+					className='flex-1 border border-gray-200 rounded-xl px-4 py-2.5 focus:border-[#3498db] focus:ring-2 focus:ring-blue-100 focus:outline-none transition-all'
 				/>
 				<button
 					type='submit'
 					disabled={sending || !newMessage.trim()}
-					className='bg-[#3498db] text-white px-6 py-2 rounded-md font-bold hover:bg-blue-600 duration-300 disabled:opacity-50'
+					className='bg-[#3498db] text-white px-6 py-2.5 rounded-xl font-bold hover:bg-blue-600 transition-all duration-300 disabled:opacity-50'
 				>
-					{sending ? '...' : 'Надіслати'}
+					{sending ? '...' : '→'}
 				</button>
 			</form>
-			<p className='text-gray-400 text-xs mt-2'>
-				Усі повідомлення зберігаються для арбітражу
-			</p>
 		</div>
 	);
 };
@@ -171,6 +215,7 @@ const DealPage = () => {
 	const [error, setError] = useState(null);
 	const [actionLoading, setActionLoading] = useState(false);
 	const [walletAddress, setWalletAddress] = useState('');
+	const [copied, setCopied] = useState(false);
 
 	const refreshDeal = async () => {
 		try {
@@ -218,6 +263,12 @@ const DealPage = () => {
 		handleAction(() => dealsAPI.dispute(id, reason));
 	};
 
+	const copyToClipboard = (text) => {
+		navigator.clipboard.writeText(text);
+		setCopied(true);
+		setTimeout(() => setCopied(false), 2000);
+	};
+
 	if (loading) {
 		return (
 			<div className='my-28 flex justify-center'>
@@ -236,223 +287,281 @@ const DealPage = () => {
 
 	if (!deal) return null;
 
-	const statusInfo = STATUS_LABELS[deal.status] || STATUS_LABELS.created;
 	const isBuyer = user?.id === deal.buyer_id;
 	const isSeller = user?.id === deal.seller_id;
+	const isSpecialStatus = ['disputed', 'cancelled'].includes(deal.status);
 
 	return (
 		<section className='my-28 max-w-3xl mx-auto px-4'>
-			<h1 className='text-3xl font-bold text-[#3498db] mb-8'>
-				Угода #{deal.id}
-			</h1>
 
-			{/* Error Toast */}
+			{/* Error toast */}
 			{error && (
-				<div className='bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-xl mb-6 text-sm'>
+				<div className='bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-2xl mb-6 text-sm animate-fadeIn'>
 					{error}
 				</div>
 			)}
 
-			{/* Status Badge */}
-			<div className={`${statusInfo.color} text-white text-center py-3 rounded-xl mb-8 font-bold text-lg`}>
-				{statusInfo.text}
-			</div>
-
-			{/* Deal Info Card */}
-			<div className='bg-white rounded-2xl shadow-lg p-6 mb-6'>
-				<h3 className='font-bold text-lg mb-4'>Деталі угоди</h3>
-				<div className='grid grid-cols-2 gap-4'>
+			{/* Hero header */}
+			<div className='bg-gradient-to-br from-[#3498db] to-[#2573a7] rounded-2xl p-6 mb-6 text-white shadow-xl shadow-blue-100'>
+				<div className='flex items-start justify-between'>
 					<div>
-						<p className='text-gray-500 text-sm'>Канал</p>
-						<p className='font-bold'>{deal.channel_name || `Канал #${deal.channel_id}`}</p>
+						<p className='text-blue-200 text-xs font-medium uppercase tracking-wider mb-1'>
+							{isBuyer ? 'Ви купуєте' : 'Ви продаєте'}
+						</p>
+						<h1 className='text-2xl font-bold mb-1'>
+							{deal.channel_name || `Канал #${deal.channel_id}`}
+						</h1>
+						<p className='text-blue-100 text-sm'>
+							{isBuyer ? deal.seller_name || 'Продавець' : deal.buyer_name || 'Покупець'} · {new Date(deal.created_at).toLocaleDateString('uk-UA')}
+						</p>
 					</div>
-					<div>
-						<p className='text-gray-500 text-sm'>Сума</p>
-						<p className='font-bold text-[#27ae60]'>{deal.amount_usdt} USDT</p>
-					</div>
-					<div>
-						<p className='text-gray-500 text-sm'>Покупець</p>
-						<p className='font-bold'>{deal.buyer_name || 'Покупець'}</p>
-					</div>
-					<div>
-						<p className='text-gray-500 text-sm'>Продавець</p>
-						<p className='font-bold'>{deal.seller_name || 'Продавець'}</p>
+					<div className='text-right'>
+						<p className='text-3xl font-extrabold'>{deal.amount_usdt}</p>
+						<p className='text-blue-200 text-sm font-medium'>USDT</p>
 					</div>
 				</div>
 			</div>
 
-			{/* Step 1: Confirm Readiness (status: created) */}
+			{/* Special statuses */}
+			{deal.status === 'disputed' && (
+				<div className='bg-red-50 border border-red-200 rounded-2xl p-5 mb-6 text-center'>
+					<p className='text-red-600 font-bold text-lg'>⚠️ Спір</p>
+					<p className='text-red-500 text-sm mt-1'>Адміністратор розглядає це питання</p>
+				</div>
+			)}
+			{deal.status === 'cancelled' && (
+				<div className='bg-gray-50 border border-gray-200 rounded-2xl p-5 mb-6 text-center'>
+					<p className='text-gray-500 font-bold text-lg'>Угода скасована</p>
+				</div>
+			)}
+
+			{/* Step Progress */}
+			{!isSpecialStatus && <StepProgress status={deal.status} />}
+
+			{/* Step 1: Confirm Readiness */}
 			{deal.status === 'created' && (
-				<div className='bg-white rounded-2xl shadow-lg p-6 mb-6'>
-					<h3 className='font-bold text-lg mb-4'>🤝 Підтвердження готовності</h3>
-					<p className='text-gray-600 mb-4'>
-						Обидві сторони повинні підтвердити готовність до угоди, перш ніж покупець зможе оплатити.
+				<div className='bg-white rounded-2xl shadow-lg border border-gray-100 p-6 mb-6'>
+					<h3 className='font-bold text-lg mb-2'>Підтвердіть готовність до угоди</h3>
+					<p className='text-gray-500 text-sm mb-5'>
+						Обидві сторони повинні підтвердити готовність. Після цього покупець зможе оплатити.
 					</p>
-					<div className='flex items-center gap-4 mb-4'>
-						<div className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold ${deal.buyer_ready ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'}`}>
-							{deal.buyer_ready ? '✅' : '⏳'} Покупець
+					<div className='flex gap-3 mb-5'>
+						<div className={`flex-1 flex items-center gap-3 p-4 rounded-xl border-2 transition-all duration-300 ${
+							deal.buyer_ready ? 'border-green-400 bg-green-50' : 'border-gray-200 bg-gray-50'
+						}`}>
+							<div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold ${
+								deal.buyer_ready ? 'bg-green-500 text-white' : 'bg-gray-200 text-gray-400'
+							}`}>
+								{deal.buyer_ready ? '✓' : '1'}
+							</div>
+							<div>
+								<p className='font-semibold text-sm'>Покупець</p>
+								<p className={`text-xs ${deal.buyer_ready ? 'text-green-600' : 'text-gray-400'}`}>
+									{deal.buyer_ready ? 'Готовий' : 'Очікує'}
+								</p>
+							</div>
 						</div>
-						<div className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold ${deal.seller_ready ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'}`}>
-							{deal.seller_ready ? '✅' : '⏳'} Продавець
+						<div className={`flex-1 flex items-center gap-3 p-4 rounded-xl border-2 transition-all duration-300 ${
+							deal.seller_ready ? 'border-green-400 bg-green-50' : 'border-gray-200 bg-gray-50'
+						}`}>
+							<div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold ${
+								deal.seller_ready ? 'bg-green-500 text-white' : 'bg-gray-200 text-gray-400'
+							}`}>
+								{deal.seller_ready ? '✓' : '2'}
+							</div>
+							<div>
+								<p className='font-semibold text-sm'>Продавець</p>
+								<p className={`text-xs ${deal.seller_ready ? 'text-green-600' : 'text-gray-400'}`}>
+									{deal.seller_ready ? 'Готовий' : 'Очікує'}
+								</p>
+							</div>
 						</div>
 					</div>
-					{((isBuyer && !deal.buyer_ready) || (isSeller && !deal.seller_ready)) && (
+					{((isBuyer && !deal.buyer_ready) || (isSeller && !deal.seller_ready)) ? (
 						<button
 							onClick={handleConfirmReady}
 							disabled={actionLoading}
-							className='font-bold bg-[#3498db] text-white py-3 px-8 rounded-xl shadow-lg hover:bg-blue-600 duration-300 disabled:opacity-50'
+							className='w-full font-bold bg-[#3498db] text-white py-3.5 rounded-xl shadow-lg shadow-blue-100 hover:bg-blue-600 transition-all duration-300 disabled:opacity-50'
 						>
-							{actionLoading ? 'Зачекайте...' : '✅ Підтвердити готовність'}
+							{actionLoading ? 'Зачекайте...' : 'Підтвердити готовність'}
 						</button>
+					) : (
+						<div className='bg-blue-50 text-blue-600 text-sm font-medium px-4 py-3 rounded-xl text-center'>
+							Ви підтвердили. Очікуйте іншу сторону
+						</div>
 					)}
-					{((isBuyer && deal.buyer_ready) || (isSeller && deal.seller_ready)) && (
-						<p className='text-green-600 font-semibold text-sm'>
-							Ви підтвердили готовність. Очікуйте підтвердження іншої сторони.
+				</div>
+			)}
+
+			{/* Step 2: Payment */}
+			{deal.status === 'payment_pending' && isBuyer && (
+				<div className='bg-white rounded-2xl shadow-lg border border-gray-100 p-6 mb-6'>
+					<h3 className='font-bold text-lg mb-2'>Оплата</h3>
+					<p className='text-gray-500 text-sm mb-5'>
+						Переведіть <strong className='text-gray-800'>{deal.amount_usdt} USDT</strong> через мережу <strong className='text-gray-800'>TRC-20</strong>
+					</p>
+					<div className='relative bg-gray-50 border border-gray-200 p-4 rounded-xl mb-4 group'>
+						<p className='font-mono text-sm break-all pr-10 select-all text-gray-700'>
+							{deal.escrow_wallet_address}
+						</p>
+						<button
+							onClick={() => copyToClipboard(deal.escrow_wallet_address)}
+							className='absolute top-3 right-3 bg-white border border-gray-200 rounded-lg px-2.5 py-1.5 text-xs font-medium text-gray-500 hover:text-[#3498db] hover:border-[#3498db] transition-all'
+						>
+							{copied ? '✓' : 'Копіювати'}
+						</button>
+					</div>
+					<div className='flex items-start gap-2 bg-yellow-50 border border-yellow-200 rounded-xl px-4 py-3'>
+						<span className='text-yellow-500 text-sm mt-0.5'>⚠️</span>
+						<div className='text-xs text-yellow-700'>
+							<p className='font-semibold'>Переводьте тільки USDT через TRC-20!</p>
+							<p className='mt-0.5 text-yellow-600'>Оплата перевіряється автоматично кожні 30 секунд</p>
+						</div>
+					</div>
+				</div>
+			)}
+			{deal.status === 'payment_pending' && isSeller && (
+				<div className='bg-white rounded-2xl shadow-lg border border-gray-100 p-6 mb-6'>
+					<div className='flex items-center gap-3'>
+						<div className='w-10 h-10 rounded-full bg-yellow-50 flex items-center justify-center'>
+							<span className='text-xl'>⏳</span>
+						</div>
+						<div>
+							<h3 className='font-bold'>Очікування оплати</h3>
+							<p className='text-gray-500 text-sm'>Покупець здійснює переказ</p>
+						</div>
+					</div>
+				</div>
+			)}
+
+			{/* Step 3: Channel Transfer */}
+			{deal.status === 'paid' && (
+				<div className='bg-white rounded-2xl shadow-lg border border-gray-100 p-6 mb-6'>
+					<h3 className='font-bold text-lg mb-2'>Передача каналу</h3>
+					{isSeller && (
+						<p className='text-gray-500 text-sm mb-5'>
+							Кошти отримані! Передайте канал через Telegram:
+							<span className='block text-gray-400 text-xs mt-1'>Settings → Channel → Administrators → Transfer Ownership</span>
 						</p>
 					)}
-				</div>
-			)}
-
-			{/* Step 2: Payment (status: payment_pending) */}
-			{deal.status === 'payment_pending' && isBuyer && (
-				<div className='bg-white rounded-2xl shadow-lg p-6 mb-6'>
-					<h3 className='font-bold text-lg mb-4'>💰 Оплата</h3>
-					<p className='mb-2'>Переведіть <strong>{deal.amount_usdt} USDT (TRC-20)</strong> на адресу:</p>
-					<div className='bg-gray-100 p-4 rounded-xl font-mono text-sm break-all select-all mb-4'>
-						{deal.escrow_wallet_address}
-					</div>
-					<p className='text-gray-500 text-sm'>
-						⏳ Оплата автоматично перевіряється кожні 30 секунд.
-					</p>
-					<p className='text-red-500 text-sm mt-2'>
-						⚠️ Переводьте тільки USDT через мережу TRC-20!
-					</p>
-				</div>
-			)}
-
-			{deal.status === 'payment_pending' && isSeller && (
-				<div className='bg-white rounded-2xl shadow-lg p-6 mb-6'>
-					<h3 className='font-bold text-lg mb-4'>⏳ Очікування оплати</h3>
-					<p className='text-gray-600'>
-						Покупець здійснює оплату. Ви отримаєте повідомлення, коли кошти надійдуть.
-					</p>
-				</div>
-			)}
-
-			{/* Step 3: Channel Transfer (status: paid) */}
-			{deal.status === 'paid' && (
-				<div className='bg-white rounded-2xl shadow-lg p-6 mb-6'>
-					<h3 className='font-bold text-lg mb-4'>📤 Передача каналу</h3>
-					{isSeller && (
-						<>
-							<p className='mb-4'>
-								Кошти отримані! Передайте права власності на канал покупцю через Telegram:
-								<br />
-								<span className='text-gray-500 text-sm'>Settings → Channel → Administrators → Transfer Ownership</span>
-							</p>
-							<div className='flex items-center gap-4 mb-4'>
-								<div className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold ${deal.seller_confirmed_transfer ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'}`}>
-									{deal.seller_confirmed_transfer ? '✅' : '⏳'} Ви (продавець)
-								</div>
-								<div className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold ${deal.buyer_confirmed_transfer ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'}`}>
-									{deal.buyer_confirmed_transfer ? '✅' : '⏳'} Покупець
-								</div>
+					{isBuyer && (
+						<p className='text-gray-500 text-sm mb-5'>
+							Кошти на рахунку. Перевірте, чи ви отримали права на канал.
+						</p>
+					)}
+					<div className='flex gap-3 mb-5'>
+						<div className={`flex-1 flex items-center gap-3 p-4 rounded-xl border-2 transition-all duration-300 ${
+							deal.buyer_confirmed_transfer ? 'border-green-400 bg-green-50' : 'border-gray-200 bg-gray-50'
+						}`}>
+							<div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold ${
+								deal.buyer_confirmed_transfer ? 'bg-green-500 text-white' : 'bg-gray-200 text-gray-400'
+							}`}>
+								{deal.buyer_confirmed_transfer ? '✓' : '⏳'}
 							</div>
-							{!deal.seller_confirmed_transfer && (
+							<div>
+								<p className='font-semibold text-sm'>Покупець</p>
+								<p className={`text-xs ${deal.buyer_confirmed_transfer ? 'text-green-600' : 'text-gray-400'}`}>
+									{deal.buyer_confirmed_transfer ? 'Підтвердив' : 'Очікує'}
+								</p>
+							</div>
+						</div>
+						<div className={`flex-1 flex items-center gap-3 p-4 rounded-xl border-2 transition-all duration-300 ${
+							deal.seller_confirmed_transfer ? 'border-green-400 bg-green-50' : 'border-gray-200 bg-gray-50'
+						}`}>
+							<div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold ${
+								deal.seller_confirmed_transfer ? 'bg-green-500 text-white' : 'bg-gray-200 text-gray-400'
+							}`}>
+								{deal.seller_confirmed_transfer ? '✓' : '⏳'}
+							</div>
+							<div>
+								<p className='font-semibold text-sm'>Продавець</p>
+								<p className={`text-xs ${deal.seller_confirmed_transfer ? 'text-green-600' : 'text-gray-400'}`}>
+									{deal.seller_confirmed_transfer ? 'Підтвердив' : 'Очікує'}
+								</p>
+							</div>
+						</div>
+					</div>
+					{((isBuyer && !deal.buyer_confirmed_transfer) || (isSeller && !deal.seller_confirmed_transfer)) ? (
+						<div className='flex gap-3'>
+							<button
+								onClick={handleConfirmTransfer}
+								disabled={actionLoading}
+								className='flex-1 font-bold bg-[#27ae60] text-white py-3.5 rounded-xl shadow-lg shadow-green-100 hover:bg-green-600 transition-all duration-300 disabled:opacity-50'
+							>
+								{actionLoading ? 'Зачекайте...' : isBuyer ? 'Підтвердити отримання' : 'Підтвердити передачу'}
+							</button>
+							{isBuyer && (
 								<button
-									onClick={handleConfirmTransfer}
+									onClick={handleDispute}
 									disabled={actionLoading}
-									className='font-bold bg-[#27ae60] text-white py-3 px-8 rounded-xl shadow-lg hover:bg-green-600 duration-300 disabled:opacity-50 mr-4'
+									className='bg-red-50 text-red-500 border border-red-200 px-5 py-3.5 rounded-xl font-semibold hover:bg-red-100 transition-all duration-300 disabled:opacity-50'
 								>
-									{actionLoading ? 'Зачекайте...' : '✅ Підтвердити передачу'}
+									Спір
 								</button>
 							)}
-						</>
-					)}
-					{isBuyer && (
-						<>
-							<p className='mb-4'>
-								Продавець передає вам канал. Перевірте, чи ви отримали права власності.
-							</p>
-							<div className='flex items-center gap-4 mb-4'>
-								<div className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold ${deal.buyer_confirmed_transfer ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'}`}>
-									{deal.buyer_confirmed_transfer ? '✅' : '⏳'} Ви (покупець)
-								</div>
-								<div className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold ${deal.seller_confirmed_transfer ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'}`}>
-									{deal.seller_confirmed_transfer ? '✅' : '⏳'} Продавець
-								</div>
-							</div>
-							{!deal.buyer_confirmed_transfer && (
-								<>
-									<button
-										onClick={handleConfirmTransfer}
-										disabled={actionLoading}
-										className='font-bold bg-[#27ae60] text-white py-3 px-8 rounded-xl shadow-lg hover:bg-green-600 duration-300 disabled:opacity-50 mr-4'
-									>
-										{actionLoading ? 'Зачекайте...' : '✅ Підтвердити отримання'}
-									</button>
-									<button
-										onClick={handleDispute}
-										disabled={actionLoading}
-										className='font-bold bg-red-500 text-white py-3 px-8 rounded-xl shadow-lg hover:bg-red-600 duration-300 disabled:opacity-50'
-									>
-										⚠️ Відкрити спір
-									</button>
-								</>
-							)}
-						</>
+						</div>
+					) : (
+						<div className='bg-blue-50 text-blue-600 text-sm font-medium px-4 py-3 rounded-xl text-center'>
+							Ви підтвердили. Очікуйте іншу сторону
+						</div>
 					)}
 				</div>
 			)}
 
-			{/* Step 4: Seller Wallet (status: awaiting_payout) */}
+			{/* Step 4: Seller Wallet */}
 			{deal.status === 'awaiting_payout' && isSeller && (
-				<div className='bg-white rounded-2xl shadow-lg p-6 mb-6'>
-					<h3 className='font-bold text-lg mb-4'>💳 Адреса для виплати</h3>
-					<p className='text-gray-600 mb-4'>
-						Канал передано! Вкажіть вашу USDT (TRC-20) адресу для отримання коштів.
-						<br />
-						<span className='text-sm text-gray-400'>Комісія сервісу: 3%</span>
+				<div className='bg-white rounded-2xl shadow-lg border border-gray-100 p-6 mb-6'>
+					<h3 className='font-bold text-lg mb-2'>Отримання коштів</h3>
+					<p className='text-gray-500 text-sm mb-1'>
+						Канал успішно передано! Вкажіть вашу USDT (TRC-20) адресу.
 					</p>
-					<div className='flex gap-2'>
+					<p className='text-gray-400 text-xs mb-5'>Комісія сервісу: 3%</p>
+					<div className='flex gap-2 mb-3'>
 						<input
 							type='text'
 							value={walletAddress}
 							onChange={(e) => setWalletAddress(e.target.value)}
-							placeholder='T...'
+							placeholder='TRC-20 адреса (T...)'
 							maxLength={100}
-							className='flex-1 border border-gray-300 rounded-xl px-4 py-3 focus:border-[#3498db] focus:outline-none font-mono text-sm'
+							className='flex-1 border border-gray-200 rounded-xl px-4 py-3.5 focus:border-[#3498db] focus:ring-2 focus:ring-blue-100 focus:outline-none font-mono text-sm transition-all'
 						/>
 						<button
 							onClick={handleSubmitWallet}
 							disabled={actionLoading || !walletAddress.trim()}
-							className='font-bold bg-[#27ae60] text-white px-8 py-3 rounded-xl shadow-lg hover:bg-green-600 duration-300 disabled:opacity-50'
+							className='font-bold bg-[#27ae60] text-white px-6 py-3.5 rounded-xl shadow-lg shadow-green-100 hover:bg-green-600 transition-all duration-300 disabled:opacity-50 whitespace-nowrap'
 						>
-							{actionLoading ? 'Переказ...' : '💸 Отримати кошти'}
+							{actionLoading ? 'Переказ...' : 'Отримати'}
 						</button>
 					</div>
-					<p className='text-red-500 text-xs mt-2'>
-						⚠️ Перевірте адресу! Помилка в адресі призведе до втрати коштів.
+					<p className='text-red-400 text-xs'>
+						⚠️ Ретельно перевірте адресу — помилка призведе до втрати коштів
 					</p>
 				</div>
 			)}
-
 			{deal.status === 'awaiting_payout' && isBuyer && (
-				<div className='bg-white rounded-2xl shadow-lg p-6 mb-6'>
-					<h3 className='font-bold text-lg mb-4'>⏳ Виплата продавцю</h3>
-					<p className='text-gray-600'>
-						Канал передано! Продавець вказує адресу для отримання коштів.
-					</p>
+				<div className='bg-white rounded-2xl shadow-lg border border-gray-100 p-6 mb-6'>
+					<div className='flex items-center gap-3'>
+						<div className='w-10 h-10 rounded-full bg-purple-50 flex items-center justify-center'>
+							<span className='text-xl'>💳</span>
+						</div>
+						<div>
+							<h3 className='font-bold'>Виплата продавцю</h3>
+							<p className='text-gray-500 text-sm'>Продавець отримує кошти</p>
+						</div>
+					</div>
 				</div>
 			)}
 
 			{/* Step 5: Completed */}
 			{deal.status === 'completed' && (
-				<div className='bg-green-50 rounded-2xl shadow-lg p-6 mb-6 text-center'>
-					<h3 className='font-bold text-xl mb-2 text-green-600'>✅ Угода завершена!</h3>
-					<p className='text-gray-600'>Дякуємо за використання TgSell!</p>
+				<div className='bg-gradient-to-br from-green-50 to-emerald-50 border border-green-200 rounded-2xl p-8 mb-6 text-center'>
+					<div className='w-16 h-16 rounded-full bg-green-500 text-white flex items-center justify-center text-3xl mx-auto mb-4 shadow-lg shadow-green-200'>
+						✓
+					</div>
+					<h3 className='font-bold text-xl text-green-700 mb-1'>Угода завершена</h3>
+					<p className='text-green-600 text-sm'>Дякуємо за використання TgSell!</p>
 					{deal.payout_tx_hash && (
-						<p className='text-gray-400 text-xs mt-3 font-mono break-all'>
+						<p className='text-gray-400 text-xs mt-4 font-mono break-all'>
 							TX: {deal.payout_tx_hash}
 						</p>
 					)}
@@ -461,29 +570,6 @@ const DealPage = () => {
 
 			{/* Deal Chat */}
 			<DealChat dealId={deal.id} userId={user?.id} onCallAdmin={handleCallAdmin} deal={deal} />
-
-			{/* Timeline */}
-			<div className='bg-white rounded-2xl shadow-lg p-6'>
-				<h3 className='font-bold text-lg mb-4'>📋 Хронологія</h3>
-				<div className='space-y-3'>
-					<div className='flex items-center gap-3'>
-						<div className='w-3 h-3 rounded-full bg-green-500'></div>
-						<p className='text-sm'>Угода створена — {new Date(deal.created_at).toLocaleString('uk-UA')}</p>
-					</div>
-					{deal.paid_at && (
-						<div className='flex items-center gap-3'>
-							<div className='w-3 h-3 rounded-full bg-green-500'></div>
-							<p className='text-sm'>Оплата отримана — {new Date(deal.paid_at).toLocaleString('uk-UA')}</p>
-						</div>
-					)}
-					{deal.completed_at && (
-						<div className='flex items-center gap-3'>
-							<div className='w-3 h-3 rounded-full bg-green-500'></div>
-							<p className='text-sm'>Угода завершена — {new Date(deal.completed_at).toLocaleString('uk-UA')}</p>
-						</div>
-					)}
-				</div>
-			</div>
 		</section>
 	);
 };
