@@ -291,7 +291,7 @@ async def notify_deal_completed(bot: Bot, deal: Deal, buyer: User, seller: User)
 
 async def start_bot():
     """Start the Telegram bot (run as separate process or task)."""
-    bot = Bot(token=settings.bot_token)
+    bot = Bot(token=settings.bot_token_alerts)
     dp = Dispatcher()
     dp.include_router(router)
 

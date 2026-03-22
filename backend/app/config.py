@@ -2,8 +2,10 @@ from pydantic_settings import BaseSettings
 
 
 class Settings(BaseSettings):
-    # Telegram Bot
-    bot_token: str = ""
+    # Telegram Bots (split by function)
+    bot_token_auth: str = ""      # tgsell_auth_bot — Login Widget
+    bot_token_alerts: str = ""     # tgsell_alert_bot — deal notifications (aiogram)
+    bot_token_stats: str = ""      # tgsell_stats_bot — Bot API stats (getChat, etc.)
     telegram_api_id: int = 0
     telegram_api_hash: str = ""
     telegram_phone: str = ""

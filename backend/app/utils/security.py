@@ -49,8 +49,8 @@ def verify_telegram_auth(data: dict) -> bool:
         f"{k}={v}" for k, v in sorted(auth_data.items()) if v is not None
     )
 
-    # Secret key = SHA256(bot_token)
-    secret_key = hashlib.sha256(settings.bot_token.encode()).digest()
+    # Secret key = SHA256(auth bot token)
+    secret_key = hashlib.sha256(settings.bot_token_auth.encode()).digest()
     computed_hash = hmac.new(secret_key, check_string.encode(), hashlib.sha256).hexdigest()
 
     return hmac.compare_digest(computed_hash, received_hash)

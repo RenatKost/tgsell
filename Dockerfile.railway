@@ -9,9 +9,11 @@ COPY src/ ./src/
 COPY .env.example ./.env
 
 ARG VITE_API_URL=/api
-ARG VITE_TELEGRAM_BOT_NAME=tgsell_garant_bot
+ARG VITE_TELEGRAM_BOT_NAME=tgsell_auth_bot
+ARG VITE_GOOGLE_CLIENT_ID=""
 RUN echo "VITE_API_URL=${VITE_API_URL}" > .env && \
     echo "VITE_TELEGRAM_BOT_NAME=${VITE_TELEGRAM_BOT_NAME}" >> .env && \
+    echo "VITE_GOOGLE_CLIENT_ID=${VITE_GOOGLE_CLIENT_ID}" >> .env && \
     npm run build
 
 FROM python:3.12-slim

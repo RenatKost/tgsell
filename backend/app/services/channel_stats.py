@@ -45,7 +45,7 @@ async def get_channel_info_bot_api(channel_username: str) -> dict | None:
     """
     import httpx
 
-    base_url = f"https://api.telegram.org/bot{settings.bot_token}"
+    base_url = f"https://api.telegram.org/bot{settings.bot_token_stats}"
 
     try:
         async with httpx.AsyncClient() as http:
@@ -71,7 +71,7 @@ async def get_channel_info_bot_api(channel_username: str) -> dict | None:
                     if file_resp.status_code == 200:
                         file_path = file_resp.json().get("result", {}).get("file_path")
                         if file_path:
-                            photo_url = f"https://api.telegram.org/file/bot{settings.bot_token}/{file_path}"
+                            photo_url = f"https://api.telegram.org/file/bot{settings.bot_token_stats}/{file_path}"
 
             return {
                 "name": chat_data.get("title", ""),
