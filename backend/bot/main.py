@@ -287,16 +287,60 @@ async def notify_deal_completed(bot: Bot, deal: Deal, buyer: User, seller: User)
                 logger.error(f"Failed to notify user {user.telegram_id}: {e}")
 
 
+# ── Auth bot router (separate bot for login) ─────────────────────────
+
+auth_router = Router()
+
+
+@auth_router.message(CommandStart())
+async def auth_cmd_start(message: Message):
+    """Handle /start with auth tokens on the auth bot."""
+    args = message.text.split(maxsplit=1)
+    if len(args) > 1 and args[1].startswith("auth_"):
+        token = args[1][5:]  # strip "auth_" prefix
+        from app.utils.auth_tokens import complete_auth_token
+
+        user_data = {
+            "id": message.from_user.id,
+            "first_name": message.from_user.first_name or "User",
+            "username": message.from_user.username,
+        }
+        if complete_auth_token(token, user_data):
+            await message.answer(
+                "✅ Авторизація успішна! Поверніться на сайт — вхід виконається автоматично.",
+            )
+        else:
+            await message.answer(
+                "❌ Посилання для входу недійсне або вже використане.\n"
+                "Спробуйте ще раз на сайті.",
+            )
+        return
+
+    await message.answer(
+        "👋 Вітаю! Я бот авторизації TgSell.\n"
+        "Використовуйте кнопку на сайті для входу.",
+    )
+
+
 # ── Bot runner ────────────────────────────────────────────────────────
 
 async def start_bot():
-    """Start the Telegram bot (run as separate process or task)."""
-    bot = Bot(token=settings.bot_token_alerts)
-    dp = Dispatcher()
-    dp.include_router(router)
+    """Start both Telegram bots (alerts + auth)."""
+    # Alerts bot (deals, notifications)
+    alerts_bot = Bot(token=settings.bot_token_alerts)
+    alerts_dp = Dispatcher()
+    alerts_dp.include_router(router)
 
-    logger.info("Telegram bot starting…")
-    await dp.start_polling(bot)
+    # Auth bot (login via deep link)
+    auth_bot = Bot(token=settings.bot_token_auth)
+    auth_dp = Dispatcher()
+    auth_dp.include_router(auth_router)
+
+    logger.info("Telegram bots starting (alerts + auth)…")
+    await asyncio.gather(
+        alerts_dp.start_polling(alerts_bot),
+        auth_dp.start_polling(auth_bot),
+    )
 
 
 if __name__ == "__main__":

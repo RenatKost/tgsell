@@ -65,6 +65,12 @@ export const authAPI = {
 	linkTelegram: (telegramData) =>
 		api.post('/auth/link/telegram', telegramData),
 
+	createBotToken: () =>
+		api.post('/auth/bot-token'),
+
+	checkBotAuth: (token) =>
+		api.get('/auth/bot-check', { params: { token } }),
+
 	getMe: () =>
 		api.get('/auth/me'),
 

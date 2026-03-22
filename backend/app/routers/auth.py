@@ -168,6 +168,60 @@ async def link_telegram(
     return UserResponse.model_validate(current_user)
 
 
+# ── Bot-based auth (for switching Telegram accounts) ─────────────────
+
+@router.post("/bot-token")
+async def create_bot_auth_token():
+    """Generate a one-time token for bot-based login."""
+    from app.utils.auth_tokens import create_auth_token
+    token = create_auth_token()
+    bot_name = "tgsell_auth_bot"
+    return {
+        "token": token,
+        "bot_link": f"https://t.me/{bot_name}?start=auth_{token}",
+    }
+
+
+@router.get("/bot-check")
+async def check_bot_auth(token: str, db: AsyncSession = Depends(get_db)):
+    """Poll this endpoint to check if bot auth completed."""
+    from app.utils.auth_tokens import consume_auth_token
+
+    user_data = consume_auth_token(token)
+    if not user_data:
+        return {"status": "pending"}
+
+    # Find or create user
+    result = await db.execute(select(User).where(User.telegram_id == user_data["id"]))
+    user = result.scalar_one_or_none()
+
+    if not user:
+        user = User(
+            telegram_id=user_data["id"],
+            username=user_data.get("username"),
+            first_name=user_data.get("first_name", "User"),
+            avatar_url=None,
+        )
+        db.add(user)
+        await db.commit()
+        await db.refresh(user)
+    else:
+        user.username = user_data.get("username") or user.username
+        user.first_name = user_data.get("first_name") or user.first_name
+        await db.commit()
+        await db.refresh(user)
+
+    access_token = create_access_token({"sub": str(user.id)})
+    refresh_token = create_refresh_token({"sub": str(user.id)})
+
+    return {
+        "status": "ok",
+        "access_token": access_token,
+        "refresh_token": refresh_token,
+        "user": UserResponse.model_validate(user).model_dump(),
+    }
+
+
 @router.get("/me", response_model=UserResponse)
 async def get_me(user: User = Depends(get_current_user)):
     """Get current authenticated user."""

@@ -1,5 +1,5 @@
 import { faTelegram, faGoogle } from '@fortawesome/free-brands-svg-icons';
-import { faRightLeft } from '@fortawesome/free-solid-svg-icons';
+import { faRightLeft, faSpinner } from '@fortawesome/free-solid-svg-icons';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { useEffect, useRef, useState, useCallback } from 'react';
 import { authAPI } from '../../services/api';
@@ -13,6 +13,8 @@ const AuthModal = ({ show, setShow }) => {
 	const googleBtnRef = useRef(null);
 	const { login } = useAuth();
 	const [widgetKey, setWidgetKey] = useState(0);
+	const [botAuth, setBotAuth] = useState({ status: 'idle' }); // idle | loading | waiting | error
+	const pollRef = useRef(null);
 
 	// Google Sign-In callback
 	const handleGoogleResponse = useCallback(async (response) => {
@@ -29,6 +31,53 @@ const AuthModal = ({ show, setShow }) => {
 			alert(`Помилка входу: ${msg}`);
 		}
 	}, [login, setShow]);
+
+	// Cleanup polling on unmount or modal close
+	useEffect(() => {
+		if (!show) {
+			stopPolling();
+			setBotAuth({ status: 'idle' });
+		}
+		return () => stopPolling();
+	}, [show]);
+
+	const stopPolling = () => {
+		if (pollRef.current) {
+			clearInterval(pollRef.current);
+			pollRef.current = null;
+		}
+	};
+
+	const handleBotLogin = async () => {
+		setBotAuth({ status: 'loading' });
+		try {
+			const { data } = await authAPI.createBotToken();
+			const { token, bot_link } = data;
+			window.open(bot_link, '_blank');
+			setBotAuth({ status: 'waiting', token });
+
+			pollRef.current = setInterval(async () => {
+				try {
+					const { data: result } = await authAPI.checkBotAuth(token);
+					if (result.status === 'ok') {
+						stopPolling();
+						login(result.user, {
+							access_token: result.access_token,
+							refresh_token: result.refresh_token,
+						});
+						setShow(false);
+						setBotAuth({ status: 'idle' });
+					}
+				} catch {
+					// token expired or error — stop polling
+					stopPolling();
+					setBotAuth({ status: 'error' });
+				}
+			}, 2000);
+		} catch {
+			setBotAuth({ status: 'error' });
+		}
+	};
 
 	// Load Google Identity Services SDK
 	useEffect(() => {
@@ -117,26 +166,6 @@ const AuthModal = ({ show, setShow }) => {
 		};
 	}, [show, widgetKey, loadWidget]);
 
-	const handleSwitchAccount = () => {
-		// Open Telegram OAuth logout in popup
-		// bot_id must be numeric — extract from VITE_TELEGRAM_BOT_AUTH_ID or use known ID
-		const botNumericId = import.meta.env.VITE_TELEGRAM_BOT_AUTH_ID || '8490432145';
-		const logoutUrl = `https://oauth.telegram.org/auth/logout?bot_id=${botNumericId}&origin=${encodeURIComponent(window.location.origin)}`;
-		const popup = window.open(logoutUrl, '_blank', 'width=550,height=450');
-		const timer = setInterval(() => {
-			if (popup && popup.closed) {
-				clearInterval(timer);
-				setWidgetKey((k) => k + 1);
-			}
-		}, 300);
-		// Fallback: if popup blocked or user doesn't close it
-		setTimeout(() => {
-			clearInterval(timer);
-			if (popup) popup.close();
-			setWidgetKey((k) => k + 1);
-		}, 5000);
-	};
-
 	if (!show) return null;
 
 	return (
@@ -155,12 +184,28 @@ const AuthModal = ({ show, setShow }) => {
 						{/* Telegram Widget renders here */}
 					</div>
 					<button
-						onClick={handleSwitchAccount}
-						className='text-gray-500 hover:text-[#3498db] text-xs flex items-center gap-1.5 duration-300'
+						onClick={handleBotLogin}
+						disabled={botAuth.status === 'loading' || botAuth.status === 'waiting'}
+						className='text-gray-500 hover:text-[#3498db] text-xs flex items-center gap-1.5 duration-300 disabled:opacity-50'
 					>
-						<FontAwesomeIcon icon={faRightLeft} className='text-[10px]' />
-						Інший Telegram аккаунт
+						{botAuth.status === 'loading' || botAuth.status === 'waiting' ? (
+							<FontAwesomeIcon icon={faSpinner} className='text-[10px] animate-spin' />
+						) : (
+							<FontAwesomeIcon icon={faRightLeft} className='text-[10px]' />
+						)}
+						{botAuth.status === 'waiting' ? 'Очікуємо підтвердження...' : 'Інший Telegram аккаунт'}
 					</button>
+					{botAuth.status === 'waiting' && (
+						<p className='text-xs text-gray-400'>
+							Натисніть <b>Start</b> у боті, що відкрився в Telegram
+						</p>
+					)}
+					{botAuth.status === 'error' && (
+						<p className='text-xs text-red-400'>
+							Час вийшов або сталась помилка.{' '}
+							<button onClick={handleBotLogin} className='underline hover:text-red-600'>Спробувати знову</button>
+						</p>
+					)}
 
 					<div className='flex items-center gap-3 w-full'>
 						<div className='flex-1 h-px bg-gray-200'></div>
