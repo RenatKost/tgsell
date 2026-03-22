@@ -53,16 +53,21 @@ const AuthModal = ({ show, setShow }) => {
 	}, [show, widgetKey, loadWidget]);
 
 	const handleSwitchAccount = () => {
-		// Logout from Telegram OAuth via hidden iframe
-		const iframe = document.createElement('iframe');
-		iframe.src = `https://oauth.telegram.org/auth/logout?bot_id=${TELEGRAM_BOT_NAME}&origin=${encodeURIComponent(window.location.origin)}`;
-		iframe.style.display = 'none';
-		document.body.appendChild(iframe);
+		// Open Telegram OAuth logout in popup (iframe blocked by SameSite cookies)
+		const logoutUrl = `https://oauth.telegram.org/auth/logout?bot_id=${TELEGRAM_BOT_NAME}&origin=${encodeURIComponent(window.location.origin)}`;
+		const popup = window.open(logoutUrl, '_blank', 'width=550,height=450');
+		const timer = setInterval(() => {
+			if (popup && popup.closed) {
+				clearInterval(timer);
+				setWidgetKey((k) => k + 1);
+			}
+		}, 300);
+		// Fallback: if popup blocked or user doesn't close it
 		setTimeout(() => {
-			document.body.removeChild(iframe);
-			// Re-render widget so it shows fresh login
+			clearInterval(timer);
+			if (popup) popup.close();
 			setWidgetKey((k) => k + 1);
-		}, 1500);
+		}, 5000);
 	};
 
 	if (!show) return null;
