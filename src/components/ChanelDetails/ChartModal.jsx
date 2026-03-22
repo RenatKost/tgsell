@@ -65,7 +65,8 @@ const ChartModal = ({ open, onClose, stats = [], title, color, dataKey, tooltipF
 		},
 		xaxis: {
 			categories,
-			labels: { show: true, rotate: -45, rotateAlways: false, style: { colors: '#6b7280', fontSize: '11px' }, hideOverlappingLabels: true },
+			tickAmount: Math.min(categories.length, 15),
+			labels: { show: true, rotate: -45, rotateAlways: false, style: { colors: '#6b7280', fontSize: '11px' }, hideOverlappingLabels: true, maxHeight: 80 },
 			axisTicks: { show: true, color: '#e5e7eb' },
 			axisBorder: { show: true, color: '#e5e7eb' },
 			tooltip: { enabled: false },
