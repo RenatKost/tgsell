@@ -8,15 +8,16 @@ import {
 	faUsers,
 	faWallet,
 	faTrash,
+	faArrowRight,
 } from '@fortawesome/free-solid-svg-icons';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { NavLink } from 'react-router-dom';
 
 const statusLabels = {
-	pending: { text: 'На модерації', color: 'text-yellow-600 bg-yellow-100' },
-	approved: { text: 'Опубліковано', color: 'text-green-600 bg-green-100' },
-	rejected: { text: 'Відхилено', color: 'text-red-600 bg-red-100' },
-	sold: { text: 'Продано', color: 'text-gray-600 bg-gray-100' },
+	pending: { text: 'На модерації', color: 'text-yellow-700 bg-yellow-50 border-yellow-200' },
+	approved: { text: 'Опубліковано', color: 'text-green-700 bg-green-50 border-green-200' },
+	rejected: { text: 'Відхилено', color: 'text-red-700 bg-red-50 border-red-200' },
+	sold: { text: 'Продано', color: 'text-gray-700 bg-gray-50 border-gray-200' },
 };
 
 const CabinetCard = ({ channel, onDelete }) => {
@@ -24,117 +25,112 @@ const CabinetCard = ({ channel, onDelete }) => {
 
 	const formatAge = (months) => {
 		if (!months) return '—';
-		const y = Math.floor(months / 12);
-		const m = months % 12;
-		return y > 0 ? `${y} р. ${m} міс.` : `${m} міс.`;
+		const m = typeof months === 'string' ? parseInt(months, 10) : months;
+		if (isNaN(m)) return '—';
+		const y = Math.floor(m / 12);
+		const rem = m % 12;
+		return y > 0 ? `${y} р. ${rem} міс.` : `${rem} міс.`;
 	};
 
 	return (
-		<div className='bg-white rounded-md shadow-md px-4 py-8 relative'>
-			<span className={`absolute top-2 right-2 text-xs px-2 py-1 rounded-full font-semibold ${status.color}`}>
-				{status.text}
-			</span>
-
-			<div className='flex items-center lg:flex-row flex-col gap-5 sm:gap-10 border-b-[1px] border-gray-400 pb-2'>
-				{channel.avatar_url ? (
-					<img className='w-20 h-20 rounded-full object-cover' src={channel.avatar_url} alt={channel.channel_name} />
-				) : (
-					<div className='w-20 h-20 rounded-full bg-blue-100 flex items-center justify-center text-2xl font-bold text-blue-500'>
-						{channel.channel_name?.[0] || '?'}
-					</div>
-				)}
-				<div>
-					<NavLink to={`/channel/${channel.id}`} className='font-bold mb-3 hover:text-blue-500 duration-300 block'>
-						{channel.channel_name}
-					</NavLink>
-					<div className='flex gap-1 items-center mb-3'>
-						<FontAwesomeIcon icon={faUsers} className='text-gray-500' />
-						<p className='text-gray-500'>
-							{channel.subscribers_count?.toLocaleString('uk-UA') || '0'} підписників
-						</p>
-					</div>
-					{channel.daily_growth != null && (
-						<div className='flex gap-1 items-center'>
-							<FontAwesomeIcon icon={faChartLine} className='text-gray-500' />
-							<p className='text-gray-500'>
-								{channel.daily_growth > 0 ? '+' : ''}{channel.daily_growth} за вчора
-							</p>
+		<div className='bg-white rounded-2xl border border-gray-100 shadow-sm hover:shadow-md duration-300 overflow-hidden'>
+			{/* Top: Avatar + Name + Status */}
+			<div className='p-5 pb-4'>
+				<div className='flex items-start gap-4'>
+					{channel.avatar_url ? (
+						<img className='w-14 h-14 rounded-xl object-cover flex-shrink-0' src={channel.avatar_url} alt={channel.channel_name} />
+					) : (
+						<div className='w-14 h-14 rounded-xl bg-gradient-to-br from-blue-400 to-blue-600 flex items-center justify-center text-xl font-bold text-white flex-shrink-0'>
+							{channel.channel_name?.[0] || '?'}
 						</div>
 					)}
-				</div>
-			</div>
-			<div className='border-b-[1px] border-gray-400 p-2 mt-2'>
-				<div className='flex items-center gap-2 mb-2'>
-					<FontAwesomeIcon icon={faListAlt} />
-					<p className='font-bold'>Категорія</p>
-				</div>
-				<p className='text-gray-500'>{channel.category || '—'}</p>
-			</div>
-			<div className='border-b-[1px] border-gray-400 p-2 mt-2'>
-				<div className='flex items-center gap-2 mb-2'>
-					<FontAwesomeIcon icon={faClock} />
-					<p className='font-bold'>Вік</p>
-				</div>
-				<p className='text-gray-500'>{formatAge(channel.age)}</p>
-			</div>
-			<div className='border-b-[1px] border-gray-400 p-2 grid lg:grid-cols-2 mt-2'>
-				<div className='border-gray-400 lg:border-r-[1px] border-b-[1px] lg:border-b-[0]'>
-					<div className='flex gap-2 mb-2'>
-						<FontAwesomeIcon icon={faEye} />
-						<p className='font-bold'>Переглядів</p>
+					<div className='flex-1 min-w-0'>
+						<div className='flex items-start justify-between gap-2'>
+							<NavLink to={`/channel/${channel.id}`} className='font-bold text-gray-800 hover:text-[#3498db] duration-300 truncate block'>
+								{channel.channel_name}
+							</NavLink>
+							<span className={`text-xs px-2.5 py-1 rounded-full font-medium border whitespace-nowrap ${status.color}`}>
+								{status.text}
+							</span>
+						</div>
+						<div className='flex items-center gap-3 mt-1.5 text-sm text-gray-500'>
+							<span className='flex items-center gap-1'>
+								<FontAwesomeIcon icon={faUsers} className='text-xs' />
+								{channel.subscribers_count?.toLocaleString('uk-UA') || '0'}
+							</span>
+							{channel.daily_growth != null && (
+								<span className={`flex items-center gap-1 ${channel.daily_growth >= 0 ? 'text-green-600' : 'text-red-500'}`}>
+									<FontAwesomeIcon icon={faChartLine} className='text-xs' />
+									{channel.daily_growth >= 0 ? '+' : ''}{channel.daily_growth}
+								</span>
+							)}
+							{channel.category && (
+								<span className='flex items-center gap-1'>
+									<FontAwesomeIcon icon={faListAlt} className='text-xs' />
+									{channel.category}
+								</span>
+							)}
+						</div>
 					</div>
-					<p className='text-gray-500 mb-2 lg:mb-0'>
-						{channel.avg_views?.toLocaleString('uk-UA') || '—'}
-					</p>
 				</div>
-				<div className='lg:pl-2 pt-2 mt-2 lg:pt-0 lg:mt-0'>
-					<div className='flex gap-2 mb-2'>
-						<FontAwesomeIcon icon={faBarChart} />
-						<p className='font-bold'>ER</p>
-					</div>
-					<p className='text-gray-500'>
-						{channel.er != null ? `${channel.er.toFixed(1)}%` : '—'}
-					</p>
-				</div>
-			</div>
-			<div className='border-b-[1px] border-gray-400 p-2 mt-2'>
-				<div className='flex items-center gap-2 mb-2'>
-					<FontAwesomeIcon icon={faDollarSign} />
-					<p className='font-bold'>Прибуток в місяць</p>
-				</div>
-				<p className='text-gray-500'>
-					{channel.monthly_income
-						? `${channel.monthly_income.toLocaleString('uk-UA')} USDT`
-						: '—'}
-				</p>
-			</div>
-			<div className='border-b-[1px] border-gray-400 p-2 mt-2'>
-				<div className='flex items-center gap-2 mb-2'>
-					<FontAwesomeIcon icon={faWallet} />
-					<p className='font-bold'>Ціна</p>
-				</div>
-				<p className='text-gray-500'>{channel.price?.toLocaleString('uk-UA')} USDT</p>
 			</div>
 
-			{channel.rejection_reason && (
-				<div className='mt-3 p-2 bg-red-50 rounded-md'>
-					<p className='text-sm text-red-600'>
-						<span className='font-bold'>Причина відхилення:</span> {channel.rejection_reason}
+			{/* Stats grid */}
+			<div className='grid grid-cols-2 sm:grid-cols-4 gap-px bg-gray-100 border-t border-gray-100'>
+				<div className='bg-white p-3 text-center'>
+					<p className='text-xs text-gray-400 mb-0.5'>Переглядів</p>
+					<p className='font-semibold text-gray-800 text-sm'>{channel.avg_views?.toLocaleString('uk-UA') || '—'}</p>
+				</div>
+				<div className='bg-white p-3 text-center'>
+					<p className='text-xs text-gray-400 mb-0.5'>ER</p>
+					<p className='font-semibold text-gray-800 text-sm'>{channel.er != null ? `${channel.er.toFixed(1)}%` : '—'}</p>
+				</div>
+				<div className='bg-white p-3 text-center'>
+					<p className='text-xs text-gray-400 mb-0.5'>Вік</p>
+					<p className='font-semibold text-gray-800 text-sm'>{formatAge(channel.age)}</p>
+				</div>
+				<div className='bg-white p-3 text-center'>
+					<p className='text-xs text-gray-400 mb-0.5'>Дохід/міс</p>
+					<p className='font-semibold text-gray-800 text-sm'>
+						{channel.monthly_income ? `${channel.monthly_income.toLocaleString('uk-UA')}` : '—'}
 					</p>
 				</div>
-			)}
+			</div>
 
-			{onDelete && channel.status !== 'sold' && (
-				<div className='flex justify-end mt-3'>
-					<button
-						onClick={() => onDelete(channel.id)}
-						className='text-red-400 hover:text-red-600 duration-300'
-						title='Видалити оголошення'
-					>
-						<FontAwesomeIcon icon={faTrash} />
-					</button>
+			{/* Bottom: Price + Actions */}
+			<div className='p-4 pt-3 border-t border-gray-100'>
+				{channel.rejection_reason && (
+					<div className='mb-3 px-3 py-2 bg-red-50 rounded-lg border border-red-100'>
+						<p className='text-xs text-red-600'>
+							<span className='font-semibold'>Причина:</span> {channel.rejection_reason}
+						</p>
+					</div>
+				)}
+				<div className='flex items-center justify-between'>
+					<div>
+						<p className='text-xs text-gray-400'>Ціна</p>
+						<p className='text-lg font-bold text-gray-800'>{channel.price?.toLocaleString('uk-UA')} <span className='text-sm text-gray-500'>USDT</span></p>
+					</div>
+					<div className='flex items-center gap-2'>
+						{onDelete && channel.status !== 'sold' && (
+							<button
+								onClick={() => onDelete(channel.id)}
+								className='w-9 h-9 rounded-lg border border-gray-200 text-gray-400 hover:text-red-500 hover:border-red-200 hover:bg-red-50 duration-300 flex items-center justify-center'
+								title='Видалити'
+							>
+								<FontAwesomeIcon icon={faTrash} size='sm' />
+							</button>
+						)}
+						<NavLink
+							to={`/channel/${channel.id}`}
+							className='flex items-center gap-1.5 px-4 py-2 bg-[#3498db] text-white text-sm font-semibold rounded-lg hover:bg-[#2980b9] duration-300'
+						>
+							Деталі
+							<FontAwesomeIcon icon={faArrowRight} size='xs' />
+						</NavLink>
+					</div>
 				</div>
-			)}
+			</div>
 		</div>
 	);
 };
