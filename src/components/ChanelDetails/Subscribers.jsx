@@ -21,6 +21,10 @@ const Subscribers = ({ stats = [], current }) => {
 
 	const hasData = filtered.length > 0;
 	const dataPoints = hasData ? filtered.map(s => s.subscribers) : [];
+	const categories = hasData ? filtered.map(s => {
+		const d = new Date(s.date);
+		return `${d.getDate()}.${String(d.getMonth() + 1).padStart(2, '0')}.${d.getFullYear()}`;
+	}) : [];
 
 	const minVal = Math.min(...dataPoints);
 	const maxVal = Math.max(...dataPoints);
@@ -35,6 +39,7 @@ const Subscribers = ({ stats = [], current }) => {
 					stroke: { curve: 'smooth', width: 2.5 },
 					chart: { toolbar: { show: false }, animations: { enabled: true, easing: 'easeinout', speed: 600 } },
 					xaxis: {
+						categories,
 						labels: { show: false },
 						axisTicks: { show: false },
 						axisBorder: { show: false },
@@ -43,7 +48,7 @@ const Subscribers = ({ stats = [], current }) => {
 					yaxis: { min: yMin, max: yMax, labels: { show: false } },
 					grid: { show: true, borderColor: '#f3f4f6', strokeDashArray: 4, xaxis: { lines: { show: false } }, padding: { bottom: 0 } },
 					legend: { show: false },
-					tooltip: { y: { formatter: v => v?.toLocaleString('uk-UA') } },
+					tooltip: { x: { show: true }, y: { formatter: v => v?.toLocaleString('uk-UA') } },
 					colors: ['#27ACD2'],
 					fill: { colors: ['#27ACD2'], type: 'gradient', gradient: { opacityFrom: 0.45, opacityTo: 0.02, shadeIntensity: 1, stops: [0, 90, 100] } },
 				},

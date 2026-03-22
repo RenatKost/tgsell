@@ -382,3 +382,136 @@ async def admin_delete_channel(
         raise HTTPException(status_code=404, detail="Channel not found")
     await db.delete(channel)
     await db.commit()
+
+
+@router.post("/channels/{channel_id}/recollect")
+async def recollect_channel_stats(
+    channel_id: int,
+    admin: User = Depends(get_admin_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Force re-collect stats for a single channel from Telegram."""
+    result = await db.execute(select(Channel).where(Channel.id == channel_id))
+    channel = result.scalar_one_or_none()
+    if not channel:
+        raise HTTPException(status_code=404, detail="Channel not found")
+
+    from app.services.channel_stats import collect_channel_stats
+    from app.models.channel import ChannelStats
+
+    stats = await collect_channel_stats(channel.telegram_link)
+
+    if stats.get("subscribers_count"):
+        channel.subscribers_count = stats["subscribers_count"]
+    if stats.get("avg_views"):
+        channel.avg_views = stats["avg_views"]
+    if stats.get("er"):
+        channel.er = stats["er"]
+    if stats.get("avatar_url"):
+        channel.avatar_url = stats["avatar_url"]
+    if stats.get("channel_name"):
+        channel.channel_name = stats["channel_name"]
+    if stats.get("adv_reach_12h"):
+        channel.adv_reach_12h = stats["adv_reach_12h"]
+    if stats.get("adv_reach_24h"):
+        channel.adv_reach_24h = stats["adv_reach_24h"]
+    if stats.get("adv_reach_48h"):
+        channel.adv_reach_48h = stats["adv_reach_48h"]
+
+    daily_stats = stats.get("daily_stats", [])
+    new_records = 0
+    if daily_stats:
+        existing = await db.execute(
+            select(ChannelStats.date).where(ChannelStats.channel_id == channel.id)
+        )
+        existing_dates = {d.strftime("%Y-%m-%d") for d in existing.scalars().all()}
+
+        for ds in daily_stats:
+            if ds["date"] not in existing_dates:
+                db.add(ChannelStats(
+                    channel_id=channel.id,
+                    date=datetime.strptime(ds["date"], "%Y-%m-%d"),
+                    subscribers=ds.get("subscribers", 0),
+                    avg_views=ds.get("avg_views", 0),
+                    avg_reach=ds.get("avg_views", 0),
+                    er=ds.get("er", 0.0),
+                ))
+                new_records += 1
+
+    await db.commit()
+
+    return {
+        "ok": True,
+        "channel_id": channel.id,
+        "channel_name": channel.channel_name,
+        "daily_stats_total": len(daily_stats),
+        "new_records_added": new_records,
+    }
+
+
+@router.post("/channels/recollect-all")
+async def recollect_all_channels_stats(
+    admin: User = Depends(get_admin_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Force re-collect stats for ALL active channels."""
+    import asyncio
+    from app.services.channel_stats import collect_channel_stats
+    from app.models.channel import ChannelStats
+
+    result = await db.execute(
+        select(Channel).where(
+            Channel.status.in_([ChannelStatus.approved, ChannelStatus.pending])
+        )
+    )
+    channels = result.scalars().all()
+
+    results = []
+    for channel in channels:
+        try:
+            stats = await collect_channel_stats(channel.telegram_link)
+
+            if stats.get("subscribers_count"):
+                channel.subscribers_count = stats["subscribers_count"]
+            if stats.get("avg_views"):
+                channel.avg_views = stats["avg_views"]
+            if stats.get("er"):
+                channel.er = stats["er"]
+
+            daily_stats = stats.get("daily_stats", [])
+            new_records = 0
+            if daily_stats:
+                existing = await db.execute(
+                    select(ChannelStats.date).where(ChannelStats.channel_id == channel.id)
+                )
+                existing_dates = {d.strftime("%Y-%m-%d") for d in existing.scalars().all()}
+
+                for ds in daily_stats:
+                    if ds["date"] not in existing_dates:
+                        db.add(ChannelStats(
+                            channel_id=channel.id,
+                            date=datetime.strptime(ds["date"], "%Y-%m-%d"),
+                            subscribers=ds.get("subscribers", 0),
+                            avg_views=ds.get("avg_views", 0),
+                            avg_reach=ds.get("avg_views", 0),
+                            er=ds.get("er", 0.0),
+                        ))
+                        new_records += 1
+
+            await db.commit()
+            results.append({
+                "channel_id": channel.id,
+                "name": channel.channel_name,
+                "daily_stats": len(daily_stats),
+                "new_records": new_records,
+            })
+
+            await asyncio.sleep(3)
+        except Exception as e:
+            results.append({
+                "channel_id": channel.id,
+                "name": channel.channel_name,
+                "error": str(e),
+            })
+
+    return {"ok": True, "channels_processed": len(results), "details": results}
