@@ -1,5 +1,5 @@
 import { faTelegram, faGoogle } from '@fortawesome/free-brands-svg-icons';
-import { faRightLeft, faSpinner } from '@fortawesome/free-solid-svg-icons';
+import { faRightLeft, faSpinner, faXmark } from '@fortawesome/free-solid-svg-icons';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { useEffect, useRef, useState, useCallback } from 'react';
 import { authAPI } from '../../services/api';
@@ -173,71 +173,94 @@ const AuthModal = ({ show, setShow }) => {
 			onClick={(e) => {
 				if (e.target === e.currentTarget) setShow(false);
 			}}
-			className='fixed top-0 left-0 h-screen w-screen flex items-center justify-center bg-black bg-opacity-50 z-50'
+			className='fixed inset-0 flex items-center justify-center bg-black/60 backdrop-blur-sm z-50 p-4'
 		>
-			<div className='bg-white sm:p-10 p-6 rounded-xl shadow-lg z-[51] mx-auto text-center max-w-sm w-full'>
-				<h2 className='text-2xl uppercase font-bold'>Вітаю 🙋‍♂️</h2>
-				<p className='text-gray-500 mt-2 mb-6'>Увійдіть для продовження</p>
-				<div className='flex flex-col items-center gap-4'>
-					{/* Telegram Login */}
-					<div ref={telegramRef} key={widgetKey} className='flex justify-center'>
-						{/* Telegram Widget renders here */}
-					</div>
+			<div className='bg-white rounded-2xl shadow-2xl z-[51] mx-auto text-center max-w-[400px] w-full overflow-hidden animate-fadeIn'>
+				{/* Top gradient bar */}
+				<div className='h-24 bg-gradient-to-r from-[#3498db] to-[#27ae60] flex items-center justify-center relative'>
 					<button
-						onClick={handleBotLogin}
-						disabled={botAuth.status === 'loading' || botAuth.status === 'waiting'}
-						className='text-gray-500 hover:text-[#3498db] text-xs flex items-center gap-1.5 duration-300 disabled:opacity-50'
+						onClick={() => setShow(false)}
+						className='absolute top-3 right-3 text-white/70 hover:text-white w-8 h-8 flex items-center justify-center rounded-full hover:bg-white/20 duration-200'
 					>
-						{botAuth.status === 'loading' || botAuth.status === 'waiting' ? (
-							<FontAwesomeIcon icon={faSpinner} className='text-[10px] animate-spin' />
-						) : (
-							<FontAwesomeIcon icon={faRightLeft} className='text-[10px]' />
-						)}
-						{botAuth.status === 'waiting' ? 'Очікуємо підтвердження...' : 'Інший Telegram аккаунт'}
+						<FontAwesomeIcon icon={faXmark} className='text-lg' />
 					</button>
-					{botAuth.status === 'waiting' && (
-						<p className='text-xs text-gray-400'>
-							Натисніть <b>Start</b> у боті, що відкрився в Telegram
-						</p>
-					)}
-					{botAuth.status === 'error' && (
-						<p className='text-xs text-red-400'>
-							Час вийшов або сталась помилка.{' '}
-							<button onClick={handleBotLogin} className='underline hover:text-red-600'>Спробувати знову</button>
-						</p>
-					)}
-
-					<div className='flex items-center gap-3 w-full'>
-						<div className='flex-1 h-px bg-gray-200'></div>
-						<span className='text-gray-400 text-sm'>або</span>
-						<div className='flex-1 h-px bg-gray-200'></div>
+					<div className='w-16 h-16 bg-white rounded-2xl shadow-lg flex items-center justify-center'>
+						<span className='text-3xl'>🔐</span>
 					</div>
+				</div>
 
-					{/* Google Sign-In */}
-					{GOOGLE_CLIENT_ID ? (
-						<div ref={googleBtnRef} className='flex justify-center'></div>
-					) : (
-						<p className='text-gray-300 text-xs'>Google вхід не налаштовано</p>
-					)}
+				<div className='px-8 py-6'>
+					<h2 className='text-xl font-bold text-gray-800 mb-1'>Вхід в TgSell</h2>
+					<p className='text-gray-400 text-sm mb-6'>Оберіть спосіб авторизації</p>
 
-					{import.meta.env.DEV && (
+					<div className='flex flex-col items-center gap-4'>
+						{/* Telegram Login Widget */}
+						<div ref={telegramRef} key={widgetKey} className='flex justify-center'>
+							{/* Telegram Widget renders here */}
+						</div>
+
+						{/* Switch account via bot */}
 						<button
-							className='text-white flex items-center gap-2 bg-[#3498db] py-3 px-8 rounded-md shadow-md duration-500 hover:shadow-[#3498db]'
-							onClick={() => {
-								window.onTelegramAuth?.({
-									id: 123456789,
-									first_name: 'Demo',
-									username: 'demo_user',
-									photo_url: '',
-									auth_date: Math.floor(Date.now() / 1000),
-									hash: 'demo',
-								});
-							}}
+							onClick={handleBotLogin}
+							disabled={botAuth.status === 'loading' || botAuth.status === 'waiting'}
+							className='text-gray-400 hover:text-[#3498db] text-xs flex items-center gap-1.5 duration-300 disabled:opacity-50'
 						>
-							<FontAwesomeIcon icon={faTelegram} />
-							Demo вхід (для розробки)
+							{botAuth.status === 'loading' || botAuth.status === 'waiting' ? (
+								<FontAwesomeIcon icon={faSpinner} className='text-[10px] animate-spin' />
+							) : (
+								<FontAwesomeIcon icon={faRightLeft} className='text-[10px]' />
+							)}
+							{botAuth.status === 'waiting' ? 'Очікуємо підтвердження...' : 'Інший Telegram аккаунт'}
 						</button>
-					)}
+						{botAuth.status === 'waiting' && (
+							<div className='bg-blue-50 border border-blue-100 rounded-xl px-4 py-3 w-full'>
+								<p className='text-xs text-blue-600'>
+									Натисніть <b>Start</b> у боті, що відкрився в Telegram
+								</p>
+							</div>
+						)}
+						{botAuth.status === 'error' && (
+							<div className='bg-red-50 border border-red-100 rounded-xl px-4 py-3 w-full'>
+								<p className='text-xs text-red-500'>
+									Час вийшов або сталась помилка.{' '}
+									<button onClick={handleBotLogin} className='font-semibold underline hover:text-red-700'>Спробувати знову</button>
+								</p>
+							</div>
+						)}
+
+						{/* Divider */}
+						<div className='flex items-center gap-3 w-full'>
+							<div className='flex-1 h-px bg-gray-100'></div>
+							<span className='text-gray-300 text-xs uppercase tracking-wider'>або</span>
+							<div className='flex-1 h-px bg-gray-100'></div>
+						</div>
+
+						{/* Google Sign-In */}
+						{GOOGLE_CLIENT_ID ? (
+							<div ref={googleBtnRef} className='flex justify-center'></div>
+						) : (
+							<p className='text-gray-300 text-xs'>Google вхід не налаштовано</p>
+						)}
+
+						{import.meta.env.DEV && (
+							<button
+								className='w-full text-white flex items-center justify-center gap-2 bg-gradient-to-r from-[#3498db] to-[#2980b9] py-3 px-6 rounded-xl font-semibold shadow-md hover:shadow-lg hover:shadow-blue-200 duration-300'
+								onClick={() => {
+									window.onTelegramAuth?.({
+										id: 123456789,
+										first_name: 'Demo',
+										username: 'demo_user',
+										photo_url: '',
+										auth_date: Math.floor(Date.now() / 1000),
+										hash: 'demo',
+									});
+								}}
+							>
+								<FontAwesomeIcon icon={faTelegram} />
+								Demo вхід (для розробки)
+							</button>
+						)}
+					</div>
 				</div>
 			</div>
 		</div>
