@@ -17,6 +17,9 @@ celery==5.3.6
 aiogram==3.3.0
 telethon==1.34.0
 
+# Google Auth
+google-auth==2.49.1
+
 # TRON / USDT
 tronpy==0.4.0
 cryptography==42.0.2

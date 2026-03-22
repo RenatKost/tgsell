@@ -9,6 +9,10 @@ class Settings(BaseSettings):
     telegram_phone: str = ""
     telethon_session_string: str = ""
 
+    # Google OAuth
+    google_client_id: str = ""
+    google_client_secret: str = ""
+
     # Database
     database_url: str = "postgresql+asyncpg://tgsell:tgsell@localhost:5432/tgsell"
     redis_url: str = "redis://localhost:6379/0"

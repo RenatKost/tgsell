@@ -1,4 +1,4 @@
-import { faTelegram } from '@fortawesome/free-brands-svg-icons';
+import { faTelegram, faGoogle } from '@fortawesome/free-brands-svg-icons';
 import { faRightLeft } from '@fortawesome/free-solid-svg-icons';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { useEffect, useRef, useState, useCallback } from 'react';
@@ -6,11 +6,76 @@ import { authAPI } from '../../services/api';
 import { useAuth } from '../../context/AppContext';
 
 const TELEGRAM_BOT_NAME = import.meta.env.VITE_TELEGRAM_BOT_NAME || 'TgSellBot';
+const GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID || '';
 
 const AuthModal = ({ show, setShow }) => {
 	const telegramRef = useRef(null);
+	const googleBtnRef = useRef(null);
 	const { login } = useAuth();
 	const [widgetKey, setWidgetKey] = useState(0);
+
+	// Google Sign-In callback
+	const handleGoogleResponse = useCallback(async (response) => {
+		try {
+			const { data } = await authAPI.loginGoogle(response.credential);
+			login(data.user, {
+				access_token: data.access_token,
+				refresh_token: data.refresh_token,
+			});
+			setShow(false);
+		} catch (error) {
+			console.error('Google auth failed:', error);
+			const msg = error.response?.data?.detail || 'Помилка авторизації Google';
+			alert(`Помилка входу: ${msg}`);
+		}
+	}, [login, setShow]);
+
+	// Load Google Identity Services SDK
+	useEffect(() => {
+		if (!GOOGLE_CLIENT_ID) return;
+		if (document.getElementById('google-gsi-script')) return;
+
+		const script = document.createElement('script');
+		script.id = 'google-gsi-script';
+		script.src = 'https://accounts.google.com/gsi/client';
+		script.async = true;
+		script.defer = true;
+		document.head.appendChild(script);
+	}, []);
+
+	// Initialize Google button when modal opens
+	useEffect(() => {
+		if (!show || !GOOGLE_CLIENT_ID || !googleBtnRef.current) return;
+
+		const initGoogle = () => {
+			if (!window.google?.accounts?.id) return;
+			window.google.accounts.id.initialize({
+				client_id: GOOGLE_CLIENT_ID,
+				callback: handleGoogleResponse,
+			});
+			googleBtnRef.current.innerHTML = '';
+			window.google.accounts.id.renderButton(googleBtnRef.current, {
+				theme: 'outline',
+				size: 'large',
+				text: 'signin_with',
+				locale: 'uk',
+				width: 280,
+			});
+		};
+
+		// SDK may not be loaded yet
+		if (window.google?.accounts?.id) {
+			initGoogle();
+		} else {
+			const timer = setInterval(() => {
+				if (window.google?.accounts?.id) {
+					clearInterval(timer);
+					initGoogle();
+				}
+			}, 200);
+			return () => clearInterval(timer);
+		}
+	}, [show, handleGoogleResponse]);
 
 	const loadWidget = useCallback(() => {
 		if (!telegramRef.current) return;
@@ -79,21 +144,35 @@ const AuthModal = ({ show, setShow }) => {
 			}}
 			className='fixed top-0 left-0 h-screen w-screen flex items-center justify-center bg-black bg-opacity-50 z-50'
 		>
-			<div className='bg-white sm:p-10 p-6 rounded shadow-lg z-[51] mx-auto text-center'>
+			<div className='bg-white sm:p-10 p-6 rounded-xl shadow-lg z-[51] mx-auto text-center max-w-sm w-full'>
 				<h2 className='text-2xl uppercase font-bold'>Вітаю 🙋‍♂️</h2>
-				<p className='text-gray-500 mt-2 mb-6'>Увійдіть через Telegram для продовження</p>
-				<div className='flex flex-col items-center gap-6'>
+				<p className='text-gray-500 mt-2 mb-6'>Увійдіть для продовження</p>
+				<div className='flex flex-col items-center gap-4'>
+					{/* Telegram Login */}
 					<div ref={telegramRef} key={widgetKey} className='flex justify-center'>
 						{/* Telegram Widget renders here */}
 					</div>
 					<button
 						onClick={handleSwitchAccount}
-						className='text-gray-500 hover:text-[#3498db] text-sm flex items-center gap-2 duration-300'
+						className='text-gray-500 hover:text-[#3498db] text-xs flex items-center gap-1.5 duration-300'
 					>
-						<FontAwesomeIcon icon={faRightLeft} className='text-xs' />
-						Вхід з іншого аккаунту
+						<FontAwesomeIcon icon={faRightLeft} className='text-[10px]' />
+						Інший Telegram аккаунт
 					</button>
-					<div className='text-gray-400 text-sm'>— або —</div>
+
+					<div className='flex items-center gap-3 w-full'>
+						<div className='flex-1 h-px bg-gray-200'></div>
+						<span className='text-gray-400 text-sm'>або</span>
+						<div className='flex-1 h-px bg-gray-200'></div>
+					</div>
+
+					{/* Google Sign-In */}
+					{GOOGLE_CLIENT_ID ? (
+						<div ref={googleBtnRef} className='flex justify-center'></div>
+					) : (
+						<p className='text-gray-300 text-xs'>Google вхід не налаштовано</p>
+					)}
+
 					{import.meta.env.DEV && (
 						<button
 							className='text-white flex items-center gap-2 bg-[#3498db] py-3 px-8 rounded-md shadow-md duration-500 hover:shadow-[#3498db]'

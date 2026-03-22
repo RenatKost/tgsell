@@ -13,13 +13,19 @@ class TelegramAuthData(BaseModel):
     hash: str
 
 
+class GoogleAuthData(BaseModel):
+    credential: str  # Google ID token from frontend
+
+
 class RefreshRequest(BaseModel):
     refresh_token: str
 
 
 class UserResponse(BaseModel):
     id: int
-    telegram_id: int
+    telegram_id: int | None
+    google_id: str | None = None
+    email: str | None = None
     username: str | None
     first_name: str
     avatar_url: str | None

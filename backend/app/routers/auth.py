@@ -1,10 +1,12 @@
 from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy import select
+from sqlalchemy import select, or_
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.config import settings
 from app.database import get_db
 from app.models.user import User
 from app.schemas.auth import (
+    GoogleAuthData,
     RefreshRequest,
     TelegramAuthData,
     TokenResponse,
@@ -70,6 +72,100 @@ async def telegram_login(data: TelegramAuthData, db: AsyncSession = Depends(get_
         refresh_token=refresh_token,
         user=UserResponse.model_validate(user),
     )
+
+
+@router.post("/google", response_model=TokenResponse)
+async def google_login(data: GoogleAuthData, db: AsyncSession = Depends(get_db)):
+    """Authenticate via Google Sign-In."""
+    import logging
+    from google.oauth2 import id_token
+    from google.auth.transport import requests as google_requests
+
+    logger = logging.getLogger(__name__)
+
+    try:
+        idinfo = id_token.verify_oauth2_token(
+            data.credential,
+            google_requests.Request(),
+            settings.google_client_id,
+        )
+    except ValueError:
+        logger.warning("Google auth: invalid ID token")
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid Google token",
+        )
+
+    google_id = idinfo["sub"]
+    email = idinfo.get("email")
+    name = idinfo.get("name", email or "User")
+    picture = idinfo.get("picture")
+
+    # Find user by google_id or email
+    result = await db.execute(
+        select(User).where(or_(User.google_id == google_id, User.email == email))
+    )
+    user = result.scalar_one_or_none()
+
+    if not user:
+        user = User(
+            google_id=google_id,
+            email=email,
+            first_name=name,
+            avatar_url=picture,
+        )
+        db.add(user)
+        await db.commit()
+        await db.refresh(user)
+    else:
+        # Link google_id if user found by email but no google_id yet
+        if not user.google_id:
+            user.google_id = google_id
+        user.email = email or user.email
+        user.first_name = name or user.first_name
+        user.avatar_url = picture or user.avatar_url
+        await db.commit()
+        await db.refresh(user)
+
+    access_token = create_access_token({"sub": str(user.id)})
+    refresh_token = create_refresh_token({"sub": str(user.id)})
+
+    return TokenResponse(
+        access_token=access_token,
+        refresh_token=refresh_token,
+        user=UserResponse.model_validate(user),
+    )
+
+
+@router.post("/link/telegram", response_model=UserResponse)
+async def link_telegram(
+    data: TelegramAuthData,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Link Telegram account to existing user (e.g. Google user)."""
+    import logging
+    logger = logging.getLogger(__name__)
+
+    auth_dict = data.model_dump()
+    if not verify_telegram_auth(auth_dict):
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid Telegram auth data")
+
+    # Check if telegram_id already belongs to another user
+    existing = await db.execute(select(User).where(User.telegram_id == data.id))
+    existing_user = existing.scalar_one_or_none()
+
+    if existing_user and existing_user.id != current_user.id:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Цей Telegram вже прив'язаний до іншого аккаунту")
+
+    current_user.telegram_id = data.id
+    current_user.username = data.username or current_user.username
+    if not current_user.avatar_url:
+        current_user.avatar_url = data.photo_url
+    await db.commit()
+    await db.refresh(current_user)
+
+    return UserResponse.model_validate(current_user)
 
 
 @router.get("/me", response_model=UserResponse)
