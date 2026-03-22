@@ -324,8 +324,30 @@ async def auth_cmd_start(message: Message):
 
 # ── Bot runner ────────────────────────────────────────────────────────
 
+async def run_bots_background():
+    """Start both Telegram bots as a background task (called from FastAPI lifespan)."""
+    try:
+        alerts_bot = Bot(token=settings.bot_token_alerts)
+        alerts_dp = Dispatcher()
+        alerts_dp.include_router(router)
+
+        auth_bot = Bot(token=settings.bot_token_auth)
+        auth_dp = Dispatcher()
+        auth_dp.include_router(auth_router)
+
+        logger.info("Telegram bots starting (alerts + auth)…")
+        await asyncio.gather(
+            alerts_dp.start_polling(alerts_bot),
+            auth_dp.start_polling(auth_bot),
+        )
+    except asyncio.CancelledError:
+        logger.info("Telegram bots stopped.")
+    except Exception as e:
+        logger.error(f"Telegram bots error: {e}")
+
+
 async def start_bot():
-    """Start both Telegram bots (alerts + auth)."""
+    """Start both Telegram bots (standalone entry point)."""
     # Alerts bot (deals, notifications)
     alerts_bot = Bot(token=settings.bot_token_alerts)
     alerts_dp = Dispatcher()
