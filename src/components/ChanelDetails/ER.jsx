@@ -5,11 +5,17 @@ const ER = ({ stats = [], current }) => {
 	const dataPoints = hasData ? stats.map(s => s.er || 0) : [];
 	const categories = hasData ? stats.map(s => s.date?.split('T')[0] || '') : [];
 
+	const minVal = Math.min(...dataPoints);
+	const maxVal = Math.max(...dataPoints);
+	const range = maxVal - minVal || maxVal * 0.1 || 0.5;
+	const yMin = Math.max(0, +(minVal - range * 0.15).toFixed(2));
+	const yMax = +(maxVal + range * 0.1).toFixed(2);
+
 	const chartData = hasData
 		? {
 				options: {
 					dataLabels: { enabled: false },
-					stroke: { curve: 'smooth', width: 3 },
+					stroke: { curve: 'smooth', width: 2.5 },
 					chart: { toolbar: { show: false } },
 					xaxis: {
 						categories,
@@ -18,18 +24,20 @@ const ER = ({ stats = [], current }) => {
 						axisBorder: { show: false },
 					},
 					yaxis: {
-						max: Math.max(...dataPoints),
+						min: yMin,
+						max: yMax,
 						labels: { show: false },
 						axisTicks: { show: false },
 						axisBorder: { show: false },
 					},
-					grid: { show: false },
+					grid: { show: true, borderColor: '#f3f4f6', strokeDashArray: 4, xaxis: { lines: { show: false } } },
 					legend: { show: false },
-					colors: ['#009366'],
+					tooltip: { y: { formatter: v => `${v?.toFixed(2)}%` } },
+					colors: ['#10B981'],
 					fill: {
-						colors: ['#009366'],
+						colors: ['#10B981'],
 						type: 'gradient',
-						gradient: { opacityFrom: 0.65, opacityTo: 0.5 },
+						gradient: { opacityFrom: 0.5, opacityTo: 0.05, shadeIntensity: 1 },
 					},
 				},
 				series: [{ name: 'Рівень залученості', data: dataPoints }],

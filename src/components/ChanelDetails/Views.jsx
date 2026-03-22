@@ -5,11 +5,17 @@ const Views = ({ stats = [], current }) => {
 	const dataPoints = hasData ? stats.map(s => s.avg_views || 0) : [];
 	const categories = hasData ? stats.map(s => s.date?.split('T')[0] || '') : [];
 
+	const minVal = Math.min(...dataPoints);
+	const maxVal = Math.max(...dataPoints);
+	const range = maxVal - minVal || maxVal * 0.1 || 1;
+	const yMin = Math.max(0, Math.floor(minVal - range * 0.15));
+	const yMax = Math.ceil(maxVal + range * 0.1);
+
 	const chartData = hasData
 		? {
 				options: {
 					dataLabels: { enabled: false },
-					stroke: { curve: 'smooth', width: 3 },
+					stroke: { curve: 'smooth', width: 2.5 },
 					chart: { toolbar: { show: false } },
 					xaxis: {
 						categories,
@@ -18,18 +24,20 @@ const Views = ({ stats = [], current }) => {
 						axisBorder: { show: false },
 					},
 					yaxis: {
-						max: Math.max(...dataPoints),
+						min: yMin,
+						max: yMax,
 						labels: { show: false },
 						axisTicks: { show: false },
 						axisBorder: { show: false },
 					},
-					grid: { show: false },
+					grid: { show: true, borderColor: '#f3f4f6', strokeDashArray: 4, xaxis: { lines: { show: false } } },
 					legend: { show: false },
-					colors: ['#FF94DA'],
+					tooltip: { y: { formatter: v => v?.toLocaleString('uk-UA') } },
+					colors: ['#EC4899'],
 					fill: {
-						colors: ['#FF94DA'],
+						colors: ['#EC4899'],
 						type: 'gradient',
-						gradient: { opacityFrom: 0.65, opacityTo: 0.5 },
+						gradient: { opacityFrom: 0.5, opacityTo: 0.05, shadeIntensity: 1 },
 					},
 				},
 				series: [{ name: 'Добовий перегляд', data: dataPoints }],

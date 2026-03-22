@@ -44,6 +44,11 @@ class ChannelResponse(BaseModel):
     adv_reach_12h: int | None
     adv_reach_24h: int | None
     adv_reach_48h: int | None
+    total_posts: int | None = None
+    post_frequency: float | None = None
+    last_post_date: datetime | None = None
+    avg_forwards: int | None = None
+    avg_reactions: int | None = None
     status: str
     created_at: datetime
 

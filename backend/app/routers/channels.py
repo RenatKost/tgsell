@@ -152,6 +152,20 @@ async def create_channel(
             channel.adv_reach_48h = stats["adv_reach_48h"]
         if stats.get("channel_age_months"):
             channel.age = f"{stats['channel_age_months']}"
+        if stats.get("total_posts"):
+            channel.total_posts = stats["total_posts"]
+        if stats.get("post_frequency") is not None:
+            channel.post_frequency = stats["post_frequency"]
+        if stats.get("last_post_date"):
+            from datetime import datetime as dt2
+            try:
+                channel.last_post_date = dt2.fromisoformat(stats["last_post_date"])
+            except (ValueError, TypeError):
+                pass
+        if stats.get("avg_forwards"):
+            channel.avg_forwards = stats["avg_forwards"]
+        if stats.get("avg_reactions"):
+            channel.avg_reactions = stats["avg_reactions"]
 
         # Save historical daily stats for graphs
         daily_stats = stats.get("daily_stats", [])

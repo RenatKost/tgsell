@@ -41,6 +41,11 @@ class Channel(Base):
     adv_reach_12h: Mapped[int | None] = mapped_column(Integer, nullable=True)
     adv_reach_24h: Mapped[int | None] = mapped_column(Integer, nullable=True)
     adv_reach_48h: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    total_posts: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    post_frequency: Mapped[float | None] = mapped_column(Float, nullable=True)
+    last_post_date: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    avg_forwards: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    avg_reactions: Mapped[int | None] = mapped_column(Integer, nullable=True)
 
     status: Mapped[ChannelStatus] = mapped_column(
         Enum(ChannelStatus), default=ChannelStatus.pending

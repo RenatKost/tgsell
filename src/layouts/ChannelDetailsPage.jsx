@@ -73,7 +73,7 @@ const ChannelDetailsPage = () => {
 			<div className='flex flex-col lg:flex-row items-start gap-6'>
 				{/* Left column */}
 				<div className='w-full lg:w-[460px] flex-shrink-0 space-y-5'>
-					<DetailsCard channel={channel} onBuy={handleBuy} />
+					<DetailsCard channel={channel} onBuy={handleBuy} stats={stats} />
 
 					{channel.description && (
 						<div className='bg-white rounded-2xl border border-gray-100 shadow-sm p-5'>

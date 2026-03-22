@@ -114,23 +114,45 @@ async def get_channel_stats_telethon(channel_username: str, message_limit: int =
             diff = now - created
             channel_age_months = max(1, int(diff.days / 30))
 
+        # Get total posts count
+        total_posts = None
+        try:
+            all_msgs = await client.get_messages(entity, limit=0)
+            total_posts = all_msgs.total
+        except Exception:
+            pass
+
         # Get messages for historical stats (more messages = more history)
         messages = await client.get_messages(entity, limit=message_limit)
 
         views_list = []
+        forwards_list = []
+        reactions_list = []
         now = datetime.now(timezone.utc)
 
         reach_12h = []
         reach_24h = []
         reach_48h = []
 
+        last_post_date = None
+        posts_last_30d = 0
+
         # Group views by date for daily stats
         daily_views = defaultdict(list)
 
         for msg in messages:
+            msg_date = msg.date.replace(tzinfo=timezone.utc)
+
+            # Track last post date
+            if last_post_date is None or msg_date > last_post_date:
+                last_post_date = msg_date
+
+            # Count posts in last 30 days
+            if (now - msg_date).days <= 30:
+                posts_last_30d += 1
+
             if msg.views is not None:
                 views_list.append(msg.views)
-                msg_date = msg.date.replace(tzinfo=timezone.utc)
 
                 age_hours = (now - msg_date).total_seconds() / 3600
                 if age_hours <= 12:
@@ -144,8 +166,23 @@ async def get_channel_stats_telethon(channel_username: str, message_limit: int =
                 day_key = msg_date.strftime("%Y-%m-%d")
                 daily_views[day_key].append(msg.views)
 
+            # Forwards
+            if msg.forwards is not None:
+                forwards_list.append(msg.forwards)
+
+            # Reactions
+            if hasattr(msg, 'reactions') and msg.reactions:
+                total_react = sum(
+                    r.count for r in msg.reactions.results
+                ) if hasattr(msg.reactions, 'results') else 0
+                if total_react > 0:
+                    reactions_list.append(total_react)
+
         avg_views = sum(views_list) // len(views_list) if views_list else 0
         er = round((avg_views / subscribers * 100), 2) if subscribers > 0 else 0.0
+        avg_forwards = sum(forwards_list) // len(forwards_list) if forwards_list else 0
+        avg_reactions = sum(reactions_list) // len(reactions_list) if reactions_list else 0
+        post_frequency = round(posts_last_30d / 30, 1) if posts_last_30d > 0 else 0.0
 
         # Build daily stats for graphs (sorted by date)
         daily_stats = []
@@ -171,6 +208,11 @@ async def get_channel_stats_telethon(channel_username: str, message_limit: int =
             "adv_reach_48h": sum(reach_48h) // len(reach_48h) if reach_48h else 0,
             "channel_age_months": channel_age_months,
             "daily_stats": daily_stats,
+            "total_posts": total_posts,
+            "post_frequency": post_frequency,
+            "last_post_date": last_post_date.isoformat() if last_post_date else None,
+            "avg_forwards": avg_forwards,
+            "avg_reactions": avg_reactions,
         }
     except Exception as e:
         logger.error(f"Telethon stats failed for @{channel_username}: {e}")
@@ -200,6 +242,11 @@ async def collect_channel_stats(telegram_link: str) -> dict:
         "adv_reach_48h": None,
         "channel_age_months": None,
         "daily_stats": [],
+        "total_posts": None,
+        "post_frequency": None,
+        "last_post_date": None,
+        "avg_forwards": None,
+        "avg_reactions": None,
     }
 
     # Step 1: Bot API (safe, always works)
@@ -220,5 +267,10 @@ async def collect_channel_stats(telegram_link: str) -> dict:
         result["adv_reach_48h"] = telethon_stats.get("adv_reach_48h")
         result["channel_age_months"] = telethon_stats.get("channel_age_months")
         result["daily_stats"] = telethon_stats.get("daily_stats", [])
+        result["total_posts"] = telethon_stats.get("total_posts")
+        result["post_frequency"] = telethon_stats.get("post_frequency")
+        result["last_post_date"] = telethon_stats.get("last_post_date")
+        result["avg_forwards"] = telethon_stats.get("avg_forwards")
+        result["avg_reactions"] = telethon_stats.get("avg_reactions")
 
     return result
