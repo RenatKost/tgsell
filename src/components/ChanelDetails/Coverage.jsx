@@ -9,7 +9,7 @@ const TF = [
 	{ label: '7д', days: 7 },
 ];
 
-const Coverage = ({ stats = [], current }) => {
+const PostsPerDay = ({ stats = [] }) => {
 	const [tf, setTf] = useState(0);
 	const [modal, setModal] = useState(false);
 
@@ -19,18 +19,20 @@ const Coverage = ({ stats = [], current }) => {
 		return (now - d) / 86400000 <= TF[tf].days;
 	});
 
-	const hasData = filtered.length > 0;
-	const dataPoints = hasData ? filtered.map(s => s.avg_reach || s.avg_views || 0) : [];
+	const hasData = filtered.length > 0 && filtered.some(s => s.post_count > 0);
+	const dataPoints = hasData ? filtered.map(s => s.post_count || 0) : [];
 	const categories = hasData ? filtered.map(s => {
 		const d = new Date(s.date);
 		return `${d.getDate()}.${String(d.getMonth() + 1).padStart(2, '0')}.${d.getFullYear()}`;
 	}) : [];
 
 	const minVal = Math.min(...dataPoints);
-	const maxVal = Math.max(...dataPoints);
+	const maxVal = Math.max(...dataPoints, 1);
 	const range = maxVal - minVal || maxVal * 0.1 || 1;
 	const yMin = Math.max(0, Math.floor(minVal - range * 0.3));
 	const yMax = Math.ceil(maxVal + range * 0.3);
+
+	const avg = dataPoints.length ? Math.round(dataPoints.reduce((a, b) => a + b, 0) / dataPoints.length) : 0;
 
 	const chartData = hasData
 		? {
@@ -48,22 +50,20 @@ const Coverage = ({ stats = [], current }) => {
 					yaxis: { min: yMin, max: yMax, labels: { show: false } },
 					grid: { show: true, borderColor: '#f3f4f6', strokeDashArray: 4, xaxis: { lines: { show: false } }, padding: { bottom: 0 } },
 					legend: { show: false },
-					tooltip: { x: { show: true }, y: { formatter: v => v?.toLocaleString('uk-UA') } },
+					tooltip: { x: { show: true }, y: { formatter: v => `${v} пост${v === 1 ? '' : v < 5 ? 'и' : 'ів'}` } },
 					colors: ['#F97316'],
 					fill: { colors: ['#F97316'], type: 'gradient', gradient: { opacityFrom: 0.45, opacityTo: 0.02, shadeIntensity: 1, stops: [0, 90, 100] } },
 				},
-				series: [{ name: 'Охоплення публікацій', data: dataPoints }],
+				series: [{ name: 'Публікації', data: dataPoints }],
 		  }
 		: null;
-
-	const formatted = (current || dataPoints[dataPoints.length - 1])?.toLocaleString('uk-UA') || '—';
 
 	return (
 		<div className='bg-white rounded-2xl border border-gray-100 shadow-sm px-5 pt-5 w-full'>
 			<div className='flex items-center justify-between mb-1'>
 				<div>
-					<p className='text-gray-400 text-xs'>Охоплення публікацій</p>
-					<p className='font-bold text-xl text-gray-900'>{formatted}</p>
+					<p className='text-gray-400 text-xs'>Публікації на день</p>
+					<p className='font-bold text-xl text-gray-900'>~{avg}/день</p>
 				</div>
 				<div className='flex items-center gap-1'>
 					{TF.map((t, i) => (
@@ -80,11 +80,11 @@ const Coverage = ({ stats = [], current }) => {
 			{chartData ? (
 				<ReactApexChart options={chartData.options} series={chartData.series} type='area' height={180} width='100%' />
 			) : (
-				<p className='text-gray-400 text-center py-10'>Немає даних для графіку</p>
+				<p className='text-gray-400 text-center py-10'>Немає даних</p>
 			)}
-			<ChartModal open={modal} onClose={() => setModal(false)} stats={stats} title='Охоплення публікацій' color='#F97316' dataKey={s => s.avg_reach || s.avg_views || 0} seriesName='Охоплення' />
+			<ChartModal open={modal} onClose={() => setModal(false)} stats={stats} title='Публікації на день' color='#F97316' dataKey='post_count' seriesName='Публікації' tooltipFmt={v => `${v} пост${v === 1 ? '' : v < 5 ? 'и' : 'ів'}`} />
 		</div>
 	);
 };
 
-export default Coverage;
+export default PostsPerDay;

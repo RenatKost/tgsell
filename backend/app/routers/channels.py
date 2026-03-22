@@ -178,6 +178,7 @@ async def create_channel(
                     avg_views=ds.get("avg_views", 0),
                     avg_reach=ds.get("avg_views", 0),
                     er=ds.get("er", 0.0),
+                    post_count=ds.get("post_count", 0),
                 )
                 db.add(stat_record)
         else:
@@ -189,6 +190,7 @@ async def create_channel(
                 avg_views=stats.get("avg_views", 0),
                 avg_reach=stats.get("avg_views", 0),
                 er=stats.get("er", 0.0),
+                post_count=0,
             )
             db.add(stat_record)
         await db.commit()

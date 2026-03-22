@@ -63,6 +63,7 @@ class ChannelStatsResponse(BaseModel):
     avg_views: int
     avg_reach: int
     er: float
+    post_count: int | None = 0
 
     model_config = {"from_attributes": True}
 

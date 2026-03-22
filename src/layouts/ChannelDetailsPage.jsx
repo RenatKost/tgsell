@@ -4,7 +4,7 @@ import { channelsAPI, dealsAPI } from '../services/api';
 import { useAuth } from '../context/AppContext';
 import DetailsCard from '../components/Cards/DetailsCard';
 import AdvertisingReach from '../components/ChanelDetails/AdvertisingReach';
-import Coverage from '../components/ChanelDetails/Coverage';
+import PostsPerDay from '../components/ChanelDetails/Coverage';
 import ER from '../components/ChanelDetails/ER';
 import Subscribers from '../components/ChanelDetails/Subscribers';
 import Views from '../components/ChanelDetails/Views';
@@ -107,9 +107,9 @@ const ChannelDetailsPage = () => {
 				{/* Right column — charts */}
 				<div className='grid 2xl:grid-cols-2 gap-5 w-full'>
 					<Subscribers stats={stats} current={channel.subscribers_count} />
-					<Coverage stats={stats} current={channel.avg_views} />
 					<Views stats={stats} current={channel.avg_views} />
 					<ER stats={stats} current={channel.er} />
+					<PostsPerDay stats={stats} />
 					<AdvertisingReach channel={channel} />
 				</div>
 			</div>

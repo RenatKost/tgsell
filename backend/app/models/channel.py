@@ -72,6 +72,7 @@ class ChannelStats(Base):
     avg_views: Mapped[int] = mapped_column(Integer, default=0)
     avg_reach: Mapped[int] = mapped_column(Integer, default=0)
     er: Mapped[float] = mapped_column(Float, default=0.0)
+    post_count: Mapped[int | None] = mapped_column(Integer, nullable=True, default=0)
     recorded_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
 
     channel = relationship("Channel", back_populates="stats")
