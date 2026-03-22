@@ -2,7 +2,6 @@ import ReactApexChart from 'react-apexcharts';
 import { useState } from 'react';
 
 const TF = [
-	{ label: 'Все', days: 0 },
 	{ label: '30д', days: 30 },
 	{ label: '14д', days: 14 },
 	{ label: '7д', days: 7 },
@@ -12,7 +11,7 @@ const Subscribers = ({ stats = [], current }) => {
 	const [tf, setTf] = useState(0);
 
 	const now = Date.now();
-	const filtered = tf === 0 ? stats : stats.filter(s => {
+	const filtered = stats.filter(s => {
 		const d = new Date(s.date).getTime();
 		return (now - d) / 86400000 <= TF[tf].days;
 	});
@@ -24,24 +23,28 @@ const Subscribers = ({ stats = [], current }) => {
 		return `${d.getDate()}.${String(d.getMonth() + 1).padStart(2, '0')}`;
 	}) : [];
 
-	const maxVal = Math.max(...dataPoints, 1);
+	const minVal = Math.min(...dataPoints);
+	const maxVal = Math.max(...dataPoints);
+	const range = maxVal - minVal || maxVal * 0.1 || 1;
+	const yMin = Math.max(0, Math.floor(minVal - range * 0.3));
+	const yMax = Math.ceil(maxVal + range * 0.3);
 
 	const chartData = hasData
 		? {
 				options: {
 					dataLabels: { enabled: false },
-					stroke: { curve: 'monotoneCubic', width: 2.5 },
+					stroke: { curve: 'smooth', width: 2.5 },
 					chart: { toolbar: { show: false }, animations: { enabled: true, easing: 'easeinout', speed: 600 } },
 					xaxis: {
 						categories,
-						labels: { show: true, rotate: 0, style: { colors: '#9ca3af', fontSize: '10px' }, hideOverlappingLabels: true },
+						labels: { show: false },
 						axisTicks: { show: false },
 						axisBorder: { show: false },
 						tooltip: { enabled: false },
 					},
 					yaxis: {
-						min: 0,
-						max: Math.ceil(maxVal * 1.1),
+						min: yMin,
+						max: yMax,
 						labels: { show: false },
 					},
 					grid: { show: true, borderColor: '#f3f4f6', strokeDashArray: 4, xaxis: { lines: { show: false } }, padding: { bottom: 0 } },
