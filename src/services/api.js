@@ -148,6 +148,9 @@ export const adminAPI = {
 
 	resolveDeal: (id, resolution) =>
 		api.post(`/admin/deals/${id}/resolve`, resolution),
+
+	cancelDeal: (id) =>
+		api.post(`/admin/deals/${id}/cancel`),
 };
 
 // ===== Favorites =====

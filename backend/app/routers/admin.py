@@ -170,15 +170,19 @@ async def reject_channel(
 
 @router.get("/deals", response_model=list[DealResponse])
 async def get_all_deals(
+    deal_status: str | None = None,
     admin: User = Depends(get_admin_user),
     db: AsyncSession = Depends(get_db),
 ):
-    """Get all deals (admin only)."""
-    result = await db.execute(
+    """Get all deals (admin only). Optional status filter."""
+    query = (
         select(Deal)
         .options(selectinload(Deal.channel), selectinload(Deal.buyer), selectinload(Deal.seller))
         .order_by(Deal.created_at.desc())
     )
+    if deal_status:
+        query = query.where(Deal.status == deal_status)
+    result = await db.execute(query)
     deals = result.scalars().all()
 
     responses = []
@@ -227,6 +231,44 @@ async def resolve_deal(
         # TODO: release USDT to seller
     else:
         raise HTTPException(status_code=400, detail="Invalid resolution")
+
+    await db.commit()
+    await db.refresh(deal)
+
+    return DealResponse(
+        id=deal.id, channel_id=deal.channel_id, buyer_id=deal.buyer_id, seller_id=deal.seller_id,
+        channel_name=deal.channel.channel_name if deal.channel else None,
+        buyer_name=deal.buyer.first_name if deal.buyer else None,
+        seller_name=deal.seller.first_name if deal.seller else None,
+        status=deal.status.value, escrow_wallet_address=deal.escrow_wallet_address,
+        amount_usdt=deal.amount_usdt, service_fee=deal.service_fee,
+        deal_group_chat_id=deal.deal_group_chat_id, dispute_reason=deal.dispute_reason,
+        created_at=deal.created_at, paid_at=deal.paid_at, completed_at=deal.completed_at,
+    )
+
+
+@router.post("/deals/{deal_id}/cancel", response_model=DealResponse)
+async def admin_cancel_deal(
+    deal_id: int,
+    admin: User = Depends(get_admin_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Admin force-cancel a deal (any non-completed status)."""
+    result = await db.execute(
+        select(Deal)
+        .options(selectinload(Deal.channel), selectinload(Deal.buyer), selectinload(Deal.seller))
+        .where(Deal.id == deal_id)
+    )
+    deal = result.scalar_one_or_none()
+    if not deal:
+        raise HTTPException(status_code=404, detail="Deal not found")
+    if deal.status in (DealStatus.completed, DealStatus.cancelled):
+        raise HTTPException(status_code=400, detail="Deal is already completed or cancelled")
+
+    deal.status = DealStatus.cancelled
+    # Restore channel availability
+    if deal.channel:
+        deal.channel.status = ChannelStatus.approved
 
     await db.commit()
     await db.refresh(deal)

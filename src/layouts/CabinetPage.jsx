@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { NavLink } from 'react-router-dom';
-import { channelsAPI, favoritesAPI } from '../services/api';
+import { channelsAPI, favoritesAPI, dealsAPI } from '../services/api';
 import { useAuth } from '../context/AppContext';
 import CabinetCard from '../components/Cards/CabinetCard';
 import CatalogCard from '../components/Cards/CatalogCard';
@@ -10,10 +10,13 @@ import {
 	faHeart,
 	faPlus,
 	faFilter,
+	faHandshake,
+	faArrowRight,
 } from '@fortawesome/free-solid-svg-icons';
 
 const TABS = [
 	{ text: 'Мої оголошення', value: 'my', icon: faList },
+	{ text: 'Мої угоди', value: 'deals', icon: faHandshake },
 	{ text: 'Обране', value: 'favorites', icon: faHeart },
 ];
 
@@ -24,12 +27,32 @@ const STATUS_FILTERS = [
 	{ text: 'Відхилені', value: 'rejected', dot: 'bg-red-500' },
 ];
 
+const DEAL_STATUS_LABELS = {
+	created: { text: 'Очікує оплати', color: 'bg-yellow-100 text-yellow-700' },
+	payment_pending: { text: 'Очікує оплати', color: 'bg-yellow-100 text-yellow-700' },
+	paid: { text: 'Оплачено', color: 'bg-blue-100 text-blue-700' },
+	channel_transferring: { text: 'Передача каналу', color: 'bg-indigo-100 text-indigo-700' },
+	completed: { text: 'Завершено', color: 'bg-green-100 text-green-700' },
+	disputed: { text: 'Спір', color: 'bg-red-100 text-red-700' },
+	cancelled: { text: 'Скасовано', color: 'bg-gray-100 text-gray-600' },
+};
+
+const DEAL_FILTERS = [
+	{ text: 'Активні', value: 'active', dot: 'bg-blue-500' },
+	{ text: 'Завершені', value: 'completed', dot: 'bg-green-500' },
+	{ text: 'Спірні', value: 'disputed', dot: 'bg-red-500' },
+	{ text: 'Скасовані', value: 'cancelled', dot: 'bg-gray-400' },
+	{ text: 'Всі', value: null, dot: 'bg-gray-400' },
+];
+
 const CabinetPage = () => {
 	const { user } = useAuth();
 	const [activeTab, setActiveTab] = useState(TABS[0]);
 	const [activeFilter, setActiveFilter] = useState(STATUS_FILTERS[0]);
+	const [dealFilter, setDealFilter] = useState(DEAL_FILTERS[0]);
 	const [channels, setChannels] = useState([]);
 	const [favorites, setFavorites] = useState([]);
+	const [deals, setDeals] = useState([]);
 	const [loading, setLoading] = useState(true);
 
 	useEffect(() => {
@@ -43,6 +66,9 @@ const CabinetPage = () => {
 					}
 					const { data } = await channelsAPI.getAll(params);
 					setChannels(data.items || data);
+				} else if (activeTab.value === 'deals') {
+					const { data } = await dealsAPI.getMy();
+					setDeals(Array.isArray(data) ? data : []);
 				} else {
 					const { data } = await favoritesAPI.getAll();
 					setFavorites(data);
@@ -75,6 +101,21 @@ const CabinetPage = () => {
 		approved: channels.filter(c => c.status === 'approved').length,
 		pending: channels.filter(c => c.status === 'pending').length,
 		rejected: channels.filter(c => c.status === 'rejected').length,
+	};
+
+	const ACTIVE_STATUSES = ['created', 'payment_pending', 'paid', 'channel_transferring'];
+	const filteredDeals = dealFilter.value === null
+		? deals
+		: dealFilter.value === 'active'
+			? deals.filter(d => ACTIVE_STATUSES.includes(d.status))
+			: deals.filter(d => d.status === dealFilter.value);
+
+	const dealCounts = {
+		active: deals.filter(d => ACTIVE_STATUSES.includes(d.status)).length,
+		completed: deals.filter(d => d.status === 'completed').length,
+		disputed: deals.filter(d => d.status === 'disputed').length,
+		cancelled: deals.filter(d => d.status === 'cancelled').length,
+		all: deals.length,
 	};
 
 	return (
@@ -110,6 +151,9 @@ const CabinetPage = () => {
 					>
 						<FontAwesomeIcon icon={tab.icon} />
 						{tab.text}
+						{tab.value === 'deals' && deals.length > 0 && (
+							<span className='bg-blue-100 text-blue-600 text-xs px-2 py-0.5 rounded-full'>{deals.length}</span>
+						)}
 						{tab.value === 'favorites' && favorites.length > 0 && (
 							<span className='bg-red-100 text-red-600 text-xs px-2 py-0.5 rounded-full'>{favorites.length}</span>
 						)}
@@ -165,6 +209,103 @@ const CabinetPage = () => {
 							{filteredChannels.map(channel => (
 								<CabinetCard key={channel.id} channel={channel} onDelete={handleDelete} />
 							))}
+						</div>
+					)}
+				</>
+			) : activeTab.value === 'deals' ? (
+				<>
+					{/* Deal filter pills */}
+					<div className='flex flex-wrap gap-2 mb-6'>
+						{DEAL_FILTERS.map(f => (
+							<button
+								key={f.text}
+								onClick={() => setDealFilter(f)}
+								className={`flex items-center gap-2 px-4 py-2 rounded-full text-sm font-medium duration-300 ${
+									f === dealFilter
+										? 'bg-[#3498db] text-white shadow-md shadow-blue-200'
+										: 'bg-white text-gray-600 border border-gray-200 hover:border-[#3498db] hover:text-[#3498db]'
+								}`}
+							>
+								<span className={`w-2 h-2 rounded-full ${f === dealFilter ? 'bg-white' : f.dot}`} />
+								{f.text}
+								<span className={`text-xs ${f === dealFilter ? 'text-blue-100' : 'text-gray-400'}`}>
+									{f.value === null ? dealCounts.all : dealCounts[f.value] || 0}
+								</span>
+							</button>
+						))}
+					</div>
+
+					{loading ? (
+						<div className='flex justify-center py-20'>
+							<div className='animate-spin rounded-full h-10 w-10 border-b-2 border-blue-500' />
+						</div>
+					) : filteredDeals.length === 0 ? (
+						<div className='text-center py-16 bg-white rounded-2xl border border-dashed border-gray-300'>
+							<div className='text-5xl mb-4'>🤝</div>
+							<p className='text-lg font-semibold text-gray-700 mb-2'>
+								{dealFilter.value ? 'Немає угод з таким статусом' : 'У вас ще немає угод'}
+							</p>
+							<p className='text-gray-500 mb-6'>Перейдіть до каталогу, щоб купити канал</p>
+							<NavLink
+								to='/catalog'
+								className='inline-flex items-center gap-2 font-bold bg-[#3498db] text-white py-3 px-8 rounded-xl shadow-lg shadow-blue-200 hover:bg-[#2980b9] duration-300'
+							>
+								Перейти до каталогу
+							</NavLink>
+						</div>
+					) : (
+						<div className='grid gap-4'>
+							{filteredDeals.map(deal => {
+								const statusInfo = DEAL_STATUS_LABELS[deal.status] || DEAL_STATUS_LABELS.created;
+								const isBuyer = user?.id === deal.buyer_id;
+								return (
+									<NavLink
+										key={deal.id}
+										to={`/deal/${deal.id}`}
+										className='bg-white rounded-2xl shadow-sm border border-gray-100 p-5 hover:shadow-md duration-300 block group'
+									>
+										<div className='flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-3'>
+											<div>
+												<h3 className='font-bold text-gray-800 text-lg'>
+													{deal.channel_name || `Канал #${deal.channel_id}`}
+												</h3>
+												<p className='text-gray-500 text-sm'>
+													Угода #{deal.id} · {isBuyer ? 'Ви покупець' : 'Ви продавець'}
+												</p>
+											</div>
+											<div className='flex items-center gap-3'>
+												<span className={`text-xs px-3 py-1 rounded-full font-semibold ${statusInfo.color}`}>
+													{statusInfo.text}
+												</span>
+												<FontAwesomeIcon icon={faArrowRight} className='text-gray-300 group-hover:text-[#3498db] duration-300' />
+											</div>
+										</div>
+										<div className='grid grid-cols-2 sm:grid-cols-4 gap-3 text-sm'>
+											<div className='bg-gray-50 p-3 rounded-xl'>
+												<span className='font-semibold text-green-600'>{deal.amount_usdt} USDT</span>
+												<p className='text-gray-400 text-xs mt-0.5'>сума</p>
+											</div>
+											<div className='bg-gray-50 p-3 rounded-xl'>
+												<span className='font-semibold'>{deal.service_fee} USDT</span>
+												<p className='text-gray-400 text-xs mt-0.5'>комісія</p>
+											</div>
+											<div className='bg-gray-50 p-3 rounded-xl'>
+												<span className='font-semibold'>{isBuyer ? (deal.seller_name || 'Продавець') : (deal.buyer_name || 'Покупець')}</span>
+												<p className='text-gray-400 text-xs mt-0.5'>{isBuyer ? 'продавець' : 'покупець'}</p>
+											</div>
+											<div className='bg-gray-50 p-3 rounded-xl'>
+												<span className='font-semibold'>{new Date(deal.created_at).toLocaleDateString('uk-UA')}</span>
+												<p className='text-gray-400 text-xs mt-0.5'>дата</p>
+											</div>
+										</div>
+										{deal.dispute_reason && (
+											<p className='mt-3 text-sm bg-red-50 text-red-700 p-3 rounded-xl'>
+												<span className='font-semibold'>Причина спору:</span> {deal.dispute_reason}
+											</p>
+										)}
+									</NavLink>
+								);
+							})}
 						</div>
 					)}
 				</>

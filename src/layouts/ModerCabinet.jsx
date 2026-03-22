@@ -1,5 +1,6 @@
-import { useEffect, useState } from 'react';
-import { adminAPI } from '../services/api';
+import { useEffect, useRef, useState } from 'react';
+import { adminAPI, dealsAPI } from '../services/api';
+import { useAuth } from '../context/AppContext';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import {
 	faCheck,
@@ -17,11 +18,16 @@ import {
 	faLayerGroup,
 	faScaleBalanced,
 	faFilter,
+	faHandshake,
+	faComments,
+	faBan,
+	faArrowRight,
 } from '@fortawesome/free-solid-svg-icons';
 
 const TABS = [
 	{ text: 'На модерації', value: 'channels', icon: faClipboardCheck },
 	{ text: 'Всі канали', value: 'all_channels', icon: faLayerGroup },
+	{ text: 'Всі угоди', value: 'all_deals', icon: faHandshake },
 	{ text: 'Спірні угоди', value: 'disputes', icon: faScaleBalanced },
 ];
 
@@ -33,21 +39,130 @@ const STATUS_FILTERS = [
 	{ text: 'Продані', value: 'sold', dot: 'bg-blue-500' },
 ];
 
+const DEAL_STATUS_FILTERS = [
+	{ text: 'Всі', value: '', dot: 'bg-gray-400' },
+	{ text: 'Активні', value: 'active', dot: 'bg-blue-500' },
+	{ text: 'Оплачені', value: 'paid', dot: 'bg-indigo-500' },
+	{ text: 'Завершені', value: 'completed', dot: 'bg-green-500' },
+	{ text: 'Спірні', value: 'disputed', dot: 'bg-red-500' },
+	{ text: 'Скасовані', value: 'cancelled', dot: 'bg-gray-500' },
+];
+
+const DEAL_STATUS_LABELS = {
+	created: { text: 'Очікує оплати', color: 'bg-yellow-100 text-yellow-700' },
+	payment_pending: { text: 'Очікує оплати', color: 'bg-yellow-100 text-yellow-700' },
+	paid: { text: 'Оплачено', color: 'bg-blue-100 text-blue-700' },
+	channel_transferring: { text: 'Передача каналу', color: 'bg-indigo-100 text-indigo-700' },
+	completed: { text: 'Завершено', color: 'bg-green-100 text-green-700' },
+	disputed: { text: 'Спір', color: 'bg-red-100 text-red-700' },
+	cancelled: { text: 'Скасовано', color: 'bg-gray-100 text-gray-600' },
+};
+
+// === Deal Chat Modal ===
+const DealChatModal = ({ dealId, userId, onClose }) => {
+	const [messages, setMessages] = useState([]);
+	const [newMessage, setNewMessage] = useState('');
+	const [sending, setSending] = useState(false);
+	const messagesEndRef = useRef(null);
+
+	const fetchMessages = async () => {
+		try {
+			const { data } = await dealsAPI.getMessages(dealId);
+			setMessages(data);
+		} catch (err) { /* silent */ }
+	};
+
+	useEffect(() => {
+		fetchMessages();
+		const interval = setInterval(fetchMessages, 5000);
+		return () => clearInterval(interval);
+	}, [dealId]);
+
+	useEffect(() => {
+		messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+	}, [messages]);
+
+	const handleSend = async (e) => {
+		e.preventDefault();
+		const text = newMessage.trim();
+		if (!text || sending) return;
+		setSending(true);
+		try {
+			await dealsAPI.sendMessage(dealId, text);
+			setNewMessage('');
+			await fetchMessages();
+		} catch (err) { /* silent */ }
+		finally { setSending(false); }
+	};
+
+	return (
+		<div className='fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4' onClick={onClose}>
+			<div className='bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[80vh] flex flex-col animate-fadeIn' onClick={e => e.stopPropagation()}>
+				<div className='bg-gradient-to-r from-[#3498db] to-[#2980b9] text-white p-5 rounded-t-2xl flex items-center justify-between'>
+					<h3 className='font-bold text-lg'>💬 Чат угоди #{dealId}</h3>
+					<button onClick={onClose} className='text-white/80 hover:text-white text-xl'>✕</button>
+				</div>
+				<div className='flex-1 overflow-y-auto p-4 bg-gray-50 min-h-[300px]'>
+					{messages.length === 0 && (
+						<p className='text-gray-400 text-center mt-20 text-sm'>Повідомлень ще немає</p>
+					)}
+					{messages.map(msg => {
+						const isOwn = msg.sender_id === userId;
+						return (
+							<div key={msg.id} className={`mb-3 flex ${isOwn ? 'justify-end' : 'justify-start'}`}>
+								<div className={`max-w-[75%] px-4 py-2 rounded-lg ${isOwn ? 'bg-[#3498db] text-white rounded-br-none' : 'bg-white text-gray-800 rounded-bl-none shadow-sm'}`}>
+									{!isOwn && <p className='text-xs font-bold mb-1 opacity-70'>{msg.sender_name || 'Користувач'}</p>}
+									<p className='text-sm whitespace-pre-wrap break-words'>{msg.text}</p>
+									<p className={`text-xs mt-1 ${isOwn ? 'text-blue-100' : 'text-gray-400'}`}>
+										{new Date(msg.created_at).toLocaleString('uk-UA', { hour: '2-digit', minute: '2-digit', day: '2-digit', month: '2-digit' })}
+									</p>
+								</div>
+							</div>
+						);
+					})}
+					<div ref={messagesEndRef} />
+				</div>
+				<form onSubmit={handleSend} className='p-4 border-t border-gray-200 flex gap-2'>
+					<input
+						type='text'
+						value={newMessage}
+						onChange={e => setNewMessage(e.target.value)}
+						placeholder='Написати як адмін...'
+						maxLength={2000}
+						className='flex-1 border border-gray-200 rounded-xl px-4 py-2.5 focus:outline-none focus:ring-2 focus:ring-blue-300 focus:border-transparent'
+					/>
+					<button
+						type='submit'
+						disabled={sending || !newMessage.trim()}
+						className='bg-[#3498db] text-white px-6 py-2.5 rounded-xl font-semibold hover:bg-[#2980b9] duration-300 disabled:opacity-50'
+					>
+						{sending ? '...' : 'Надіслати'}
+					</button>
+				</form>
+			</div>
+		</div>
+	);
+};
+
 const ModerCabinet = () => {
+	const { user } = useAuth();
 	const [activeTab, setActiveTab] = useState(TABS[0]);
 	const [pendingChannels, setPendingChannels] = useState([]);
 	const [allChannels, setAllChannels] = useState([]);
 	const [disputes, setDisputes] = useState([]);
+	const [allDeals, setAllDeals] = useState([]);
 	const [loading, setLoading] = useState(true);
 	const [rejectId, setRejectId] = useState(null);
 	const [rejectReason, setRejectReason] = useState('');
 	const [editId, setEditId] = useState(null);
 	const [editData, setEditData] = useState({});
 	const [statusFilter, setStatusFilter] = useState('');
+	const [dealStatusFilter, setDealStatusFilter] = useState('');
+	const [chatDealId, setChatDealId] = useState(null);
 
 	useEffect(() => {
 		loadData();
-	}, [activeTab, statusFilter]);
+	}, [activeTab, statusFilter, dealStatusFilter]);
 
 	const loadData = async () => {
 		setLoading(true);
@@ -59,8 +174,21 @@ const ModerCabinet = () => {
 				const params = statusFilter ? { status: statusFilter } : {};
 				const { data } = await adminAPI.getAllChannels(params);
 				setAllChannels(Array.isArray(data) ? data : data.items || []);
+			} else if (activeTab.value === 'all_deals') {
+				const params = {};
+				if (dealStatusFilter === 'active') {
+					// Load all; filter client-side
+				} else if (dealStatusFilter) {
+					params.deal_status = dealStatusFilter;
+				}
+				const { data } = await adminAPI.getAllDeals(params);
+				let items = Array.isArray(data) ? data : data.items || [];
+				if (dealStatusFilter === 'active') {
+					items = items.filter(d => ['created', 'payment_pending', 'paid', 'channel_transferring'].includes(d.status));
+				}
+				setAllDeals(items);
 			} else {
-				const { data } = await adminAPI.getAllDeals({ status: 'disputed' });
+				const { data } = await adminAPI.getAllDeals({ deal_status: 'disputed' });
 				setDisputes(Array.isArray(data) ? data : data.items || []);
 			}
 		} catch (err) {
@@ -98,8 +226,20 @@ const ModerCabinet = () => {
 		try {
 			await adminAPI.resolveDeal(dealId, { resolution });
 			setDisputes(prev => prev.filter(d => d.id !== dealId));
+			setAllDeals(prev => prev.filter(d => d.id !== dealId));
 		} catch (err) {
 			alert(err.response?.data?.detail || 'Помилка');
+		}
+	};
+
+	const handleCancelDeal = async (dealId) => {
+		if (!confirm('Скасувати цю угоду? Канал повернеться в каталог.')) return;
+		try {
+			await adminAPI.cancelDeal(dealId);
+			setAllDeals(prev => prev.map(d => d.id === dealId ? { ...d, status: 'cancelled' } : d));
+			setDisputes(prev => prev.filter(d => d.id !== dealId));
+		} catch (err) {
+			alert(err.response?.data?.detail || 'Помилка скасування');
 		}
 	};
 
@@ -412,6 +552,126 @@ const ModerCabinet = () => {
 						</div>
 					)}
 				</>
+			) : activeTab.value === 'all_deals' ? (
+				<>
+					{/* Deal status filter pills */}
+					<div className='flex flex-wrap gap-2 mb-6'>
+						{DEAL_STATUS_FILTERS.map(f => (
+							<button
+								key={f.text}
+								onClick={() => setDealStatusFilter(f.value)}
+								className={`flex items-center gap-2 px-4 py-2 rounded-full text-sm font-medium duration-300 ${
+									dealStatusFilter === f.value
+										? 'bg-[#3498db] text-white shadow-md shadow-blue-200'
+										: 'bg-white text-gray-600 border border-gray-200 hover:border-[#3498db] hover:text-[#3498db]'
+								}`}
+							>
+								<span className={`w-2 h-2 rounded-full ${dealStatusFilter === f.value ? 'bg-white' : f.dot}`} />
+								{f.text}
+							</button>
+						))}
+					</div>
+
+					{allDeals.length === 0 ? (
+						<div className='text-center py-16 bg-white rounded-2xl border border-dashed border-gray-300'>
+							<div className='text-5xl mb-4'>🤝</div>
+							<p className='text-lg font-semibold text-gray-700'>Немає угод</p>
+						</div>
+					) : (
+						<div className='grid gap-4'>
+							{allDeals.map(deal => {
+								const statusInfo = DEAL_STATUS_LABELS[deal.status] || DEAL_STATUS_LABELS.created;
+								const isTerminal = ['completed', 'cancelled'].includes(deal.status);
+								return (
+									<div key={deal.id} className='bg-white rounded-2xl shadow-sm border border-gray-100 p-5 hover:shadow-md duration-300'>
+										<div className='flex flex-col md:flex-row md:items-center justify-between gap-3 mb-3'>
+											<div>
+												<h3 className='font-bold text-gray-800 text-lg'>
+													<FontAwesomeIcon icon={faHandshake} className='mr-2 text-blue-400' />
+													Угода #{deal.id} — {deal.channel_name || `Канал #${deal.channel_id}`}
+												</h3>
+												<p className='text-gray-500 text-sm mt-1'>
+													Покупець: <strong>{deal.buyer_name || '—'}</strong> · Продавець: <strong>{deal.seller_name || '—'}</strong>
+												</p>
+											</div>
+											<span className={`text-xs px-3 py-1 rounded-full font-semibold whitespace-nowrap ${statusInfo.color}`}>
+												{statusInfo.text}
+											</span>
+										</div>
+
+										<div className='grid grid-cols-2 md:grid-cols-4 gap-2 text-sm mb-3'>
+											<div className='bg-gray-50 p-2.5 rounded-xl'>
+												<span className='font-semibold text-green-600'>{deal.amount_usdt} USDT</span>
+												<p className='text-gray-400 text-xs'>сума</p>
+											</div>
+											<div className='bg-gray-50 p-2.5 rounded-xl'>
+												<span className='font-semibold'>{deal.service_fee} USDT</span>
+												<p className='text-gray-400 text-xs'>комісія</p>
+											</div>
+											<div className='bg-gray-50 p-2.5 rounded-xl'>
+												<span className='font-semibold'>{new Date(deal.created_at).toLocaleDateString('uk-UA')}</span>
+												<p className='text-gray-400 text-xs'>створено</p>
+											</div>
+											<div className='bg-gray-50 p-2.5 rounded-xl'>
+												<span className='font-semibold'>
+													{deal.completed_at ? new Date(deal.completed_at).toLocaleDateString('uk-UA') : '—'}
+												</span>
+												<p className='text-gray-400 text-xs'>завершено</p>
+											</div>
+										</div>
+
+										{deal.dispute_reason && (
+											<p className='text-sm bg-red-50 text-red-700 p-3 rounded-xl mb-3'>
+												<span className='font-semibold'>Причина спору:</span> {deal.dispute_reason}
+											</p>
+										)}
+
+										<div className='flex flex-wrap gap-2'>
+											<button
+												onClick={() => setChatDealId(deal.id)}
+												className='bg-[#3498db] text-white px-4 py-2 rounded-xl text-sm font-semibold hover:bg-[#2980b9] duration-300 flex items-center gap-2'
+											>
+												<FontAwesomeIcon icon={faComments} /> Чат
+											</button>
+											<a
+												href={`/deal/${deal.id}`}
+												target='_blank'
+												rel='noopener noreferrer'
+												className='bg-gray-100 text-gray-700 px-4 py-2 rounded-xl text-sm font-semibold hover:bg-gray-200 duration-300 flex items-center gap-2'
+											>
+												<FontAwesomeIcon icon={faArrowRight} /> Відкрити угоду
+											</a>
+											{deal.status === 'disputed' && (
+												<>
+													<button
+														onClick={() => handleResolve(deal.id, 'refund_buyer')}
+														className='bg-orange-500 text-white px-4 py-2 rounded-xl text-sm font-semibold hover:bg-orange-600 duration-300'
+													>
+														Повернути покупцю
+													</button>
+													<button
+														onClick={() => handleResolve(deal.id, 'release_seller')}
+														className='bg-[#27ae60] text-white px-4 py-2 rounded-xl text-sm font-semibold hover:bg-[#219a52] duration-300'
+													>
+														Перевести продавцю
+													</button>
+												</>
+											)}
+											{!isTerminal && (
+												<button
+													onClick={() => handleCancelDeal(deal.id)}
+													className='bg-red-500 text-white px-4 py-2 rounded-xl text-sm font-semibold hover:bg-red-600 duration-300 flex items-center gap-2'
+												>
+													<FontAwesomeIcon icon={faBan} /> Скасувати
+												</button>
+											)}
+										</div>
+									</div>
+								);
+							})}
+						</div>
+					)}
+				</>
 			) : disputes.length === 0 ? (
 				<div className='text-center py-16 bg-white rounded-2xl border border-dashed border-gray-300'>
 					<div className='text-5xl mb-4'>⚖️</div>
@@ -432,17 +692,26 @@ const ModerCabinet = () => {
 								</span>
 							</div>
 							<p className='text-gray-600 mb-2'>
-								<span className='font-semibold'>Сума:</span> {deal.amount_usdt} USDT
+								<span className='font-semibold'>Канал:</span> {deal.channel_name || `#${deal.channel_id}`} · <span className='font-semibold'>Сума:</span> {deal.amount_usdt} USDT
+							</p>
+							<p className='text-gray-600 mb-2'>
+								<span className='font-semibold'>Покупець:</span> {deal.buyer_name || '—'} · <span className='font-semibold'>Продавець:</span> {deal.seller_name || '—'}
 							</p>
 							{deal.dispute_reason && (
 								<p className='text-gray-600 mb-4 bg-red-50 p-3 rounded-xl'>
 									<span className='font-semibold'>Причина:</span> {deal.dispute_reason}
 								</p>
 							)}
-							<div className='flex gap-3'>
+							<div className='flex flex-wrap gap-3'>
+								<button
+									onClick={() => setChatDealId(deal.id)}
+									className='bg-[#3498db] text-white px-5 py-2.5 rounded-xl font-semibold hover:bg-[#2980b9] duration-300 shadow-sm flex items-center gap-2'
+								>
+									<FontAwesomeIcon icon={faComments} /> Чат
+								</button>
 								<button
 									onClick={() => handleResolve(deal.id, 'refund_buyer')}
-									className='bg-[#3498db] text-white px-5 py-2.5 rounded-xl font-semibold hover:bg-[#2980b9] duration-300 shadow-sm'
+									className='bg-orange-500 text-white px-5 py-2.5 rounded-xl font-semibold hover:bg-orange-600 duration-300 shadow-sm'
 								>
 									Повернути покупцю
 								</button>
@@ -452,10 +721,25 @@ const ModerCabinet = () => {
 								>
 									Перевести продавцю
 								</button>
+								<button
+									onClick={() => handleCancelDeal(deal.id)}
+									className='bg-red-500 text-white px-5 py-2.5 rounded-xl font-semibold hover:bg-red-600 duration-300 shadow-sm flex items-center gap-2'
+								>
+									<FontAwesomeIcon icon={faBan} /> Скасувати
+								</button>
 							</div>
 						</div>
 					))}
 				</div>
+			)}
+
+			{/* Deal Chat Modal */}
+			{chatDealId && (
+				<DealChatModal
+					dealId={chatDealId}
+					userId={user?.id}
+					onClose={() => setChatDealId(null)}
+				/>
 			)}
 		</section>
 	);
