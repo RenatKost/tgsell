@@ -113,6 +113,18 @@ export const dealsAPI = {
 	confirmTransfer: (id) =>
 		api.post(`/deals/${id}/confirm-transfer`),
 
+	confirmReady: (id) =>
+		api.post(`/deals/${id}/confirm-ready`),
+
+	confirmChannelTransfer: (id) =>
+		api.post(`/deals/${id}/confirm-channel-transfer`),
+
+	setSellerWallet: (id, walletAddress) =>
+		api.post(`/deals/${id}/seller-wallet`, { wallet_address: walletAddress }),
+
+	callAdmin: (id) =>
+		api.post(`/deals/${id}/call-admin`),
+
 	dispute: (id, reason) =>
 		api.post(`/deals/${id}/dispute`, { reason }),
 

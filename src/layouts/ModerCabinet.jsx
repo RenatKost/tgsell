@@ -107,6 +107,15 @@ const DealChatModal = ({ dealId, userId, onClose }) => {
 						<p className='text-gray-400 text-center mt-20 text-sm'>Повідомлень ще немає</p>
 					)}
 					{messages.map(msg => {
+						if (msg.is_system) {
+							return (
+								<div key={msg.id} className='mb-3 flex justify-center'>
+									<div className='bg-blue-50 text-blue-700 text-xs px-4 py-2 rounded-full font-medium'>
+										{msg.text}
+									</div>
+								</div>
+							);
+						}
 						const isOwn = msg.sender_id === userId;
 						return (
 							<div key={msg.id} className={`mb-3 flex ${isOwn ? 'justify-end' : 'justify-start'}`}>

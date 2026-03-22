@@ -10,7 +10,10 @@ from app.database import get_db
 from app.models.channel import Channel, ChannelStatus
 from app.models.deal import Deal, DealMessage, DealStatus
 from app.models.user import User
-from app.schemas.deal import DealCreate, DealDisputeRequest, DealMessageCreate, DealMessageResponse, DealResponse
+from app.schemas.deal import (
+    DealCreate, DealDisputeRequest, DealMessageCreate,
+    DealMessageResponse, DealResponse, SellerWalletRequest,
+)
 from app.services.escrow import generate_escrow_wallet
 from app.utils.security import get_current_user
 
@@ -32,6 +35,12 @@ def _deal_to_response(deal: Deal, channel: Channel | None = None, buyer: User | 
         service_fee=deal.service_fee,
         deal_group_chat_id=deal.deal_group_chat_id,
         dispute_reason=deal.dispute_reason,
+        buyer_ready=deal.buyer_ready,
+        seller_ready=deal.seller_ready,
+        buyer_confirmed_transfer=deal.buyer_confirmed_transfer,
+        seller_confirmed_transfer=deal.seller_confirmed_transfer,
+        seller_payout_address=deal.seller_payout_address,
+        payout_tx_hash=deal.payout_tx_hash,
         created_at=deal.created_at,
         paid_at=deal.paid_at,
         completed_at=deal.completed_at,
@@ -140,7 +149,7 @@ async def confirm_transfer(
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    """Buyer confirms they received the channel. Triggers payout to seller."""
+    """Legacy endpoint — redirects to confirm-channel-transfer."""
     result = await db.execute(
         select(Deal)
         .options(selectinload(Deal.channel), selectinload(Deal.buyer), selectinload(Deal.seller))
@@ -149,22 +158,29 @@ async def confirm_transfer(
     deal = result.scalar_one_or_none()
     if not deal:
         raise HTTPException(status_code=404, detail="Deal not found")
-    if deal.buyer_id != user.id:
-        raise HTTPException(status_code=403, detail="Only buyer can confirm transfer")
+    if deal.buyer_id != user.id and deal.seller_id != user.id:
+        raise HTTPException(status_code=403, detail="Access denied")
     if deal.status != DealStatus.paid:
         raise HTTPException(status_code=400, detail="Deal is not in paid status")
 
-    deal.status = DealStatus.completed
-    deal.completed_at = datetime.utcnow()
+    if deal.buyer_id == user.id:
+        deal.buyer_confirmed_transfer = True
+        await _add_system_message(db, deal.id, user.id, "✅ Покупець підтвердив отримання каналу")
+    else:
+        deal.seller_confirmed_transfer = True
+        await _add_system_message(db, deal.id, user.id, "✅ Продавець підтвердив передачу каналу")
 
-    # Mark channel as sold
-    deal.channel.status = ChannelStatus.sold
+    if deal.buyer_confirmed_transfer and deal.seller_confirmed_transfer:
+        deal.status = DealStatus.awaiting_payout
+        deal.channel.status = ChannelStatus.sold
+        payout_amount = deal.amount_usdt - deal.service_fee
+        await _add_system_message(
+            db, deal.id, user.id,
+            f"🎉 Канал успішно передано! Продавець, вкажіть свій USDT (TRC-20) гаманець для отримання {payout_amount:.2f} USDT"
+        )
 
     await db.commit()
     await db.refresh(deal)
-
-    # TODO: trigger USDT payout to seller in background task
-
     return _deal_to_response(deal, deal.channel, deal.buyer, deal.seller)
 
 
@@ -195,6 +211,224 @@ async def open_dispute(
     await db.refresh(deal)
 
     return _deal_to_response(deal, deal.channel, deal.buyer, deal.seller)
+
+
+# ===== Deal Flow Actions =====
+
+async def _add_system_message(db: AsyncSession, deal_id: int, user_id: int, text: str):
+    """Add a system message to deal chat."""
+    msg = DealMessage(deal_id=deal_id, sender_id=user_id, text=text, is_system=True)
+    db.add(msg)
+
+
+@router.post("/{deal_id}/confirm-ready", response_model=DealResponse)
+async def confirm_ready(
+    deal_id: int,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Buyer or seller confirms they are ready for the deal."""
+    result = await db.execute(
+        select(Deal)
+        .options(selectinload(Deal.channel), selectinload(Deal.buyer), selectinload(Deal.seller))
+        .where(Deal.id == deal_id)
+    )
+    deal = result.scalar_one_or_none()
+    if not deal:
+        raise HTTPException(status_code=404, detail="Deal not found")
+    if deal.buyer_id != user.id and deal.seller_id != user.id:
+        raise HTTPException(status_code=403, detail="Access denied")
+    if deal.status != DealStatus.created:
+        raise HTTPException(status_code=400, detail="Deal is not in created status")
+
+    if deal.buyer_id == user.id:
+        deal.buyer_ready = True
+        await _add_system_message(db, deal.id, user.id, f"✅ Покупець {user.first_name} підтвердив готовність до угоди")
+    else:
+        deal.seller_ready = True
+        await _add_system_message(db, deal.id, user.id, f"✅ Продавець {user.first_name} підтвердив готовність до угоди")
+
+    # Both ready → move to payment_pending
+    if deal.buyer_ready and deal.seller_ready:
+        deal.status = DealStatus.payment_pending
+        await _add_system_message(
+            db, deal.id, user.id,
+            f"💰 Обидві сторони готові! Покупець, переведіть {deal.amount_usdt} USDT (TRC-20) на адресу:\n{deal.escrow_wallet_address}"
+        )
+
+    await db.commit()
+    await db.refresh(deal)
+    return _deal_to_response(deal, deal.channel, deal.buyer, deal.seller)
+
+
+@router.post("/{deal_id}/confirm-channel-transfer", response_model=DealResponse)
+async def confirm_channel_transfer(
+    deal_id: int,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Buyer or seller confirms channel has been transferred."""
+    result = await db.execute(
+        select(Deal)
+        .options(selectinload(Deal.channel), selectinload(Deal.buyer), selectinload(Deal.seller))
+        .where(Deal.id == deal_id)
+    )
+    deal = result.scalar_one_or_none()
+    if not deal:
+        raise HTTPException(status_code=404, detail="Deal not found")
+    if deal.buyer_id != user.id and deal.seller_id != user.id:
+        raise HTTPException(status_code=403, detail="Access denied")
+    if deal.status != DealStatus.paid:
+        raise HTTPException(status_code=400, detail="Deal is not in paid status")
+
+    if deal.buyer_id == user.id:
+        deal.buyer_confirmed_transfer = True
+        await _add_system_message(db, deal.id, user.id, f"✅ Покупець підтвердив отримання каналу")
+    else:
+        deal.seller_confirmed_transfer = True
+        await _add_system_message(db, deal.id, user.id, f"✅ Продавець підтвердив передачу каналу")
+
+    # Both confirmed → awaiting payout
+    if deal.buyer_confirmed_transfer and deal.seller_confirmed_transfer:
+        deal.status = DealStatus.awaiting_payout
+        deal.channel.status = ChannelStatus.sold
+        payout_amount = deal.amount_usdt - deal.service_fee
+        await _add_system_message(
+            db, deal.id, user.id,
+            f"🎉 Канал успішно передано! Продавець, вкажіть свій USDT (TRC-20) гаманець для отримання {payout_amount:.2f} USDT"
+        )
+
+    await db.commit()
+    await db.refresh(deal)
+    return _deal_to_response(deal, deal.channel, deal.buyer, deal.seller)
+
+
+@router.post("/{deal_id}/seller-wallet", response_model=DealResponse)
+async def set_seller_wallet(
+    deal_id: int,
+    body: SellerWalletRequest,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Seller provides their USDT wallet for payout."""
+    result = await db.execute(
+        select(Deal)
+        .options(selectinload(Deal.channel), selectinload(Deal.buyer), selectinload(Deal.seller))
+        .where(Deal.id == deal_id)
+    )
+    deal = result.scalar_one_or_none()
+    if not deal:
+        raise HTTPException(status_code=404, detail="Deal not found")
+    if deal.seller_id != user.id:
+        raise HTTPException(status_code=403, detail="Only seller can provide wallet")
+    if deal.status != DealStatus.awaiting_payout:
+        raise HTTPException(status_code=400, detail="Deal is not awaiting payout")
+
+    wallet = body.wallet_address.strip()
+    if not wallet or len(wallet) < 20:
+        raise HTTPException(status_code=400, detail="Invalid wallet address")
+
+    deal.seller_payout_address = wallet
+    await _add_system_message(db, deal.id, user.id, f"💳 Продавець вказав гаманець для виплати")
+
+    # Trigger payout
+    payout_amount = deal.amount_usdt - deal.service_fee
+    try:
+        from app.services.escrow import send_trx_for_gas, transfer_usdt
+
+        # Send TRX for gas fees first
+        gas_tx = send_trx_for_gas(deal.escrow_wallet_address)
+        if gas_tx:
+            # Small delay for TRX to arrive
+            import asyncio
+            await asyncio.sleep(5)
+
+        tx_hash = transfer_usdt(deal.escrow_private_key_encrypted, wallet, payout_amount)
+        if tx_hash:
+            deal.payout_tx_hash = tx_hash
+            deal.status = DealStatus.completed
+            deal.completed_at = datetime.utcnow()
+            await _add_system_message(
+                db, deal.id, user.id,
+                f"✅ Виплата {payout_amount:.2f} USDT відправлена! TX: {tx_hash}"
+            )
+        else:
+            await _add_system_message(
+                db, deal.id, user.id,
+                "⚠️ Помилка автоматичної виплати. Адміністратор вирішить це вручну."
+            )
+    except Exception as e:
+        import logging
+        logging.getLogger(__name__).error(f"Payout failed for deal #{deal.id}: {e}")
+        await _add_system_message(
+            db, deal.id, user.id,
+            "⚠️ Помилка виплати. Адміністратор розгляне це питання."
+        )
+
+    await db.commit()
+    await db.refresh(deal)
+    return _deal_to_response(deal, deal.channel, deal.buyer, deal.seller)
+
+
+@router.post("/{deal_id}/call-admin", response_model=DealMessageResponse)
+async def call_admin(
+    deal_id: int,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Call admin to the deal chat. Sends Telegram notification."""
+    result = await db.execute(
+        select(Deal)
+        .options(selectinload(Deal.channel))
+        .where(Deal.id == deal_id)
+    )
+    deal = result.scalar_one_or_none()
+    if not deal:
+        raise HTTPException(status_code=404, detail="Deal not found")
+    if deal.buyer_id != user.id and deal.seller_id != user.id:
+        raise HTTPException(status_code=403, detail="Access denied")
+
+    # Add system message
+    msg = DealMessage(
+        deal_id=deal_id,
+        sender_id=user.id,
+        text=f"🛡️ {user.first_name} викликав адміністратора в чат",
+        is_system=True,
+    )
+    db.add(msg)
+    await db.commit()
+    await db.refresh(msg)
+
+    # Notify admins via Telegram
+    try:
+        from bot.main import notify_admin_called
+        admin_result = await db.execute(
+            select(User).where(User.role.in_(["admin", "moderator"]))
+        )
+        admins = admin_result.scalars().all()
+        from aiogram import Bot
+        bot = Bot(token=settings.bot_token_alerts)
+        channel_name = deal.channel.channel_name if deal.channel else f"#{deal.channel_id}"
+        for admin in admins:
+            if admin.telegram_id:
+                try:
+                    await notify_admin_called(bot, admin.telegram_id, deal.id, channel_name, user.first_name)
+                except Exception:
+                    pass
+        await bot.session.close()
+    except Exception as e:
+        import logging
+        logging.getLogger(__name__).error(f"Failed to notify admins for deal #{deal.id}: {e}")
+
+    return DealMessageResponse(
+        id=msg.id,
+        deal_id=msg.deal_id,
+        sender_id=msg.sender_id,
+        sender_name=user.first_name,
+        text=msg.text,
+        is_system=True,
+        created_at=msg.created_at,
+    )
 
 
 # ===== Deal Messages (Chat) =====
@@ -234,6 +468,7 @@ async def get_deal_messages(
             sender_id=m.sender_id,
             sender_name=senders.get(m.sender_id, None) and senders[m.sender_id].first_name,
             text=m.text,
+            is_system=m.is_system,
             created_at=m.created_at,
         )
         for m in messages
@@ -276,5 +511,6 @@ async def send_deal_message(
         sender_id=message.sender_id,
         sender_name=user.first_name,
         text=message.text,
+        is_system=False,
         created_at=message.created_at,
     )

@@ -3,13 +3,15 @@ import asyncio
 import logging
 from datetime import datetime, timedelta, timezone
 
+from aiogram import Bot
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
 from app.database import async_session
-from app.models.deal import Deal, DealStatus, Transaction, TransactionStatus, TransactionType
+from app.models.deal import Deal, DealMessage, DealStatus, Transaction, TransactionStatus, TransactionType
 from app.services.escrow import get_usdt_balance
+from bot.main import notify_payment_received
 
 logger = logging.getLogger(__name__)
 
@@ -20,7 +22,7 @@ async def check_payments_once():
         # Get deals awaiting payment
         result = await db.execute(
             select(Deal).where(
-                Deal.status.in_([DealStatus.created, DealStatus.payment_pending])
+                Deal.status == DealStatus.payment_pending
             )
         )
         deals = result.scalars().all()
@@ -57,7 +59,27 @@ async def check_payments_once():
                     logger.info(
                         f"Deal #{deal.id} PAID: {balance} USDT received at {deal.escrow_wallet_address}"
                     )
-                    # TODO: Notify via Telegram bot that payment received
+
+                    # Add system message to deal chat
+                    sys_msg = DealMessage(
+                        deal_id=deal.id,
+                        sender_id=deal.buyer_id,
+                        message=f"💰 Оплата {balance} USDT отримана! Продавець, передайте канал покупцю.",
+                        is_system=True,
+                    )
+                    db.add(sys_msg)
+                    await db.commit()
+
+                    # Notify via Telegram
+                    try:
+                        from app.models.user import User
+                        buyer = await db.get(User, deal.buyer_id)
+                        seller = await db.get(User, deal.seller_id)
+                        if buyer and seller:
+                            bot = Bot(token=settings.bot_token_alerts)
+                            await notify_payment_received(bot, deal, buyer, seller)
+                    except Exception as e:
+                        logger.error(f"Failed to send payment notification for deal #{deal.id}: {e}")
 
                 elif balance > 0:
                     # Partial payment

@@ -2,7 +2,7 @@ import enum
 from datetime import datetime
 
 from sqlalchemy import (
-    BigInteger, DateTime, Enum, Float, ForeignKey,
+    BigInteger, Boolean, DateTime, Enum, Float, ForeignKey,
     Integer, String, Text, func,
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship
@@ -15,6 +15,7 @@ class DealStatus(str, enum.Enum):
     payment_pending = "payment_pending"
     paid = "paid"
     channel_transferring = "channel_transferring"
+    awaiting_payout = "awaiting_payout"
     completed = "completed"
     disputed = "disputed"
     cancelled = "cancelled"
@@ -50,6 +51,13 @@ class Deal(Base):
 
     deal_group_chat_id: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
     dispute_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+    buyer_ready: Mapped[bool] = mapped_column(Boolean, default=False)
+    seller_ready: Mapped[bool] = mapped_column(Boolean, default=False)
+    buyer_confirmed_transfer: Mapped[bool] = mapped_column(Boolean, default=False)
+    seller_confirmed_transfer: Mapped[bool] = mapped_column(Boolean, default=False)
+    seller_payout_address: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    payout_tx_hash: Mapped[str | None] = mapped_column(String(100), nullable=True)
 
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
     paid_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
@@ -88,6 +96,7 @@ class DealMessage(Base):
     deal_id: Mapped[int] = mapped_column(ForeignKey("deals.id", ondelete="CASCADE"), index=True)
     sender_id: Mapped[int] = mapped_column(ForeignKey("users.id"))
     text: Mapped[str] = mapped_column(Text)
+    is_system: Mapped[bool] = mapped_column(Boolean, default=False)
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
 
     deal = relationship("Deal", back_populates="messages")

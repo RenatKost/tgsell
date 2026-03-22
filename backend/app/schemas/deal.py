@@ -21,6 +21,12 @@ class DealResponse(BaseModel):
     service_fee: float
     deal_group_chat_id: int | None
     dispute_reason: str | None
+    buyer_ready: bool = False
+    seller_ready: bool = False
+    buyer_confirmed_transfer: bool = False
+    seller_confirmed_transfer: bool = False
+    seller_payout_address: str | None = None
+    payout_tx_hash: str | None = None
     created_at: datetime
     paid_at: datetime | None
     completed_at: datetime | None
@@ -37,6 +43,10 @@ class DealResolveRequest(BaseModel):
     comment: str | None = None
 
 
+class SellerWalletRequest(BaseModel):
+    wallet_address: str
+
+
 class DealMessageCreate(BaseModel):
     text: str
 
@@ -47,6 +57,7 @@ class DealMessageResponse(BaseModel):
     sender_id: int
     sender_name: str | None = None
     text: str
+    is_system: bool = False
     created_at: datetime
 
     model_config = {"from_attributes": True}

@@ -41,7 +41,7 @@ class Settings(BaseSettings):
     encryption_key: str = "change-me-32-byte-encryption-key!"
 
     # Service
-    service_fee_percent: float = 5.0
+    service_fee_percent: float = 3.0
     payment_timeout_hours: int = 2
     transfer_timeout_hours: int = 48
     frontend_url: str = "http://localhost:5173"

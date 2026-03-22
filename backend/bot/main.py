@@ -287,6 +287,18 @@ async def notify_deal_completed(bot: Bot, deal: Deal, buyer: User, seller: User)
                 logger.error(f"Failed to notify user {user.telegram_id}: {e}")
 
 
+async def notify_admin_called(bot: Bot, admin_telegram_id: int, deal_id: int, channel_name: str, caller_name: str):
+    """Notify admin that they have been called to a deal chat."""
+    frontend_url = settings.frontend_url.rstrip("/")
+    text = (
+        f"🛡️ <b>Виклик адміністратора!</b>\n\n"
+        f"Угода #{deal_id} — {channel_name}\n"
+        f"Викликав: {caller_name}\n\n"
+        f"<a href='{frontend_url}/deal/{deal_id}'>Перейти до чату угоди →</a>"
+    )
+    await bot.send_message(admin_telegram_id, text, parse_mode=ParseMode.HTML)
+
+
 # ── Auth bot router (separate bot for login) ─────────────────────────
 
 auth_router = Router()
