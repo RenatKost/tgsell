@@ -45,16 +45,48 @@ async def collect_stats_once():
                 if stats.get("adv_reach_48h"):
                     channel.adv_reach_48h = stats["adv_reach_48h"]
 
-                # Save historical stats
-                stat_record = ChannelStats(
-                    channel_id=channel.id,
-                    date=datetime.utcnow(),
-                    subscribers=stats.get("subscribers_count", 0),
-                    avg_views=stats.get("avg_views", 0),
-                    avg_reach=stats.get("avg_views", 0),
-                    er=stats.get("er", 0.0),
-                )
-                db.add(stat_record)
+                # Save daily_stats history with deduplication
+                daily_stats = stats.get("daily_stats", [])
+                if daily_stats:
+                    # Get existing dates for this channel to avoid duplicates
+                    existing = await db.execute(
+                        select(ChannelStats.date).where(
+                            ChannelStats.channel_id == channel.id
+                        )
+                    )
+                    existing_dates = {
+                        d.strftime("%Y-%m-%d") for d in existing.scalars().all()
+                    }
+
+                    for ds in daily_stats:
+                        if ds["date"] not in existing_dates:
+                            db.add(ChannelStats(
+                                channel_id=channel.id,
+                                date=datetime.strptime(ds["date"], "%Y-%m-%d"),
+                                subscribers=ds.get("subscribers", 0),
+                                avg_views=ds.get("avg_views", 0),
+                                avg_reach=ds.get("avg_views", 0),
+                                er=ds.get("er", 0.0),
+                            ))
+                else:
+                    # Fallback: save today's snapshot
+                    today_str = datetime.utcnow().strftime("%Y-%m-%d")
+                    existing = await db.execute(
+                        select(ChannelStats.id).where(
+                            ChannelStats.channel_id == channel.id,
+                            ChannelStats.date >= datetime.strptime(today_str, "%Y-%m-%d"),
+                        )
+                    )
+                    if not existing.scalar_one_or_none():
+                        db.add(ChannelStats(
+                            channel_id=channel.id,
+                            date=datetime.utcnow(),
+                            subscribers=stats.get("subscribers_count", 0),
+                            avg_views=stats.get("avg_views", 0),
+                            avg_reach=stats.get("avg_views", 0),
+                            er=stats.get("er", 0.0),
+                        ))
+
                 await db.commit()
 
                 logger.info(f"Stats collected for channel #{channel.id} ({channel.channel_name})")
