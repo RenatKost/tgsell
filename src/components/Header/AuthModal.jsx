@@ -118,8 +118,10 @@ const AuthModal = ({ show, setShow }) => {
 	}, [show, widgetKey, loadWidget]);
 
 	const handleSwitchAccount = () => {
-		// Open Telegram OAuth logout in popup (iframe blocked by SameSite cookies)
-		const logoutUrl = `https://oauth.telegram.org/auth/logout?bot_id=${TELEGRAM_BOT_NAME}&origin=${encodeURIComponent(window.location.origin)}`;
+		// Open Telegram OAuth logout in popup
+		// bot_id must be numeric — extract from VITE_TELEGRAM_BOT_AUTH_ID or use known ID
+		const botNumericId = import.meta.env.VITE_TELEGRAM_BOT_AUTH_ID || '8490432145';
+		const logoutUrl = `https://oauth.telegram.org/auth/logout?bot_id=${botNumericId}&origin=${encodeURIComponent(window.location.origin)}`;
 		const popup = window.open(logoutUrl, '_blank', 'width=550,height=450');
 		const timer = setInterval(() => {
 			if (popup && popup.closed) {
