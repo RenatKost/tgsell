@@ -7,6 +7,7 @@ class Settings(BaseSettings):
     telegram_api_id: int = 0
     telegram_api_hash: str = ""
     telegram_phone: str = ""
+    telethon_session_string: str = ""
 
     # Database
     database_url: str = "postgresql+asyncpg://tgsell:tgsell@localhost:5432/tgsell"

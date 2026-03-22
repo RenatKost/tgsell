@@ -12,20 +12,25 @@ _telethon_client = None
 
 
 async def _get_telethon_client():
-    """Get or create a Telethon client (singleton)."""
+    """Get or create a Telethon client (singleton) using StringSession."""
     global _telethon_client
     if _telethon_client is not None and _telethon_client.is_connected():
         return _telethon_client
 
     try:
         from telethon import TelegramClient
+        from telethon.sessions import StringSession
 
+        session = StringSession(settings.telethon_session_string) if settings.telethon_session_string else StringSession()
         client = TelegramClient(
-            "tgsell_stats_session",
+            session,
             settings.telegram_api_id,
             settings.telegram_api_hash,
         )
-        await client.start(phone=settings.telegram_phone)
+        await client.connect()
+        if not await client.is_user_authorized():
+            logger.warning("Telethon session not authorized. Set TELETHON_SESSION_STRING env var.")
+            return None
         _telethon_client = client
         return client
     except Exception as e:

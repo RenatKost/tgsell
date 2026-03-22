@@ -34,6 +34,7 @@ __pycache__
 .venv
 backend/venv
 *.egg-info
+*.session
 
 # Alembic
 alembic/versions/__pycache__
