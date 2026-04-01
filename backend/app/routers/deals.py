@@ -129,10 +129,12 @@ async def create_deal(
         from bot.main import notify_new_deal
         from aiogram import Bot
         bot = Bot(token=settings.bot_token_alerts)
+        logger.info(f"[DEAL] Sending Telegram notifications for deal #{deal.id}, seller.tg_id={seller.telegram_id if seller else 'no_seller'}, buyer.tg_id={user.telegram_id}")
         await notify_new_deal(bot, deal, user, seller)
         await bot.session.close()
+        logger.info(f"[DEAL] Telegram notifications sent for deal #{deal.id}")
     except Exception as e:
-        logger.error(f"Failed to notify about deal #{deal.id}: {e}")
+        logger.error(f"[DEAL] Failed to notify about deal #{deal.id}: {e}", exc_info=True)
 
     return _deal_to_response(deal, channel, user, seller)
 

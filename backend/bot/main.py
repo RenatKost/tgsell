@@ -52,12 +52,14 @@ def deal_keyboard(deal_id: int, user_role: str) -> InlineKeyboardMarkup:
 
 @router.message(CommandStart())
 async def cmd_start(message: Message):
+    logger.info(f"[BOT] /start from user {message.from_user.id} (@{message.from_user.username})")
     await message.answer(
         "👋 Вітаю! Я бот TgSell — маркетплейс Telegram-каналів.\n\n"
         "Я допоможу вам із угодами:\n"
         "• Повідомляю про нові угоди\n"
         "• Відслідковую оплату USDT\n"
         "• Контролюю передачу каналів\n\n"
+        "🔔 Тепер ви будете отримувати сповіщення про угоди!\n\n"
         "Використовуйте /help для списку команд.",
     )
 
@@ -235,7 +237,9 @@ async def cb_deal_dispute(callback: CallbackQuery):
 # ── Notification helpers (called from backend services) ───────────────
 
 async def notify_new_deal(bot: Bot, deal: Deal, buyer: User, seller: User):
-    """Notify buyer and seller about a new deal."""
+    """Notify buyer, seller and admin about a new deal."""
+    logger.info(f"[NOTIFY] notify_new_deal called: deal={deal.id}, buyer={buyer.id}(tg={buyer.telegram_id}), seller={seller.id}(tg={seller.telegram_id})")
+
     text = (
         f"🆕 <b>Нова угода #{deal.id}</b>\n\n"
         f"💰 Сума: {deal.amount_usdt} USDT\n"
@@ -246,8 +250,11 @@ async def notify_new_deal(bot: Bot, deal: Deal, buyer: User, seller: User):
     if buyer.telegram_id:
         try:
             await bot.send_message(buyer.telegram_id, text, parse_mode=ParseMode.HTML)
+            logger.info(f"[NOTIFY] Buyer {buyer.telegram_id} notified about deal #{deal.id}")
         except Exception as e:
-            logger.error(f"Failed to notify buyer {buyer.telegram_id}: {e}")
+            logger.error(f"[NOTIFY] Failed to notify buyer {buyer.telegram_id}: {e}", exc_info=True)
+    else:
+        logger.warning(f"[NOTIFY] Buyer {buyer.id} has no telegram_id, skipping notification")
 
     seller_text = (
         f"🆕 <b>Нова угода #{deal.id}</b>\n\n"
@@ -258,12 +265,30 @@ async def notify_new_deal(bot: Bot, deal: Deal, buyer: User, seller: User):
     if seller.telegram_id:
         try:
             await bot.send_message(seller.telegram_id, seller_text, parse_mode=ParseMode.HTML)
+            logger.info(f"[NOTIFY] Seller {seller.telegram_id} notified about deal #{deal.id}")
         except Exception as e:
-            logger.error(f"Failed to notify seller {seller.telegram_id}: {e}")
+            logger.error(f"[NOTIFY] Failed to notify seller {seller.telegram_id}: {e}", exc_info=True)
+    else:
+        logger.warning(f"[NOTIFY] Seller {seller.id} has no telegram_id, skipping notification")
+
+    # Notify admin
+    if settings.admin_telegram_id:
+        admin_text = (
+            f"🆕 <b>Нова угода #{deal.id}</b>\n\n"
+            f"Покупець: {buyer.first_name} (id={buyer.id})\n"
+            f"Продавець: {seller.first_name} (id={seller.id})\n"
+            f"💰 Сума: {deal.amount_usdt} USDT"
+        )
+        try:
+            await bot.send_message(settings.admin_telegram_id, admin_text, parse_mode=ParseMode.HTML)
+            logger.info(f"[NOTIFY] Admin {settings.admin_telegram_id} notified about deal #{deal.id}")
+        except Exception as e:
+            logger.error(f"[NOTIFY] Failed to notify admin: {e}", exc_info=True)
 
 
 async def notify_payment_received(bot: Bot, deal: Deal, buyer: User, seller: User):
     """Notify that USDT payment arrived."""
+    logger.info(f"[NOTIFY] notify_payment_received called: deal={deal.id}")
     text = f"✅ <b>Угода #{deal.id}</b>: оплата {deal.amount_usdt} USDT отримана!\n\n"
     buyer_text = text + "Очікуйте передачу каналу від продавця."
     seller_text = text + "Будь ласка, передайте канал покупцю та очікуйте підтвердження."
@@ -272,19 +297,38 @@ async def notify_payment_received(bot: Bot, deal: Deal, buyer: User, seller: Use
         if user.telegram_id:
             try:
                 await bot.send_message(user.telegram_id, msg, parse_mode=ParseMode.HTML)
+                logger.info(f"[NOTIFY] User {user.telegram_id} notified about payment for deal #{deal.id}")
             except Exception as e:
-                logger.error(f"Failed to notify user {user.telegram_id}: {e}")
+                logger.error(f"[NOTIFY] Failed to notify user {user.telegram_id}: {e}", exc_info=True)
+
+    # Notify admin
+    if settings.admin_telegram_id:
+        try:
+            admin_text = f"💸 <b>Оплата отримана!</b> Угода #{deal.id} — {deal.amount_usdt} USDT"
+            await bot.send_message(settings.admin_telegram_id, admin_text, parse_mode=ParseMode.HTML)
+        except Exception as e:
+            logger.error(f"[NOTIFY] Failed to notify admin about payment: {e}")
 
 
 async def notify_deal_completed(bot: Bot, deal: Deal, buyer: User, seller: User):
     """Notify that deal is completed."""
+    logger.info(f"[NOTIFY] notify_deal_completed called: deal={deal.id}")
     text = f"🎉 <b>Угода #{deal.id} завершена!</b>\n\nДякуємо за використання TgSell!"
     for user in [buyer, seller]:
         if user.telegram_id:
             try:
                 await bot.send_message(user.telegram_id, text, parse_mode=ParseMode.HTML)
+                logger.info(f"[NOTIFY] User {user.telegram_id} notified about deal #{deal.id} completion")
             except Exception as e:
-                logger.error(f"Failed to notify user {user.telegram_id}: {e}")
+                logger.error(f"[NOTIFY] Failed to notify user {user.telegram_id}: {e}", exc_info=True)
+
+    # Notify admin
+    if settings.admin_telegram_id:
+        try:
+            admin_text = f"🎉 <b>Угода #{deal.id} завершена!</b> Сума: {deal.amount_usdt} USDT"
+            await bot.send_message(settings.admin_telegram_id, admin_text, parse_mode=ParseMode.HTML)
+        except Exception as e:
+            logger.error(f"[NOTIFY] Failed to notify admin about completion: {e}")
 
 
 async def notify_admin_called(bot: Bot, admin_telegram_id: int, deal_id: int, channel_name: str, caller_name: str):

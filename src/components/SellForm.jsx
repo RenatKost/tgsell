@@ -10,6 +10,7 @@ const SellForm = () => {
 	const { isAuthenticated } = useAuth();
 	const navigate = useNavigate();
 	const [submitError, setSubmitError] = useState('');
+	const [showBotPrompt, setShowBotPrompt] = useState(false);
 
 	const {
 		handleSubmit,
@@ -62,10 +63,7 @@ const SellForm = () => {
 					resources: resources || null,
 				});
 				setStatus('Ваша заявка відправлена на модерацію!');
-				setTimeout(() => {
-					resetForm();
-					navigate('/cabinet');
-				}, 2000);
+				setShowBotPrompt(true);
 			} catch (err) {
 				setSubmitError(err.response?.data?.detail || 'Помилка створення заявки');
 			}
@@ -210,7 +208,30 @@ const SellForm = () => {
 				>
 					{isSubmitting ? 'Відправка...' : 'Надіслати'}
 				</button>
-				{status && <span className='block mt-4 text-green-600 font-bold'>{status}</span>}
+				{showBotPrompt && (
+					<div className='mt-6 p-6 bg-blue-50 border border-blue-200 rounded-lg'>
+						<h4 className='text-lg font-bold text-blue-800 mb-2'>✅ Канал надіслано на модерацію!</h4>
+						<p className='text-blue-700 mb-4'>
+							Щоб моментально отримувати сповіщення, коли хтось захоче купити ваш канал — запустіть бота сповіщень:
+						</p>
+						<a
+							href='https://t.me/tgsell_alert_bot?start=subscribe'
+							target='_blank'
+							rel='noopener noreferrer'
+							className='inline-block bg-[#0088cc] text-white font-bold py-3 px-6 rounded-md hover:bg-[#006daa] duration-300'
+						>
+							🔔 Запустити бота сповіщень
+						</a>
+						<button
+							type='button'
+							onClick={() => navigate('/cabinet')}
+							className='ml-4 text-blue-600 underline hover:text-blue-800'
+						>
+							Перейти до кабінету →
+						</button>
+					</div>
+				)}
+				{!showBotPrompt && status && <span className='block mt-4 text-green-600 font-bold'>{status}</span>}
 				{submitError && <span className='block mt-4 text-red-500'>{submitError}</span>}
 			</form>
 		</section>

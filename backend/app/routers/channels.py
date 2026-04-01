@@ -216,6 +216,25 @@ async def create_channel(
         result = await db.execute(select(Channel).where(Channel.id == channel.id))
         channel = result.scalar_one_or_none()
 
+    # Notify admin about new channel for moderation
+    try:
+        from aiogram import Bot
+        from aiogram.enums import ParseMode
+        from app.config import settings as cfg
+        if cfg.admin_telegram_id and cfg.bot_token_alerts:
+            bot = Bot(token=cfg.bot_token_alerts)
+            admin_text = (
+                f"📺 <b>Новий канал на модерацію!</b>\n\n"
+                f"Канал: {channel.channel_name or channel.telegram_link}\n"
+                f"Продавець: {user.first_name} (id={user.id})\n"
+                f"Ціна: {channel.price} USDT"
+            )
+            await bot.send_message(cfg.admin_telegram_id, admin_text, parse_mode=ParseMode.HTML)
+            await bot.session.close()
+            logger.info(f"[CHANNEL] Admin notified about new channel #{channel.id}")
+    except Exception as e:
+        logger.error(f"[CHANNEL] Failed to notify admin about channel #{channel.id}: {e}")
+
     return ChannelResponse.model_validate(channel)
 
 
