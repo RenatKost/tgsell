@@ -111,6 +111,7 @@ async def create_channel(
     # Normalize link and check for duplicates
     import re
     clean_link = re.sub(r'^(https?://)?(t\.me/|@)', '', body.telegram_link.strip()).strip('/')
+    logger.info(f"[CHANNEL] Create request from user={user.id}: link='{body.telegram_link}', clean='{clean_link}'")
     if clean_link:
         existing = await db.execute(
             select(Channel).where(
@@ -119,6 +120,7 @@ async def create_channel(
             )
         )
         if existing.scalar_one_or_none():
+            logger.warning(f"[CHANNEL] Duplicate channel rejected: '{clean_link}' from user={user.id}")
             raise HTTPException(status_code=409, detail="Цей канал вже розміщений на біржі")
 
     try:

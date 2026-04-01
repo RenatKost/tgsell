@@ -19,6 +19,7 @@ USDT_CONTRACTS = {
 
 def _get_tron_client() -> Tron:
     """Get a Tron client for the configured network."""
+    logger.info(f"[TRON] Connecting to network={settings.tron_network}")
     if settings.tron_network == "mainnet":
         if settings.tron_api_key:
             provider = HTTPProvider(
@@ -40,6 +41,7 @@ def generate_escrow_wallet() -> tuple[str, str]:
     priv_key = PrivateKey.random()
     address = priv_key.public_key.to_base58check_address()
     encrypted_key = encrypt_private_key(priv_key.hex())
+    logger.info(f"[ESCROW] New wallet generated: {address}")
     return address, encrypted_key
 
 
@@ -55,9 +57,11 @@ def get_usdt_balance(wallet_address: str) -> float:
         )
         contract = client.get_contract(contract_address)
         balance_raw = contract.functions.balanceOf(wallet_address)
-        return balance_raw / 1_000_000  # USDT has 6 decimals
+        balance = balance_raw / 1_000_000  # USDT has 6 decimals
+        logger.info(f"[ESCROW] Balance check: {wallet_address} = {balance} USDT (contract={contract_address})")
+        return balance
     except Exception as e:
-        logger.error(f"Failed to check USDT balance for {wallet_address}: {e}")
+        logger.error(f"[ESCROW] Failed to check USDT balance for {wallet_address}: {e}", exc_info=True)
         return 0.0
 
 
@@ -84,6 +88,7 @@ def transfer_usdt(
         contract = client.get_contract(contract_address)
 
         amount_raw = int(amount_usdt * 1_000_000)  # 6 decimals
+        logger.info(f"[ESCROW] USDT transfer: {amount_usdt} ({amount_raw} raw) from {from_address} to {to_address}, contract={contract_address}")
 
         txn = (
             contract.functions.transfer(to_address, amount_raw)
@@ -94,11 +99,11 @@ def transfer_usdt(
         )
         result = txn.broadcast()
         tx_hash = result.get("txid", "")
-        logger.info(f"USDT transfer {amount_usdt} from {from_address} to {to_address}: {tx_hash}")
+        logger.info(f"[ESCROW] USDT transfer BROADCAST result: txid={tx_hash}, full_result={result}")
         return tx_hash
 
     except Exception as e:
-        logger.error(f"USDT transfer failed: {e}")
+        logger.error(f"[ESCROW] USDT transfer FAILED: {amount_usdt} to {to_address}: {e}", exc_info=True)
         return None
 
 
@@ -110,6 +115,7 @@ def send_trx_for_gas(to_address: str, amount_trx: int = 10) -> str | None:
     try:
         client = _get_tron_client()
         priv_key = PrivateKey(bytes.fromhex(settings.tron_master_wallet_private_key))
+        logger.info(f"[ESCROW] TRX gas: sending {amount_trx} TRX from master {settings.tron_master_wallet_address} to {to_address}")
 
         txn = (
             client.trx.transfer(
@@ -122,9 +128,9 @@ def send_trx_for_gas(to_address: str, amount_trx: int = 10) -> str | None:
         )
         result = txn.broadcast()
         tx_hash = result.get("txid", "")
-        logger.info(f"TRX gas transfer {amount_trx} TRX to {to_address}: {tx_hash}")
+        logger.info(f"[ESCROW] TRX gas BROADCAST result: txid={tx_hash}, full_result={result}")
         return tx_hash
 
     except Exception as e:
-        logger.error(f"TRX gas transfer failed: {e}")
+        logger.error(f"[ESCROW] TRX gas transfer FAILED to {to_address}: {e}", exc_info=True)
         return None

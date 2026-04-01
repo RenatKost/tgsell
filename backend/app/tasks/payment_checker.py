@@ -34,16 +34,18 @@ async def check_payments_once():
                     deadline = deal.created_at + timedelta(hours=settings.payment_timeout_hours)
                     if datetime.now(timezone.utc) > deadline.replace(tzinfo=timezone.utc):
                         deal.status = DealStatus.cancelled
-                        logger.info(f"Deal #{deal.id} cancelled: payment timeout")
+                        logger.info(f"[PAYMENT] Deal #{deal.id} CANCELLED: payment timeout ({settings.payment_timeout_hours}h)")
                         await db.commit()
                         continue
 
                 # Check USDT balance on escrow wallet
                 balance = get_usdt_balance(deal.escrow_wallet_address)
+                logger.info(f"[PAYMENT] Deal #{deal.id}: checking escrow {deal.escrow_wallet_address}, balance={balance} USDT, required={deal.amount_usdt} USDT")
 
                 if balance >= deal.amount_usdt:
                     deal.status = DealStatus.paid
                     deal.paid_at = datetime.utcnow()
+                    logger.info(f"[PAYMENT] Deal #{deal.id} PAID: {balance} USDT received at {deal.escrow_wallet_address}")
 
                     # Record transaction
                     tx = Transaction(
@@ -56,9 +58,7 @@ async def check_payments_once():
                     db.add(tx)
                     await db.commit()
 
-                    logger.info(
-                        f"Deal #{deal.id} PAID: {balance} USDT received at {deal.escrow_wallet_address}"
-                    )
+                    logger.info(f"[PAYMENT] Deal #{deal.id}: deposit transaction recorded")
 
                     # Add system message to deal chat
                     sys_msg = DealMessage(
@@ -83,20 +83,19 @@ async def check_payments_once():
                         if buyer and seller:
                             bot = Bot(token=settings.bot_token_alerts)
                             await notify_payment_received(bot, deal, buyer, seller)
+                            logger.info(f"[PAYMENT] Deal #{deal.id}: Telegram notification sent to buyer={buyer.telegram_id}, seller={seller.telegram_id}")
                     except Exception as e:
-                        logger.error(f"Failed to send payment notification for deal #{deal.id}: {e}")
+                        logger.error(f"[PAYMENT] Deal #{deal.id}: Telegram notification FAILED: {e}", exc_info=True)
 
                 elif balance > 0:
                     # Partial payment
+                    logger.warning(f"[PAYMENT] Deal #{deal.id}: PARTIAL payment {balance}/{deal.amount_usdt} USDT")
                     if deal.status != DealStatus.payment_pending:
                         deal.status = DealStatus.payment_pending
                         await db.commit()
-                    logger.info(
-                        f"Deal #{deal.id}: partial payment {balance}/{deal.amount_usdt} USDT"
-                    )
 
             except Exception as e:
-                logger.error(f"Error checking payment for deal #{deal.id}: {e}")
+                logger.error(f"[PAYMENT] Deal #{deal.id}: ERROR checking payment: {e}", exc_info=True)
 
 
 async def run_payment_checker(interval_seconds: int = 30):

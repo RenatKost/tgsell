@@ -8,7 +8,7 @@ from sqlalchemy.orm import selectinload
 from app.config import settings
 from app.database import get_db
 from app.models.channel import Channel, ChannelStatus
-from app.models.deal import Deal, DealMessage, DealStatus
+from app.models.deal import Deal, DealMessage, DealStatus, Transaction, TransactionStatus, TransactionType
 from app.models.user import User
 from app.schemas.deal import (
     DealCreate, DealDisputeRequest, DealMessageCreate,
@@ -82,6 +82,7 @@ async def create_deal(
 
     # Generate escrow wallet
     wallet_address, encrypted_private_key = generate_escrow_wallet()
+    logger.info(f"[DEAL] Escrow wallet generated: {wallet_address} for channel #{body.channel_id}")
 
     # Calculate fee
     fee = channel.price * (settings.service_fee_percent / 100)
@@ -99,6 +100,7 @@ async def create_deal(
     db.add(deal)
     await db.commit()
     await db.refresh(deal)
+    logger.info(f"[DEAL] Deal #{deal.id} CREATED: buyer={user.id}, seller={channel.seller_id}, channel={channel.id}, amount={channel.price} USDT, fee={fee:.2f}, escrow={wallet_address}")
 
     # Get seller for response
     seller_result = await db.execute(select(User).where(User.id == channel.seller_id))
@@ -240,6 +242,7 @@ async def open_dispute(
 
     deal.status = DealStatus.disputed
     deal.dispute_reason = body.reason
+    logger.warning(f"[DEAL] Deal #{deal.id}: DISPUTE opened by user={user.id}, reason='{body.reason}'")
     await db.commit()
     await db.refresh(deal)
 
@@ -276,14 +279,17 @@ async def confirm_ready(
 
     if deal.buyer_id == user.id:
         deal.buyer_ready = True
+        logger.info(f"[DEAL] Deal #{deal.id}: BUYER READY (user={user.id})")
         await _add_system_message(db, deal.id, user.id, f"✅ Покупець {user.first_name} підтвердив готовність до угоди")
     else:
         deal.seller_ready = True
+        logger.info(f"[DEAL] Deal #{deal.id}: SELLER READY (user={user.id})")
         await _add_system_message(db, deal.id, user.id, f"✅ Продавець {user.first_name} підтвердив готовність до угоди")
 
     # Both ready → move to payment_pending
     if deal.buyer_ready and deal.seller_ready:
         deal.status = DealStatus.payment_pending
+        logger.info(f"[DEAL] Deal #{deal.id}: STATUS → payment_pending, escrow={deal.escrow_wallet_address}, awaiting {deal.amount_usdt} USDT")
         payment_msg = (
             f"💰 Обидві сторони готові!\n\n"
             f"Покупець, переведіть {deal.amount_usdt} USDT (TRC-20) на адресу:\n"
@@ -321,9 +327,11 @@ async def confirm_channel_transfer(
 
     if deal.buyer_id == user.id:
         deal.buyer_confirmed_transfer = True
+        logger.info(f"[DEAL] Deal #{deal.id}: BUYER CONFIRMED TRANSFER (user={user.id})")
         await _add_system_message(db, deal.id, user.id, f"✅ Покупець підтвердив отримання каналу")
     else:
         deal.seller_confirmed_transfer = True
+        logger.info(f"[DEAL] Deal #{deal.id}: SELLER CONFIRMED TRANSFER (user={user.id})")
         await _add_system_message(db, deal.id, user.id, f"✅ Продавець підтвердив передачу каналу")
 
     # Both confirmed → awaiting payout
@@ -331,6 +339,7 @@ async def confirm_channel_transfer(
         deal.status = DealStatus.awaiting_payout
         deal.channel.status = ChannelStatus.sold
         payout_amount = deal.amount_usdt - deal.service_fee
+        logger.info(f"[DEAL] Deal #{deal.id}: STATUS → awaiting_payout, channel #{deal.channel_id} SOLD, payout={payout_amount:.2f} USDT")
         payout_msg = (
             f"🎉 Канал успішно передано!\n\n"
             f"Продавець, вкажіть свій USDT (TRC-20) гаманець для отримання коштів:\n"
@@ -371,6 +380,7 @@ async def set_seller_wallet(
         raise HTTPException(status_code=400, detail="Invalid wallet address")
 
     deal.seller_payout_address = wallet
+    logger.info(f"[PAYOUT] Deal #{deal.id}: seller wallet set to {wallet}, payout_amount={deal.amount_usdt - deal.service_fee:.2f} USDT")
     await _add_system_message(db, deal.id, user.id, f"💳 Продавець вказав гаманець для виплати")
 
     # Trigger payout
@@ -380,7 +390,9 @@ async def set_seller_wallet(
         import asyncio
 
         # Send TRX for gas fees first
+        logger.info(f"[PAYOUT] Deal #{deal.id}: sending TRX for gas to escrow {deal.escrow_wallet_address}")
         gas_tx = send_trx_for_gas(deal.escrow_wallet_address)
+        logger.info(f"[PAYOUT] Deal #{deal.id}: TRX gas tx={gas_tx or 'FAILED'}")
         if gas_tx:
             # Wait for TRX to confirm on TRON network
             await asyncio.sleep(15)
@@ -388,17 +400,31 @@ async def set_seller_wallet(
         # Try payout with retry
         tx_hash = None
         for attempt in range(2):
+            logger.info(f"[PAYOUT] Deal #{deal.id}: USDT transfer attempt {attempt+1}/2 — {payout_amount:.2f} USDT → {wallet}")
             tx_hash = transfer_usdt(deal.escrow_private_key_encrypted, wallet, payout_amount)
             if tx_hash:
+                logger.info(f"[PAYOUT] Deal #{deal.id}: USDT transfer SUCCESS, tx={tx_hash}")
                 break
+            logger.warning(f"[PAYOUT] Deal #{deal.id}: USDT transfer attempt {attempt+1} FAILED")
             if attempt == 0:
-                logger.warning(f"Payout attempt 1 failed for deal #{deal.id}, retrying in 10s...")
                 await asyncio.sleep(10)
 
         if tx_hash:
             deal.payout_tx_hash = tx_hash
             deal.status = DealStatus.completed
             deal.completed_at = datetime.utcnow()
+            # Record payout transaction
+            payout_tx = Transaction(
+                deal_id=deal.id,
+                tx_hash=tx_hash,
+                from_address=deal.escrow_wallet_address,
+                to_address=wallet,
+                amount=payout_amount,
+                type=TransactionType.release,
+                status=TransactionStatus.confirmed,
+            )
+            db.add(payout_tx)
+            logger.info(f"[PAYOUT] Deal #{deal.id}: STATUS → completed, payout={payout_amount:.2f} USDT, tx={tx_hash}")
             await _add_system_message(
                 db, deal.id, user.id,
                 f"✅ Виплата {payout_amount:.2f} USDT відправлена! TX: {tx_hash}"
@@ -406,12 +432,23 @@ async def set_seller_wallet(
         else:
             deal.status = DealStatus.disputed
             deal.dispute_reason = "Помилка автоматичної виплати"
+            # Record failed transaction
+            failed_tx = Transaction(
+                deal_id=deal.id,
+                from_address=deal.escrow_wallet_address,
+                to_address=wallet,
+                amount=payout_amount,
+                type=TransactionType.release,
+                status=TransactionStatus.failed,
+            )
+            db.add(failed_tx)
+            logger.error(f"[PAYOUT] Deal #{deal.id}: PAYOUT FAILED after 2 attempts, STATUS → disputed")
             await _add_system_message(
                 db, deal.id, user.id,
                 f"⚠️ Автоматична виплата не вдалася. Адміністратор вирішить це протягом 24 годин."
             )
     except Exception as e:
-        logger.error(f"Payout failed for deal #{deal.id}: {e}")
+        logger.error(f"[PAYOUT] Deal #{deal.id}: EXCEPTION during payout: {e}", exc_info=True)
         deal.status = DealStatus.disputed
         deal.dispute_reason = f"Помилка виплати: {e}"
         await _add_system_message(
