@@ -492,25 +492,16 @@ async def call_admin(
     await db.commit()
     await db.refresh(msg)
 
-    # Notify admins via Telegram
+    # Notify admin group via Telegram
     try:
         from bot.main import notify_admin_called
-        admin_result = await db.execute(
-            select(User).where(User.role.in_(["admin", "moderator"]))
-        )
-        admins = admin_result.scalars().all()
         from aiogram import Bot
         bot = Bot(token=settings.bot_token_alerts)
         channel_name = deal.channel.channel_name if deal.channel else f"#{deal.channel_id}"
-        for admin in admins:
-            if admin.telegram_id:
-                try:
-                    await notify_admin_called(bot, admin.telegram_id, deal.id, channel_name, user.first_name)
-                except Exception:
-                    pass
+        await notify_admin_called(bot, deal.id, channel_name, user.first_name)
         await bot.session.close()
     except Exception as e:
-        logger.error(f"Failed to notify admins for deal #{deal.id}: {e}")
+        logger.error(f"Failed to notify admin group for deal #{deal.id}: {e}")
 
     return DealMessageResponse(
         id=msg.id,

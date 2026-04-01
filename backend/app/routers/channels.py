@@ -221,7 +221,7 @@ async def create_channel(
         from aiogram import Bot
         from aiogram.enums import ParseMode
         from app.config import settings as cfg
-        if cfg.admin_telegram_id and cfg.bot_token_alerts:
+        if cfg.admin_group_id and cfg.bot_token_alerts:
             bot = Bot(token=cfg.bot_token_alerts)
             admin_text = (
                 f"📺 <b>Новий канал на модерацію!</b>\n\n"
@@ -229,7 +229,7 @@ async def create_channel(
                 f"Продавець: {user.first_name} (id={user.id})\n"
                 f"Ціна: {channel.price} USDT"
             )
-            await bot.send_message(cfg.admin_telegram_id, admin_text, parse_mode=ParseMode.HTML)
+            await bot.send_message(cfg.admin_group_id, admin_text, parse_mode=ParseMode.HTML)
             await bot.session.close()
             logger.info(f"[CHANNEL] Admin notified about new channel #{channel.id}")
     except Exception as e:

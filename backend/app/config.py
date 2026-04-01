@@ -45,7 +45,7 @@ class Settings(BaseSettings):
     payment_timeout_hours: int = 2
     transfer_timeout_hours: int = 48
     frontend_url: str = "http://localhost:5173"
-    admin_telegram_id: int = 0  # Admin's Telegram ID for deal notifications
+    admin_group_id: int = 0  # Telegram group chat_id for admin notifications
     alerts_bot_username: str = "tgsell_alert_bot"
 
     model_config = {"env_file": ".env", "extra": "ignore"}

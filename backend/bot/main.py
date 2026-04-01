@@ -271,8 +271,8 @@ async def notify_new_deal(bot: Bot, deal: Deal, buyer: User, seller: User):
     else:
         logger.warning(f"[NOTIFY] Seller {seller.id} has no telegram_id, skipping notification")
 
-    # Notify admin
-    if settings.admin_telegram_id:
+    # Notify admin group
+    if settings.admin_group_id:
         admin_text = (
             f"🆕 <b>Нова угода #{deal.id}</b>\n\n"
             f"Покупець: {buyer.first_name} (id={buyer.id})\n"
@@ -280,8 +280,8 @@ async def notify_new_deal(bot: Bot, deal: Deal, buyer: User, seller: User):
             f"💰 Сума: {deal.amount_usdt} USDT"
         )
         try:
-            await bot.send_message(settings.admin_telegram_id, admin_text, parse_mode=ParseMode.HTML)
-            logger.info(f"[NOTIFY] Admin {settings.admin_telegram_id} notified about deal #{deal.id}")
+            await bot.send_message(settings.admin_group_id, admin_text, parse_mode=ParseMode.HTML)
+            logger.info(f"[NOTIFY] Admin group {settings.admin_group_id} notified about deal #{deal.id}")
         except Exception as e:
             logger.error(f"[NOTIFY] Failed to notify admin: {e}", exc_info=True)
 
@@ -301,13 +301,13 @@ async def notify_payment_received(bot: Bot, deal: Deal, buyer: User, seller: Use
             except Exception as e:
                 logger.error(f"[NOTIFY] Failed to notify user {user.telegram_id}: {e}", exc_info=True)
 
-    # Notify admin
-    if settings.admin_telegram_id:
+    # Notify admin group
+    if settings.admin_group_id:
         try:
             admin_text = f"💸 <b>Оплата отримана!</b> Угода #{deal.id} — {deal.amount_usdt} USDT"
-            await bot.send_message(settings.admin_telegram_id, admin_text, parse_mode=ParseMode.HTML)
+            await bot.send_message(settings.admin_group_id, admin_text, parse_mode=ParseMode.HTML)
         except Exception as e:
-            logger.error(f"[NOTIFY] Failed to notify admin about payment: {e}")
+            logger.error(f"[NOTIFY] Failed to notify admin group about payment: {e}")
 
 
 async def notify_deal_completed(bot: Bot, deal: Deal, buyer: User, seller: User):
@@ -322,17 +322,20 @@ async def notify_deal_completed(bot: Bot, deal: Deal, buyer: User, seller: User)
             except Exception as e:
                 logger.error(f"[NOTIFY] Failed to notify user {user.telegram_id}: {e}", exc_info=True)
 
-    # Notify admin
-    if settings.admin_telegram_id:
+    # Notify admin group
+    if settings.admin_group_id:
         try:
             admin_text = f"🎉 <b>Угода #{deal.id} завершена!</b> Сума: {deal.amount_usdt} USDT"
-            await bot.send_message(settings.admin_telegram_id, admin_text, parse_mode=ParseMode.HTML)
+            await bot.send_message(settings.admin_group_id, admin_text, parse_mode=ParseMode.HTML)
         except Exception as e:
-            logger.error(f"[NOTIFY] Failed to notify admin about completion: {e}")
+            logger.error(f"[NOTIFY] Failed to notify admin group about completion: {e}")
 
 
-async def notify_admin_called(bot: Bot, admin_telegram_id: int, deal_id: int, channel_name: str, caller_name: str):
-    """Notify admin that they have been called to a deal chat."""
+async def notify_admin_called(bot: Bot, deal_id: int, channel_name: str, caller_name: str):
+    """Notify admin group that they have been called to a deal chat."""
+    if not settings.admin_group_id:
+        logger.warning(f"[NOTIFY] admin_group_id not set, skipping admin call for deal #{deal_id}")
+        return
     frontend_url = settings.frontend_url.rstrip("/")
     text = (
         f"🛡️ <b>Виклик адміністратора!</b>\n\n"
@@ -340,7 +343,7 @@ async def notify_admin_called(bot: Bot, admin_telegram_id: int, deal_id: int, ch
         f"Викликав: {caller_name}\n\n"
         f"<a href='{frontend_url}/deal/{deal_id}'>Перейти до чату угоди →</a>"
     )
-    await bot.send_message(admin_telegram_id, text, parse_mode=ParseMode.HTML)
+    await bot.send_message(settings.admin_group_id, text, parse_mode=ParseMode.HTML)
 
 
 # ── Auth bot router (separate bot for login) ─────────────────────────
