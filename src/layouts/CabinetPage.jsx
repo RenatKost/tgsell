@@ -123,14 +123,14 @@ const CabinetPage = () => {
 			{/* Header */}
 			<div className='flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-8'>
 				<div>
-					<h1 className='text-2xl md:text-3xl font-bold text-gray-800'>
+					<h1 className='text-2xl md:text-3xl font-bold text-gray-800 dark:text-white'>
 						{user?.first_name ? `Привіт, ${user.first_name} 👋` : 'Особистий кабінет'}
 					</h1>
-					<p className='text-gray-500 mt-1'>Керуйте каналами та обраним</p>
+					<p className='text-gray-500 dark:text-gray-400 mt-1'>Керуйте каналами та обраним</p>
 				</div>
 				<NavLink
 					to='/sell'
-					className='inline-flex items-center gap-2 bg-[#27ae60] text-white font-semibold py-3 px-6 rounded-xl shadow-lg shadow-green-200 hover:shadow-green-300 hover:bg-[#219a52] duration-300 whitespace-nowrap'
+					className='inline-flex items-center gap-2 bg-[#27ae60] text-white font-semibold py-3 px-6 rounded-xl shadow-lg shadow-green-200 dark:shadow-green-900/30 hover:shadow-green-300 hover:bg-[#219a52] duration-300 whitespace-nowrap'
 				>
 					<FontAwesomeIcon icon={faPlus} />
 					Продати канал
@@ -138,7 +138,7 @@ const CabinetPage = () => {
 			</div>
 
 			{/* Tabs */}
-			<div className='flex gap-2 mb-6 border-b border-gray-200'>
+			<div className='flex gap-2 mb-6 border-b border-gray-200 dark:border-slate-700'>
 				{TABS.map(tab => (
 					<button
 						key={tab.value}
@@ -146,7 +146,7 @@ const CabinetPage = () => {
 						className={`flex items-center gap-2 px-5 py-3 font-semibold text-sm duration-300 border-b-2 -mb-px ${
 							activeTab.value === tab.value
 								? 'border-[#3498db] text-[#3498db]'
-								: 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+							: 'border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300 hover:border-gray-300 dark:hover:border-slate-600'
 						}`}
 					>
 						<FontAwesomeIcon icon={tab.icon} />
@@ -172,8 +172,8 @@ const CabinetPage = () => {
 								onClick={() => setActiveFilter(f)}
 								className={`flex items-center gap-2 px-4 py-2 rounded-full text-sm font-medium duration-300 ${
 									f === activeFilter
-										? 'bg-[#3498db] text-white shadow-md shadow-blue-200'
-										: 'bg-white text-gray-600 border border-gray-200 hover:border-[#3498db] hover:text-[#3498db]'
+										? 'bg-[#3498db] text-white shadow-md shadow-blue-200 dark:shadow-blue-900/30'
+										: 'bg-white dark:bg-slate-800 text-gray-600 dark:text-gray-300 border border-gray-200 dark:border-slate-600 hover:border-[#3498db] hover:text-[#3498db]'
 								}`}
 							>
 								<span className={`w-2 h-2 rounded-full ${f === activeFilter ? 'bg-white' : f.dot}`} />
@@ -190,12 +190,12 @@ const CabinetPage = () => {
 							<div className='animate-spin rounded-full h-10 w-10 border-b-2 border-blue-500' />
 						</div>
 					) : filteredChannels.length === 0 ? (
-						<div className='text-center py-16 bg-white rounded-2xl border border-dashed border-gray-300'>
+						<div className='text-center py-16 bg-white dark:bg-slate-800 rounded-2xl border border-dashed border-gray-300 dark:border-slate-600'>
 							<div className='text-5xl mb-4'>📢</div>
-							<p className='text-lg font-semibold text-gray-700 mb-2'>
+							<p className='text-lg font-semibold text-gray-700 dark:text-gray-200 mb-2'>
 								{activeFilter.value ? 'Немає каналів з таким статусом' : 'У вас ще немає оголошень'}
 							</p>
-							<p className='text-gray-500 mb-6'>Додайте свій перший канал для продажу</p>
+							<p className='text-gray-500 dark:text-gray-400 mb-6'>Додайте свій перший канал для продажу</p>
 							<NavLink
 								className='inline-flex items-center gap-2 font-bold bg-[#27ae60] text-white py-3 px-8 rounded-xl shadow-lg shadow-green-200 hover:bg-[#219a52] duration-300'
 								to='/sell'
@@ -222,8 +222,8 @@ const CabinetPage = () => {
 								onClick={() => setDealFilter(f)}
 								className={`flex items-center gap-2 px-4 py-2 rounded-full text-sm font-medium duration-300 ${
 									f === dealFilter
-										? 'bg-[#3498db] text-white shadow-md shadow-blue-200'
-										: 'bg-white text-gray-600 border border-gray-200 hover:border-[#3498db] hover:text-[#3498db]'
+									? 'bg-[#3498db] text-white shadow-md shadow-blue-200 dark:shadow-blue-900/30'
+									: 'bg-white dark:bg-slate-800 text-gray-600 dark:text-gray-300 border border-gray-200 dark:border-slate-600 hover:border-[#3498db] hover:text-[#3498db]'
 								}`}
 							>
 								<span className={`w-2 h-2 rounded-full ${f === dealFilter ? 'bg-white' : f.dot}`} />
@@ -240,12 +240,12 @@ const CabinetPage = () => {
 							<div className='animate-spin rounded-full h-10 w-10 border-b-2 border-blue-500' />
 						</div>
 					) : filteredDeals.length === 0 ? (
-						<div className='text-center py-16 bg-white rounded-2xl border border-dashed border-gray-300'>
+						<div className='text-center py-16 bg-white dark:bg-slate-800 rounded-2xl border border-dashed border-gray-300 dark:border-slate-600'>
 							<div className='text-5xl mb-4'>🤝</div>
-							<p className='text-lg font-semibold text-gray-700 mb-2'>
+							<p className='text-lg font-semibold text-gray-700 dark:text-gray-200 mb-2'>
 								{dealFilter.value ? 'Немає угод з таким статусом' : 'У вас ще немає угод'}
 							</p>
-							<p className='text-gray-500 mb-6'>Перейдіть до каталогу, щоб купити канал</p>
+							<p className='text-gray-500 dark:text-gray-400 mb-6'>Перейдіть до каталогу, щоб купити канал</p>
 							<NavLink
 								to='/catalog'
 								className='inline-flex items-center gap-2 font-bold bg-[#3498db] text-white py-3 px-8 rounded-xl shadow-lg shadow-blue-200 hover:bg-[#2980b9] duration-300'
@@ -262,14 +262,14 @@ const CabinetPage = () => {
 									<NavLink
 										key={deal.id}
 										to={`/deal/${deal.id}`}
-										className='bg-white rounded-2xl shadow-sm border border-gray-100 p-5 hover:shadow-md duration-300 block group'
-									>
-										<div className='flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-3'>
-											<div>
-												<h3 className='font-bold text-gray-800 text-lg'>
-													{deal.channel_name || `Канал #${deal.channel_id}`}
-												</h3>
-												<p className='text-gray-500 text-sm'>
+											className='bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-gray-100 dark:border-slate-700 p-5 hover:shadow-md duration-300 block group'
+										>
+											<div className='flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-3'>
+												<div>
+													<h3 className='font-bold text-gray-800 dark:text-white text-lg'>
+														{deal.channel_name || `Канал #${deal.channel_id}`}
+													</h3>
+													<p className='text-gray-500 dark:text-gray-400 text-sm'>
 													Угода #{deal.id} · {isBuyer ? 'Ви покупець' : 'Ви продавець'}
 												</p>
 											</div>
@@ -281,21 +281,21 @@ const CabinetPage = () => {
 											</div>
 										</div>
 										<div className='grid grid-cols-2 sm:grid-cols-4 gap-3 text-sm'>
-											<div className='bg-gray-50 p-3 rounded-xl'>
+											<div className='bg-gray-50 dark:bg-slate-700/60 p-3 rounded-xl'>
 												<span className='font-semibold text-green-600'>{deal.amount_usdt} USDT</span>
-												<p className='text-gray-400 text-xs mt-0.5'>сума</p>
+												<p className='text-gray-400 dark:text-gray-500 text-xs mt-0.5'>сума</p>
 											</div>
-											<div className='bg-gray-50 p-3 rounded-xl'>
-												<span className='font-semibold'>{deal.service_fee} USDT</span>
-												<p className='text-gray-400 text-xs mt-0.5'>комісія</p>
+											<div className='bg-gray-50 dark:bg-slate-700/60 p-3 rounded-xl'>
+												<span className='font-semibold dark:text-gray-200'>{deal.service_fee} USDT</span>
+												<p className='text-gray-400 dark:text-gray-500 text-xs mt-0.5'>комісія</p>
 											</div>
-											<div className='bg-gray-50 p-3 rounded-xl'>
-												<span className='font-semibold'>{isBuyer ? (deal.seller_name || 'Продавець') : (deal.buyer_name || 'Покупець')}</span>
-												<p className='text-gray-400 text-xs mt-0.5'>{isBuyer ? 'продавець' : 'покупець'}</p>
+											<div className='bg-gray-50 dark:bg-slate-700/60 p-3 rounded-xl'>
+												<span className='font-semibold dark:text-gray-200'>{isBuyer ? (deal.seller_name || 'Продавець') : (deal.buyer_name || 'Покупець')}</span>
+												<p className='text-gray-400 dark:text-gray-500 text-xs mt-0.5'>{isBuyer ? 'продавець' : 'покупець'}</p>
 											</div>
-											<div className='bg-gray-50 p-3 rounded-xl'>
-												<span className='font-semibold'>{new Date(deal.created_at).toLocaleDateString('uk-UA')}</span>
-												<p className='text-gray-400 text-xs mt-0.5'>дата</p>
+											<div className='bg-gray-50 dark:bg-slate-700/60 p-3 rounded-xl'>
+												<span className='font-semibold dark:text-gray-200'>{new Date(deal.created_at).toLocaleDateString('uk-UA')}</span>
+												<p className='text-gray-400 dark:text-gray-500 text-xs mt-0.5'>дата</p>
 											</div>
 										</div>
 										{deal.dispute_reason && (
@@ -316,10 +316,10 @@ const CabinetPage = () => {
 							<div className='animate-spin rounded-full h-10 w-10 border-b-2 border-blue-500' />
 						</div>
 					) : favorites.length === 0 ? (
-						<div className='text-center py-16 bg-white rounded-2xl border border-dashed border-gray-300'>
+						<div className='text-center py-16 bg-white dark:bg-slate-800 rounded-2xl border border-dashed border-gray-300 dark:border-slate-600'>
 							<div className='text-5xl mb-4'>❤️</div>
-							<p className='text-lg font-semibold text-gray-700 mb-2'>У вас поки немає обраних каналів</p>
-							<p className='text-gray-500 mb-6'>Додайте канали в обране з каталогу</p>
+							<p className='text-lg font-semibold text-gray-700 dark:text-gray-200 mb-2'>У вас поки немає обраних каналів</p>
+							<p className='text-gray-500 dark:text-gray-400 mb-6'>Додайте канали в обране з каталогу</p>
 							<NavLink
 								to='/catalog'
 								className='inline-flex items-center gap-2 font-bold bg-[#3498db] text-white py-3 px-8 rounded-xl shadow-lg shadow-blue-200 hover:bg-[#2980b9] duration-300'

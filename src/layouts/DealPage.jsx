@@ -145,7 +145,7 @@ const DealChat = ({ dealId, userId, onCallAdmin, deal }) => {
 							<span className='text-xs font-bold text-blue-600'>TgSell</span>
 							<span className='text-[10px] text-gray-400'>{formatTime(msg.created_at)}</span>
 						</div>
-						<div className='bg-white border border-gray-100 rounded-xl rounded-tl-sm px-4 py-3 shadow-sm'>
+						<div className='bg-white border border-gray-100 dark:border-slate-700 rounded-xl rounded-tl-sm px-4 py-3 shadow-sm'>
 							{msg.text.split('\n').map((line, i) => (
 								<p key={i} className={`text-sm text-gray-700 leading-relaxed ${i > 0 ? 'mt-1' : ''}`}>
 									{line}
@@ -159,14 +159,14 @@ const DealChat = ({ dealId, userId, onCallAdmin, deal }) => {
 	};
 
 	return (
-		<div className='bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden mb-6'>
-			<div className='flex items-center justify-between px-6 py-4 border-b border-gray-100'>
-				<h3 className='font-bold text-gray-900'>Чат угоди</h3>
+		<div className='bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-gray-100 dark:border-slate-700 overflow-hidden mb-6'>
+			<div className='flex items-center justify-between px-6 py-4 border-b border-gray-100 dark:border-slate-700'>
+				<h3 className='font-bold text-gray-900 dark:text-white'>Чат угоди</h3>
 				{deal && !['completed', 'cancelled'].includes(deal.status) && (
 					<button
 						onClick={handleCallAdmin}
 						disabled={callingAdmin}
-						className='flex items-center gap-1.5 bg-gray-50 text-gray-600 border border-gray-200 px-4 py-2 rounded-xl text-sm font-medium hover:bg-gray-100 hover:border-gray-300 transition-all duration-200 disabled:opacity-50'
+						className='flex items-center gap-1.5 bg-gray-50 dark:bg-slate-700/60 text-gray-600 border border-gray-200 dark:border-slate-600 px-4 py-2 rounded-xl text-sm font-medium hover:bg-gray-100 hover:border-gray-300 transition-all duration-200 disabled:opacity-50'
 					>
 						<svg className='w-4 h-4' fill='none' viewBox='0 0 24 24' stroke='currentColor' strokeWidth={2}>
 							<path strokeLinecap='round' strokeLinejoin='round' d='M18.364 5.636l-3.536 3.536m0 5.656l3.536 3.536M9.172 9.172L5.636 5.636m3.536 9.192l-3.536 3.536M21 12a9 9 0 11-18 0 9 9 0 0118 0zm-5 0a4 4 0 11-8 0 4 4 0 018 0z' />
@@ -206,7 +206,7 @@ const DealChat = ({ dealId, userId, onCallAdmin, deal }) => {
 										className={`px-4 py-2.5 rounded-2xl ${
 											isOwn
 												? 'bg-blue-500 text-white rounded-br-sm'
-												: 'bg-white border border-gray-100 text-gray-800 rounded-tl-sm shadow-sm'
+												: 'bg-white border border-gray-100 dark:border-slate-700 text-gray-800 rounded-tl-sm shadow-sm'
 										}`}
 									>
 										<p className='text-sm whitespace-pre-wrap break-words'>{msg.text}</p>
@@ -221,14 +221,14 @@ const DealChat = ({ dealId, userId, onCallAdmin, deal }) => {
 				})}
 				<div ref={messagesEndRef} />
 			</div>
-			<form onSubmit={handleSend} className='flex gap-2 p-4 border-t border-gray-100 bg-white'>
+			<form onSubmit={handleSend} className='flex gap-2 p-4 border-t border-gray-100 dark:border-slate-700 bg-white'>
 				<input
 					type='text'
 					value={newMessage}
 					onChange={(e) => setNewMessage(e.target.value)}
 					placeholder='Напишіть повідомлення...'
 					maxLength={2000}
-					className='flex-1 border border-gray-200 bg-gray-50 rounded-xl px-4 py-2.5 text-sm focus:border-blue-400 focus:bg-white focus:ring-2 focus:ring-blue-50 focus:outline-none transition-all'
+					className='flex-1 border border-gray-200 dark:border-slate-600 bg-gray-50 dark:bg-slate-700/60 rounded-xl px-4 py-2.5 text-sm focus:border-blue-400 focus:bg-white focus:ring-2 focus:ring-blue-50 focus:outline-none transition-all'
 				/>
 				<button
 					type='submit'
@@ -396,14 +396,14 @@ const DealPage = () => {
 				</div>
 			)}
 			{deal.status === 'cancelled' && (
-				<div className='bg-gray-50 border border-gray-200 rounded-2xl p-5 mb-6 flex items-center gap-4'>
+				<div className='bg-gray-50 dark:bg-slate-700/60 border border-gray-200 dark:border-slate-600 rounded-2xl p-5 mb-6 flex items-center gap-4'>
 					<div className='w-10 h-10 rounded-full bg-gray-100 flex items-center justify-center flex-shrink-0'>
 						<svg className='w-5 h-5 text-gray-500' fill='none' viewBox='0 0 24 24' stroke='currentColor' strokeWidth={2}>
 							<path strokeLinecap='round' strokeLinejoin='round' d='M6 18L18 6M6 6l12 12' />
 						</svg>
 					</div>
 					<div>
-						<p className='font-bold text-gray-700'>Угоду скасовано</p>
+						<p className='font-bold text-gray-700 dark:text-gray-200'>Угоду скасовано</p>
 					</div>
 				</div>
 			)}
@@ -413,14 +413,14 @@ const DealPage = () => {
 
 			{/* Step 1: Confirm Readiness */}
 			{deal.status === 'created' && (
-				<div className='bg-white rounded-2xl shadow-lg border border-gray-100 p-6 mb-6'>
+				<div className='bg-white dark:bg-slate-800 rounded-2xl shadow-lg border border-gray-100 dark:border-slate-700 p-6 mb-6'>
 					<h3 className='font-bold text-lg mb-2'>Підтвердіть готовність до угоди</h3>
 					<p className='text-gray-500 text-sm mb-5'>
 						Обидві сторони повинні підтвердити готовність. Після цього покупець зможе оплатити.
 					</p>
 					<div className='flex gap-3 mb-5'>
 						<div className={`flex-1 flex items-center gap-3 p-4 rounded-xl border-2 transition-all duration-300 ${
-							deal.buyer_ready ? 'border-green-400 bg-green-50' : 'border-gray-200 bg-gray-50'
+							deal.buyer_ready ? 'border-green-400 bg-green-50' : 'border-gray-200 bg-gray-50 dark:bg-slate-700'
 						}`}>
 							<div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold ${
 								deal.buyer_ready ? 'bg-green-500 text-white' : 'bg-gray-200 text-gray-400'
@@ -435,7 +435,7 @@ const DealPage = () => {
 							</div>
 						</div>
 						<div className={`flex-1 flex items-center gap-3 p-4 rounded-xl border-2 transition-all duration-300 ${
-							deal.seller_ready ? 'border-green-400 bg-green-50' : 'border-gray-200 bg-gray-50'
+							deal.seller_ready ? 'border-green-400 bg-green-50' : 'border-gray-200 bg-gray-50 dark:bg-slate-700'
 						}`}>
 							<div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold ${
 								deal.seller_ready ? 'bg-green-500 text-white' : 'bg-gray-200 text-gray-400'
@@ -459,7 +459,7 @@ const DealPage = () => {
 							{actionLoading ? 'Зачекайте...' : 'Підтвердити готовність'}
 						</button>
 					) : (
-						<div className='bg-blue-50 text-blue-600 text-sm font-medium px-4 py-3 rounded-xl text-center'>
+						<div className='bg-blue-50 dark:bg-blue-900/20 text-blue-600 text-sm font-medium px-4 py-3 rounded-xl text-center'>
 							Ви підтвердили. Очікуйте іншу сторону
 						</div>
 					)}
@@ -468,32 +468,32 @@ const DealPage = () => {
 
 			{/* Step 2: Payment */}
 			{deal.status === 'payment_pending' && isBuyer && (
-				<div className='bg-white rounded-2xl shadow-lg border border-gray-100 p-6 mb-6'>
+				<div className='bg-white dark:bg-slate-800 rounded-2xl shadow-lg border border-gray-100 dark:border-slate-700 p-6 mb-6'>
 					<h3 className='font-bold text-lg mb-2'>Оплата</h3>
 					<p className='text-gray-500 text-sm mb-5'>
-						Переведіть <strong className='text-gray-800'>{deal.amount_usdt} USDT</strong> через мережу <strong className='text-gray-800'>TRC-20</strong>
+						Переведіть <strong className='text-gray-800 dark:text-white'>{deal.amount_usdt} USDT</strong> через мережу <strong className='text-gray-800 dark:text-white'>TRC-20</strong>
 					</p>
-					<div className='bg-blue-50 border border-blue-200 rounded-xl p-4 mb-4'>
+					<div className='bg-blue-50 dark:bg-blue-900/20 border border-blue-200 rounded-xl p-4 mb-4'>
 						<div className='flex justify-between text-sm mb-1'>
-							<span className='text-gray-600'>Вартість каналу:</span>
-							<span className='font-semibold text-gray-800'>{deal.amount_usdt} USDT</span>
+							<span className='text-gray-600 dark:text-gray-300'>Вартість каналу:</span>
+							<span className='font-semibold text-gray-800 dark:text-white'>{deal.amount_usdt} USDT</span>
 						</div>
 						<div className='flex justify-between text-sm mb-1'>
-							<span className='text-gray-600'>Комісія сервісу (3%):</span>
+							<span className='text-gray-600 dark:text-gray-300'>Комісія сервісу (3%):</span>
 							<span className='text-gray-500'>{deal.service_fee} USDT — утримується при виплаті продавцю</span>
 						</div>
 						<div className='flex justify-between text-sm'>
-							<span className='text-gray-600'>Комісія мережі:</span>
+							<span className='text-gray-600 dark:text-gray-300'>Комісія мережі:</span>
 							<span className='text-gray-500'>~1-2 TRX (~0.1-0.2 USDT)</span>
 						</div>
 					</div>
-					<div className='relative bg-gray-50 border border-gray-200 p-4 rounded-xl mb-4 group'>
-						<p className='font-mono text-sm break-all pr-10 select-all text-gray-700'>
+					<div className='relative bg-gray-50 dark:bg-slate-700/60 border border-gray-200 dark:border-slate-600 p-4 rounded-xl mb-4 group'>
+						<p className='font-mono text-sm break-all pr-10 select-all text-gray-700 dark:text-gray-200'>
 							{deal.escrow_wallet_address}
 						</p>
 						<button
 							onClick={() => copyToClipboard(deal.escrow_wallet_address)}
-							className='absolute top-3 right-3 bg-white border border-gray-200 rounded-lg px-2.5 py-1.5 text-xs font-medium text-gray-500 hover:text-[#3498db] hover:border-[#3498db] transition-all'
+							className='absolute top-3 right-3 bg-white border border-gray-200 dark:border-slate-600 rounded-lg px-2.5 py-1.5 text-xs font-medium text-gray-500 hover:text-[#3498db] hover:border-[#3498db] transition-all'
 						>
 							{copied ? '✓' : 'Копіювати'}
 						</button>
@@ -508,7 +508,7 @@ const DealPage = () => {
 				</div>
 			)}
 			{deal.status === 'payment_pending' && isSeller && (
-				<div className='bg-white rounded-2xl shadow-lg border border-gray-100 p-6 mb-6'>
+				<div className='bg-white dark:bg-slate-800 rounded-2xl shadow-lg border border-gray-100 dark:border-slate-700 p-6 mb-6'>
 					<div className='flex items-center gap-3'>
 						<div className='w-10 h-10 rounded-full bg-yellow-50 flex items-center justify-center'>
 							<span className='text-xl'>⏳</span>
@@ -523,7 +523,7 @@ const DealPage = () => {
 
 			{/* Step 3: Channel Transfer */}
 			{deal.status === 'paid' && (
-				<div className='bg-white rounded-2xl shadow-lg border border-gray-100 p-6 mb-6'>
+				<div className='bg-white dark:bg-slate-800 rounded-2xl shadow-lg border border-gray-100 dark:border-slate-700 p-6 mb-6'>
 					<h3 className='font-bold text-lg mb-2'>Передача каналу</h3>
 					{isSeller && (
 						<p className='text-gray-500 text-sm mb-5'>
@@ -538,7 +538,7 @@ const DealPage = () => {
 					)}
 					<div className='flex gap-3 mb-5'>
 						<div className={`flex-1 flex items-center gap-3 p-4 rounded-xl border-2 transition-all duration-300 ${
-							deal.buyer_confirmed_transfer ? 'border-green-400 bg-green-50' : 'border-gray-200 bg-gray-50'
+							deal.buyer_confirmed_transfer ? 'border-green-400 bg-green-50' : 'border-gray-200 bg-gray-50 dark:bg-slate-700'
 						}`}>
 							<div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold ${
 								deal.buyer_confirmed_transfer ? 'bg-green-500 text-white' : 'bg-gray-200 text-gray-400'
@@ -553,7 +553,7 @@ const DealPage = () => {
 							</div>
 						</div>
 						<div className={`flex-1 flex items-center gap-3 p-4 rounded-xl border-2 transition-all duration-300 ${
-							deal.seller_confirmed_transfer ? 'border-green-400 bg-green-50' : 'border-gray-200 bg-gray-50'
+							deal.seller_confirmed_transfer ? 'border-green-400 bg-green-50' : 'border-gray-200 bg-gray-50 dark:bg-slate-700'
 						}`}>
 							<div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold ${
 								deal.seller_confirmed_transfer ? 'bg-green-500 text-white' : 'bg-gray-200 text-gray-400'
@@ -588,7 +588,7 @@ const DealPage = () => {
 							)}
 						</div>
 					) : (
-						<div className='bg-blue-50 text-blue-600 text-sm font-medium px-4 py-3 rounded-xl text-center'>
+						<div className='bg-blue-50 dark:bg-blue-900/20 text-blue-600 text-sm font-medium px-4 py-3 rounded-xl text-center'>
 							Ви підтвердили. Очікуйте іншу сторону
 						</div>
 					)}
@@ -597,18 +597,18 @@ const DealPage = () => {
 
 			{/* Step 4: Seller Wallet */}
 			{deal.status === 'awaiting_payout' && isSeller && (
-				<div className='bg-white rounded-2xl shadow-lg border border-gray-100 p-6 mb-6'>
+				<div className='bg-white dark:bg-slate-800 rounded-2xl shadow-lg border border-gray-100 dark:border-slate-700 p-6 mb-6'>
 					<h3 className='font-bold text-lg mb-2'>Отримання коштів</h3>
 					<p className='text-gray-500 text-sm mb-1'>
 						Канал успішно передано! Вкажіть вашу USDT (TRC-20) адресу.
 					</p>
 					<div className='bg-green-50 border border-green-200 rounded-xl p-4 mb-4'>
 						<div className='flex justify-between text-sm mb-1'>
-							<span className='text-gray-600'>Вартість каналу:</span>
-							<span className='font-semibold text-gray-800'>{deal.amount_usdt} USDT</span>
+							<span className='text-gray-600 dark:text-gray-300'>Вартість каналу:</span>
+							<span className='font-semibold text-gray-800 dark:text-white'>{deal.amount_usdt} USDT</span>
 						</div>
 						<div className='flex justify-between text-sm mb-1'>
-							<span className='text-gray-600'>Комісія сервісу (3%):</span>
+							<span className='text-gray-600 dark:text-gray-300'>Комісія сервісу (3%):</span>
 							<span className='text-red-500'>−{deal.service_fee} USDT</span>
 						</div>
 						<div className='border-t border-green-200 mt-2 pt-2 flex justify-between text-sm font-bold'>
@@ -623,7 +623,7 @@ const DealPage = () => {
 							onChange={(e) => setWalletAddress(e.target.value)}
 							placeholder='TRC-20 адреса (T...)'
 							maxLength={100}
-							className='flex-1 border border-gray-200 rounded-xl px-4 py-3.5 focus:border-[#3498db] focus:ring-2 focus:ring-blue-100 focus:outline-none font-mono text-sm transition-all'
+							className='flex-1 border border-gray-200 dark:border-slate-600 rounded-xl px-4 py-3.5 focus:border-[#3498db] focus:ring-2 focus:ring-blue-100 focus:outline-none font-mono text-sm transition-all'
 						/>
 						<button
 							onClick={handleSubmitWallet}
@@ -639,7 +639,7 @@ const DealPage = () => {
 				</div>
 			)}
 			{deal.status === 'awaiting_payout' && isBuyer && (
-				<div className='bg-white rounded-2xl shadow-lg border border-gray-100 p-6 mb-6'>
+				<div className='bg-white dark:bg-slate-800 rounded-2xl shadow-lg border border-gray-100 dark:border-slate-700 p-6 mb-6'>
 					<div className='flex items-center gap-3'>
 						<div className='w-10 h-10 rounded-full bg-purple-50 flex items-center justify-center'>
 							<span className='text-xl'>💳</span>

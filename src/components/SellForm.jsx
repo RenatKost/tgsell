@@ -23,23 +23,23 @@ const SuccessModal = ({ onClose, onCabinet }) => {
 			onClick={() => handleClose(onClose)}
 		>
 			<div
-				className={`bg-white rounded-2xl shadow-2xl max-w-md w-full p-8 text-center transition-all duration-300 ${visible ? 'opacity-100 scale-100 translate-y-0' : 'opacity-0 scale-95 translate-y-4'}`}
+				className={`bg-white dark:bg-slate-800 rounded-2xl shadow-2xl max-w-md w-full p-8 text-center transition-all duration-300 ${visible ? 'opacity-100 scale-100 translate-y-0' : 'opacity-0 scale-95 translate-y-4'}`}
 				onClick={e => e.stopPropagation()}
 			>
-				<div className='w-20 h-20 bg-gradient-to-br from-green-400 to-emerald-500 rounded-full flex items-center justify-center mx-auto mb-6 shadow-lg shadow-green-200'>
+				<div className='w-20 h-20 bg-gradient-to-br from-green-400 to-emerald-500 rounded-full flex items-center justify-center mx-auto mb-6 shadow-lg shadow-green-200 dark:shadow-green-900/30'>
 					<svg className='w-10 h-10 text-white' fill='none' viewBox='0 0 24 24' stroke='currentColor' strokeWidth={2.5}>
 						<path strokeLinecap='round' strokeLinejoin='round' d='M5 13l4 4L19 7' />
 					</svg>
 				</div>
 
-				<h3 className='text-2xl font-bold text-gray-900 mb-3'>
+				<h3 className='text-2xl font-bold text-gray-900 dark:text-white mb-3'>
 					Канал додано!
 				</h3>
-				<p className='text-gray-500 mb-6 leading-relaxed'>
+				<p className='text-gray-500 dark:text-gray-400 mb-6 leading-relaxed'>
 					Ваш канал з'явиться в каталозі після перевірки адміністратором.
 				</p>
 
-				<div className='bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-100 rounded-xl p-5 mb-6 text-left'>
+				<div className='bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-900/20 dark:to-indigo-900/20 border border-blue-100 dark:border-blue-800 rounded-xl p-5 mb-6 text-left'>
 					<div className='flex items-start gap-3'>
 						<div className='w-10 h-10 bg-blue-500 rounded-lg flex items-center justify-center flex-shrink-0 mt-0.5'>
 							<svg className='w-5 h-5 text-white' fill='none' viewBox='0 0 24 24' stroke='currentColor' strokeWidth={2}>
@@ -47,8 +47,8 @@ const SuccessModal = ({ onClose, onCabinet }) => {
 							</svg>
 						</div>
 						<div>
-							<p className='font-semibold text-gray-800 text-sm'>Підключіть бота сповіщень</p>
-							<p className='text-gray-500 text-sm mt-1'>
+							<p className='font-semibold text-gray-800 dark:text-gray-200 text-sm'>Підключіть бота сповіщень</p>
+							<p className='text-gray-500 dark:text-gray-400 text-sm mt-1'>
 								Він повідомить, коли канал підтвердять і коли його захочуть купити
 							</p>
 						</div>
@@ -70,7 +70,7 @@ const SuccessModal = ({ onClose, onCabinet }) => {
 					<button
 						type='button'
 						onClick={() => handleClose(onCabinet)}
-						className='text-gray-500 hover:text-gray-800 font-medium py-2.5 px-6 rounded-xl transition-colors duration-200 hover:bg-gray-100'
+						className='text-gray-500 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200 font-medium py-2.5 px-6 rounded-xl transition-colors duration-200 hover:bg-gray-100 dark:hover:bg-slate-700'
 					>
 						Перейти до кабінету →
 					</button>
@@ -82,7 +82,7 @@ const SuccessModal = ({ onClose, onCabinet }) => {
 
 const InputField = ({ label, error, touched, icon, children }) => (
 	<div className='space-y-1.5'>
-		<label className='text-sm font-medium text-gray-600 flex items-center gap-1.5'>
+		<label className='text-sm font-medium text-gray-600 dark:text-gray-400 flex items-center gap-1.5'>
 			{icon && <span className='text-gray-400'>{icon}</span>}
 			{label}
 		</label>
@@ -98,7 +98,7 @@ const InputField = ({ label, error, touched, icon, children }) => (
 	</div>
 );
 
-const inputClass = 'w-full border border-gray-200 rounded-xl px-4 py-3.5 text-sm bg-gray-50/50 placeholder-gray-400 transition-all duration-200 focus:border-blue-400 focus:bg-white focus:ring-4 focus:ring-blue-50';
+const inputClass = 'w-full border border-gray-200 dark:border-slate-600 rounded-xl px-4 py-3.5 text-sm bg-gray-50/50 dark:bg-slate-700/50 dark:text-white placeholder-gray-400 transition-all duration-200 focus:border-blue-400 focus:bg-white dark:focus:bg-slate-700 focus:ring-4 focus:ring-blue-50 dark:focus:ring-blue-900/30';
 
 const SellForm = () => {
 	const { isAuthenticated } = useAuth();
@@ -169,23 +169,23 @@ const SellForm = () => {
 				<div className='max-w-3xl mx-auto'>
 					{/* Header */}
 					<div className='text-center mb-10'>
-						<div className='inline-flex items-center gap-2 bg-blue-50 text-blue-600 text-sm font-medium px-4 py-2 rounded-full mb-5'>
+						<div className='inline-flex items-center gap-2 bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 text-sm font-medium px-4 py-2 rounded-full mb-5'>
 							<svg className='w-4 h-4' fill='none' viewBox='0 0 24 24' stroke='currentColor' strokeWidth={2}>
 								<path strokeLinecap='round' strokeLinejoin='round' d='M12 19l9 2-9-18-9 18 9-2zm0 0v-8' />
 							</svg>
 							Продаж каналу
 						</div>
-						<h1 className='text-3xl md:text-4xl font-bold text-gray-900 mb-3'>
+						<h1 className='text-3xl md:text-4xl font-bold text-gray-900 dark:text-white mb-3'>
 							Подати канал на продаж
 						</h1>
-						<p className='text-gray-500 max-w-lg mx-auto'>
+						<p className='text-gray-500 dark:text-gray-400 max-w-lg mx-auto'>
 							Заповніть форму і ваш канал з'явиться в каталозі після перевірки
 						</p>
 					</div>
 
 					{/* Form Card */}
 					<form
-						className='bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden'
+						className='bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-gray-100 dark:border-slate-700 overflow-hidden'
 						onSubmit={handleSubmit}
 					>
 						{/* Required Fields Section */}
@@ -194,7 +194,7 @@ const SellForm = () => {
 								<div className='w-8 h-8 bg-blue-500 rounded-lg flex items-center justify-center'>
 									<span className='text-white font-bold text-sm'>1</span>
 								</div>
-								<h3 className='font-semibold text-gray-900'>{"Обов'язкові поля"}</h3>
+								<h3 className='font-semibold text-gray-900 dark:text-white'>{"Обов'язкові поля"}</h3>
 							</div>
 
 							<div className='grid md:grid-cols-2 gap-5'>
@@ -224,7 +224,7 @@ const SellForm = () => {
 
 								<InputField label='Тематика' error={errors.category} touched={touched.category}>
 									<select
-										className={`${inputClass} ${!values.category ? 'text-gray-400' : 'text-gray-900'}`}
+										className={`${inputClass} ${!values.category ? 'text-gray-400' : 'text-gray-900 dark:text-white'}`}
 										name='category'
 										value={values.category}
 										onChange={handleChange}
@@ -257,7 +257,7 @@ const SellForm = () => {
 
 						{/* Divider */}
 						<div className='px-8 py-6'>
-							<div className='border-t border-gray-100'></div>
+								<div className='border-t border-gray-100 dark:border-slate-700'></div>
 						</div>
 
 						{/* Details Section */}
@@ -266,7 +266,7 @@ const SellForm = () => {
 								<div className='w-8 h-8 bg-gray-200 rounded-lg flex items-center justify-center'>
 									<span className='text-gray-600 font-bold text-sm'>2</span>
 								</div>
-								<h3 className='font-semibold text-gray-900'>Додаткові деталі</h3>
+								<h3 className='font-semibold text-gray-900 dark:text-white'>Додаткові деталі</h3>
 								<span className='text-xs text-gray-400 ml-1'>(необов'язково)</span>
 							</div>
 

@@ -65,9 +65,9 @@ const ChannelDetailsPage = () => {
 		<section className='mt-28'>
 			{/* Breadcrumb */}
 			<div className='flex items-center gap-2 text-sm mb-6 px-1'>
-				<NavLink to='/catalog' className='text-gray-400 hover:text-[#3498db] transition-colors'>Каталог</NavLink>
-				<span className='text-gray-300'>/</span>
-				<span className='text-gray-600 font-medium'>{channel.channel_name || 'Канал'}</span>
+				<NavLink to='/catalog' className='text-gray-400 dark:text-gray-500 hover:text-[#3498db] transition-colors'>Каталог</NavLink>
+				<span className='text-gray-300 dark:text-gray-600'>/</span>
+				<span className='text-gray-600 dark:text-gray-300 font-medium'>{channel.channel_name || 'Канал'}</span>
 			</div>
 
 			<div className='flex flex-col lg:flex-row items-start gap-6'>
@@ -76,17 +76,17 @@ const ChannelDetailsPage = () => {
 					<DetailsCard channel={channel} onBuy={handleBuy} stats={stats} />
 
 					{channel.description && (
-						<div className='bg-white rounded-2xl border border-gray-100 shadow-sm p-5'>
-							<h4 className='font-bold text-gray-900 mb-3'>Коментар власника</h4>
-							<p className='text-gray-600 text-sm leading-relaxed bg-blue-50 rounded-xl p-4'>
+						<div className='bg-white dark:bg-slate-800 rounded-2xl border border-gray-100 dark:border-slate-700 shadow-sm p-5'>
+							<h4 className='font-bold text-gray-900 dark:text-white mb-3'>Коментар власника</h4>
+							<p className='text-gray-600 dark:text-gray-300 text-sm leading-relaxed bg-blue-50 dark:bg-blue-900/20 rounded-xl p-4'>
 								{channel.description}
 							</p>
 						</div>
 					)}
 
 					{resources.length > 0 && (
-						<div className='bg-white rounded-2xl border border-gray-100 shadow-sm p-5'>
-							<h4 className='font-bold text-gray-900 mb-3'>Додаткові ресурси</h4>
+						<div className='bg-white dark:bg-slate-800 rounded-2xl border border-gray-100 dark:border-slate-700 shadow-sm p-5'>
+							<h4 className='font-bold text-gray-900 dark:text-white mb-3'>Додаткові ресурси</h4>
 							<div className='flex flex-wrap gap-2'>
 								{resources.map((url, idx) => (
 									<a
@@ -94,7 +94,7 @@ const ChannelDetailsPage = () => {
 										href={url}
 										target='_blank'
 										rel='noopener noreferrer'
-										className='inline-flex items-center gap-1.5 bg-gray-50 hover:bg-[#3498db] hover:text-white text-gray-600 font-semibold text-sm px-4 py-2.5 rounded-xl border border-gray-200 hover:border-[#3498db] transition-all duration-300'
+										className='inline-flex items-center gap-1.5 bg-gray-50 dark:bg-slate-700 hover:bg-[#3498db] hover:text-white text-gray-600 dark:text-gray-300 font-semibold text-sm px-4 py-2.5 rounded-xl border border-gray-200 dark:border-slate-600 hover:border-[#3498db] transition-all duration-300'
 									>
 										<span>🔗</span> Ресурс {idx + 1}
 									</a>

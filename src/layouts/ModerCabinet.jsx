@@ -60,7 +60,7 @@ const DEAL_STATUS_LABELS = {
 	channel_transferring: { text: 'Передача каналу', color: 'bg-indigo-100 text-indigo-700' },
 	completed: { text: 'Завершено', color: 'bg-green-100 text-green-700' },
 	disputed: { text: 'Спір', color: 'bg-red-100 text-red-700' },
-	cancelled: { text: 'Скасовано', color: 'bg-gray-100 text-gray-600' },
+	cancelled: { text: 'Скасовано', color: 'bg-gray-100 text-gray-600 dark:text-gray-300' },
 };
 
 // === Deal Chat Modal ===
@@ -102,12 +102,12 @@ const DealChatModal = ({ dealId, userId, onClose }) => {
 
 	return (
 		<div className='fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4' onClick={onClose}>
-			<div className='bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[80vh] flex flex-col animate-fadeIn' onClick={e => e.stopPropagation()}>
+			<div className='bg-white dark:bg-slate-800 rounded-2xl shadow-2xl w-full max-w-2xl max-h-[80vh] flex flex-col animate-fadeIn' onClick={e => e.stopPropagation()}>
 				<div className='bg-gradient-to-r from-[#3498db] to-[#2980b9] text-white p-5 rounded-t-2xl flex items-center justify-between'>
 					<h3 className='font-bold text-lg'>💬 Чат угоди #{dealId}</h3>
 					<button onClick={onClose} className='text-white/80 hover:text-white text-xl'>✕</button>
 				</div>
-				<div className='flex-1 overflow-y-auto p-4 bg-gray-50 min-h-[300px]'>
+				<div className='flex-1 overflow-y-auto p-4 bg-gray-50 dark:bg-slate-700/60 min-h-[300px]'>
 					{messages.length === 0 && (
 						<p className='text-gray-400 text-center mt-20 text-sm'>Повідомлень ще немає</p>
 					)}
@@ -143,7 +143,7 @@ const DealChatModal = ({ dealId, userId, onClose }) => {
 						onChange={e => setNewMessage(e.target.value)}
 						placeholder='Написати як адмін...'
 						maxLength={2000}
-						className='flex-1 border border-gray-200 rounded-xl px-4 py-2.5 focus:outline-none focus:ring-2 focus:ring-blue-300 focus:border-transparent'
+						className='flex-1 border border-gray-200 dark:border-slate-600 rounded-xl px-4 py-2.5 focus:outline-none focus:ring-2 focus:ring-blue-300 focus:border-transparent'
 					/>
 					<button
 						type='submit'
@@ -346,7 +346,7 @@ const ModerCabinet = () => {
 			{/* Header */}
 			<div className='flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-8'>
 				<div>
-					<h1 className='text-2xl md:text-3xl font-bold text-gray-800'>
+					<h1 className='text-2xl md:text-3xl font-bold text-gray-800 dark:text-white'>
 						Панель модератора
 					</h1>
 					<p className='text-gray-500 mt-1'>Модерація каналів та вирішення спорів</p>
@@ -360,7 +360,7 @@ const ModerCabinet = () => {
 			</div>
 
 			{/* Tabs */}
-			<div className='flex gap-2 mb-6 border-b border-gray-200'>
+			<div className='flex gap-2 mb-6 border-b border-gray-200 dark:border-slate-600'>
 				{TABS.map(tab => (
 					<button
 						key={tab.value}
@@ -387,7 +387,7 @@ const ModerCabinet = () => {
 				</div>
 			) : activeTab.value === 'channels' ? (
 				pendingChannels.length === 0 ? (
-					<div className='text-center py-16 bg-white rounded-2xl border border-dashed border-gray-300'>
+					<div className='text-center py-16 bg-white dark:bg-slate-800 rounded-2xl border border-dashed border-gray-300'>
 						<div className='text-5xl mb-4'>✅</div>
 						<p className='text-lg font-semibold text-gray-700 mb-2'>Все перевірено!</p>
 						<p className='text-gray-500'>Немає каналів, що очікують модерації</p>
@@ -395,7 +395,7 @@ const ModerCabinet = () => {
 				) : (
 					<div className='grid gap-6'>
 						{pendingChannels.map(channel => (
-							<div key={channel.id} className='bg-white rounded-2xl shadow-sm border border-gray-100 p-6 hover:shadow-md duration-300'>
+							<div key={channel.id} className='bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-gray-100 dark:border-slate-700 p-6 hover:shadow-md duration-300'>
 								<div className='flex flex-col md:flex-row md:items-center justify-between gap-4 mb-4'>
 									<div className='flex items-center gap-4'>
 										{channel.avatar_url ? (
@@ -406,7 +406,7 @@ const ModerCabinet = () => {
 											</div>
 										)}
 										<div>
-											<h3 className='font-bold text-lg text-gray-800'>{channel.channel_name}</h3>
+											<h3 className='font-bold text-lg text-gray-800 dark:text-white'>{channel.channel_name}</h3>
 											<a href={channel.telegram_link} target='_blank' rel='noopener noreferrer' className='text-blue-500 text-sm hover:underline'>
 												{channel.telegram_link} <FontAwesomeIcon icon={faExternalLinkAlt} size='xs' />
 											</a>
@@ -429,22 +429,22 @@ const ModerCabinet = () => {
 								</div>
 
 								<div className='grid grid-cols-2 md:grid-cols-4 gap-3 text-sm'>
-									<div className='bg-gray-50 p-3 rounded-xl'>
+									<div className='bg-gray-50 dark:bg-slate-700/60 p-3 rounded-xl'>
 										<FontAwesomeIcon icon={faUsers} className='text-gray-400 mr-1' />
 										<span className='font-semibold'>{channel.subscribers_count?.toLocaleString('uk-UA') || '—'}</span>
 										<p className='text-gray-400 text-xs mt-0.5'>підписників</p>
 									</div>
-									<div className='bg-gray-50 p-3 rounded-xl'>
+									<div className='bg-gray-50 dark:bg-slate-700/60 p-3 rounded-xl'>
 										<FontAwesomeIcon icon={faEye} className='text-gray-400 mr-1' />
 										<span className='font-semibold'>{channel.avg_views?.toLocaleString('uk-UA') || '—'}</span>
 										<p className='text-gray-400 text-xs mt-0.5'>переглядів</p>
 									</div>
-									<div className='bg-gray-50 p-3 rounded-xl'>
+									<div className='bg-gray-50 dark:bg-slate-700/60 p-3 rounded-xl'>
 										<FontAwesomeIcon icon={faBarChart} className='text-gray-400 mr-1' />
 										<span className='font-semibold'>{channel.er != null ? `${channel.er.toFixed(1)}%` : '—'}</span>
 										<p className='text-gray-400 text-xs mt-0.5'>ER</p>
 									</div>
-									<div className='bg-gray-50 p-3 rounded-xl'>
+									<div className='bg-gray-50 dark:bg-slate-700/60 p-3 rounded-xl'>
 										<span className='font-semibold text-green-600'>{channel.price?.toLocaleString('uk-UA')} USDT</span>
 										<p className='text-gray-400 text-xs mt-0.5'>ціна</p>
 									</div>
@@ -461,7 +461,7 @@ const ModerCabinet = () => {
 											value={rejectReason}
 											onChange={e => setRejectReason(e.target.value)}
 											placeholder='Причина відхилення…'
-											className='flex-1 border border-gray-200 rounded-xl px-4 py-2.5 focus:outline-none focus:ring-2 focus:ring-red-300 focus:border-transparent'
+											className='flex-1 border border-gray-200 dark:border-slate-600 rounded-xl px-4 py-2.5 focus:outline-none focus:ring-2 focus:ring-red-300 focus:border-transparent'
 										/>
 										<button
 											onClick={() => handleReject(channel.id)}
@@ -486,7 +486,7 @@ const ModerCabinet = () => {
 								className={`flex items-center gap-2 px-4 py-2 rounded-full text-sm font-medium duration-300 ${
 									statusFilter === f.value
 										? 'bg-[#3498db] text-white shadow-md shadow-blue-200'
-										: 'bg-white text-gray-600 border border-gray-200 hover:border-[#3498db] hover:text-[#3498db]'
+										: 'bg-white text-gray-600 border border-gray-200 dark:border-slate-600 hover:border-[#3498db] hover:text-[#3498db]'
 								}`}
 							>
 								<span className={`w-2 h-2 rounded-full ${statusFilter === f.value ? 'bg-white' : f.dot}`} />
@@ -496,14 +496,14 @@ const ModerCabinet = () => {
 					</div>
 
 					{allChannels.length === 0 ? (
-						<div className='text-center py-16 bg-white rounded-2xl border border-dashed border-gray-300'>
+						<div className='text-center py-16 bg-white dark:bg-slate-800 rounded-2xl border border-dashed border-gray-300'>
 							<div className='text-5xl mb-4'>📋</div>
-							<p className='text-lg font-semibold text-gray-700'>Немає каналів</p>
+							<p className='text-lg font-semibold text-gray-700 dark:text-gray-200'>Немає каналів</p>
 						</div>
 					) : (
 						<div className='grid gap-4'>
 							{allChannels.map(channel => (
-								<div key={channel.id} className='bg-white rounded-2xl shadow-sm border border-gray-100 p-5 hover:shadow-md duration-300'>
+								<div key={channel.id} className='bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-gray-100 dark:border-slate-700 p-5 hover:shadow-md duration-300'>
 									<div className='flex flex-col md:flex-row md:items-center justify-between gap-3 mb-3'>
 										<div className='flex items-center gap-3'>
 											{channel.avatar_url ? (
@@ -514,7 +514,7 @@ const ModerCabinet = () => {
 												</div>
 											)}
 											<div>
-												<h3 className='font-bold text-gray-800'>{channel.channel_name}</h3>
+												<h3 className='font-bold text-gray-800 dark:text-white'>{channel.channel_name}</h3>
 												<a href={channel.telegram_link} target='_blank' rel='noopener noreferrer' className='text-blue-500 text-sm hover:underline'>
 													{channel.telegram_link} <FontAwesomeIcon icon={faExternalLinkAlt} size='xs' />
 												</a>
@@ -534,26 +534,26 @@ const ModerCabinet = () => {
 									</div>
 
 									<div className='grid grid-cols-2 md:grid-cols-5 gap-2 text-sm'>
-										<div className='bg-gray-50 p-2.5 rounded-xl'>
+										<div className='bg-gray-50 dark:bg-slate-700/60 p-2.5 rounded-xl'>
 											<FontAwesomeIcon icon={faUsers} className='text-gray-400 mr-1' />
 											<span className='font-semibold'>{channel.subscribers_count?.toLocaleString('uk-UA') || '—'}</span>
 											<p className='text-gray-400 text-xs'>підписників</p>
 										</div>
-										<div className='bg-gray-50 p-2.5 rounded-xl'>
+										<div className='bg-gray-50 dark:bg-slate-700/60 p-2.5 rounded-xl'>
 											<FontAwesomeIcon icon={faEye} className='text-gray-400 mr-1' />
 											<span className='font-semibold'>{channel.avg_views?.toLocaleString('uk-UA') || '—'}</span>
 											<p className='text-gray-400 text-xs'>переглядів</p>
 										</div>
-										<div className='bg-gray-50 p-2.5 rounded-xl'>
+										<div className='bg-gray-50 dark:bg-slate-700/60 p-2.5 rounded-xl'>
 											<FontAwesomeIcon icon={faBarChart} className='text-gray-400 mr-1' />
 											<span className='font-semibold'>{channel.er != null ? `${channel.er.toFixed(1)}%` : '—'}</span>
 											<p className='text-gray-400 text-xs'>ER</p>
 										</div>
-										<div className='bg-gray-50 p-2.5 rounded-xl'>
+										<div className='bg-gray-50 dark:bg-slate-700/60 p-2.5 rounded-xl'>
 											<span className='font-semibold text-green-600'>{channel.price?.toLocaleString('uk-UA')} USDT</span>
 											<p className='text-gray-400 text-xs'>ціна</p>
 										</div>
-										<div className='bg-gray-50 p-2.5 rounded-xl'>
+										<div className='bg-gray-50 dark:bg-slate-700/60 p-2.5 rounded-xl'>
 											<FontAwesomeIcon icon={faList} className='text-gray-400 mr-1' />
 											<span className='font-semibold'>{channel.category || '—'}</span>
 											<p className='text-gray-400 text-xs'>категорія</p>
@@ -574,22 +574,22 @@ const ModerCabinet = () => {
 									)}
 
 									{editId === channel.id && (
-										<div className='mt-4 grid md:grid-cols-2 gap-3 bg-gray-50 p-4 rounded-xl border border-gray-100'>
+										<div className='mt-4 grid md:grid-cols-2 gap-3 bg-gray-50 dark:bg-slate-700/60 p-4 rounded-xl border border-gray-100'>
 											<div>
 												<label className='text-xs text-gray-500 font-medium'>Категорія</label>
-												<input value={editData.category} onChange={e => setEditData({ ...editData, category: e.target.value })} className='w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300 focus:border-transparent' />
+												<input value={editData.category} onChange={e => setEditData({ ...editData, category: e.target.value })} className='w-full border border-gray-200 dark:border-slate-600 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300 focus:border-transparent' />
 											</div>
 											<div>
 												<label className='text-xs text-gray-500 font-medium'>Ціна (USDT)</label>
-												<input value={editData.price} onChange={e => setEditData({ ...editData, price: e.target.value })} className='w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300 focus:border-transparent' />
+												<input value={editData.price} onChange={e => setEditData({ ...editData, price: e.target.value })} className='w-full border border-gray-200 dark:border-slate-600 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300 focus:border-transparent' />
 											</div>
 											<div>
 												<label className='text-xs text-gray-500 font-medium'>Дохід/міс (USDT)</label>
-												<input value={editData.monthly_income} onChange={e => setEditData({ ...editData, monthly_income: e.target.value })} className='w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300 focus:border-transparent' />
+												<input value={editData.monthly_income} onChange={e => setEditData({ ...editData, monthly_income: e.target.value })} className='w-full border border-gray-200 dark:border-slate-600 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300 focus:border-transparent' />
 											</div>
 											<div>
 												<label className='text-xs text-gray-500 font-medium'>Опис</label>
-												<input value={editData.description} onChange={e => setEditData({ ...editData, description: e.target.value })} className='w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300 focus:border-transparent' />
+												<input value={editData.description} onChange={e => setEditData({ ...editData, description: e.target.value })} className='w-full border border-gray-200 dark:border-slate-600 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300 focus:border-transparent' />
 											</div>
 											<button onClick={() => handleSaveEdit(channel.id)} className='bg-[#27ae60] text-white px-5 py-2 rounded-xl text-sm font-semibold hover:bg-[#219a52] duration-300 flex items-center gap-2 w-fit shadow-sm'>
 												<FontAwesomeIcon icon={faSave} /> Зберегти
@@ -612,7 +612,7 @@ const ModerCabinet = () => {
 								className={`flex items-center gap-2 px-4 py-2 rounded-full text-sm font-medium duration-300 ${
 									dealStatusFilter === f.value
 										? 'bg-[#3498db] text-white shadow-md shadow-blue-200'
-										: 'bg-white text-gray-600 border border-gray-200 hover:border-[#3498db] hover:text-[#3498db]'
+										: 'bg-white text-gray-600 border border-gray-200 dark:border-slate-600 hover:border-[#3498db] hover:text-[#3498db]'
 								}`}
 							>
 								<span className={`w-2 h-2 rounded-full ${dealStatusFilter === f.value ? 'bg-white' : f.dot}`} />
@@ -622,9 +622,9 @@ const ModerCabinet = () => {
 					</div>
 
 					{allDeals.length === 0 ? (
-						<div className='text-center py-16 bg-white rounded-2xl border border-dashed border-gray-300'>
+						<div className='text-center py-16 bg-white dark:bg-slate-800 rounded-2xl border border-dashed border-gray-300'>
 							<div className='text-5xl mb-4'>🤝</div>
-							<p className='text-lg font-semibold text-gray-700'>Немає угод</p>
+							<p className='text-lg font-semibold text-gray-700 dark:text-gray-200'>Немає угод</p>
 						</div>
 					) : (
 						<div className='grid gap-4'>
@@ -632,7 +632,7 @@ const ModerCabinet = () => {
 								const statusInfo = DEAL_STATUS_LABELS[deal.status] || DEAL_STATUS_LABELS.created;
 								const isTerminal = ['completed', 'cancelled'].includes(deal.status);
 								return (
-									<div key={deal.id} className='bg-white rounded-2xl shadow-sm border border-gray-100 p-5 hover:shadow-md duration-300'>
+									<div key={deal.id} className='bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-gray-100 dark:border-slate-700 p-5 hover:shadow-md duration-300'>
 										<div className='flex flex-col md:flex-row md:items-center justify-between gap-3 mb-3'>
 											<div>
 												<h3 className='font-bold text-gray-800 text-lg'>
@@ -649,19 +649,19 @@ const ModerCabinet = () => {
 										</div>
 
 										<div className='grid grid-cols-2 md:grid-cols-4 gap-2 text-sm mb-3'>
-											<div className='bg-gray-50 p-2.5 rounded-xl'>
+											<div className='bg-gray-50 dark:bg-slate-700/60 p-2.5 rounded-xl'>
 												<span className='font-semibold text-green-600'>{deal.amount_usdt} USDT</span>
 												<p className='text-gray-400 text-xs'>сума</p>
 											</div>
-											<div className='bg-gray-50 p-2.5 rounded-xl'>
+											<div className='bg-gray-50 dark:bg-slate-700/60 p-2.5 rounded-xl'>
 												<span className='font-semibold'>{deal.service_fee} USDT</span>
 												<p className='text-gray-400 text-xs'>комісія</p>
 											</div>
-											<div className='bg-gray-50 p-2.5 rounded-xl'>
+											<div className='bg-gray-50 dark:bg-slate-700/60 p-2.5 rounded-xl'>
 												<span className='font-semibold'>{new Date(deal.created_at).toLocaleDateString('uk-UA')}</span>
 												<p className='text-gray-400 text-xs'>створено</p>
 											</div>
-											<div className='bg-gray-50 p-2.5 rounded-xl'>
+											<div className='bg-gray-50 dark:bg-slate-700/60 p-2.5 rounded-xl'>
 												<span className='font-semibold'>
 													{deal.completed_at ? new Date(deal.completed_at).toLocaleDateString('uk-UA') : '—'}
 												</span>
@@ -722,7 +722,7 @@ const ModerCabinet = () => {
 					)}
 				</>
 			) : disputes.length === 0 ? (
-				<div className='text-center py-16 bg-white rounded-2xl border border-dashed border-gray-300'>
+				<div className='text-center py-16 bg-white dark:bg-slate-800 rounded-2xl border border-dashed border-gray-300'>
 					<div className='text-5xl mb-4'>⚖️</div>
 					<p className='text-lg font-semibold text-gray-700 mb-2'>Все спокійно</p>
 					<p className='text-gray-500'>Немає спірних угод</p>
@@ -730,9 +730,9 @@ const ModerCabinet = () => {
 			) : (
 				<div className='grid gap-6'>
 					{disputes.map(deal => (
-						<div key={deal.id} className='bg-white rounded-2xl shadow-sm border border-gray-100 p-6 hover:shadow-md duration-300'>
+						<div key={deal.id} className='bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-gray-100 dark:border-slate-700 p-6 hover:shadow-md duration-300'>
 							<div className='flex items-center justify-between mb-4'>
-								<h3 className='font-bold text-lg text-gray-800'>
+								<h3 className='font-bold text-lg text-gray-800 dark:text-white'>
 									<FontAwesomeIcon icon={faGavel} className='mr-2 text-yellow-500' />
 									Угода #{deal.id}
 								</h3>
@@ -796,7 +796,7 @@ const ModerCabinet = () => {
 								<span className='text-sm text-gray-500'>{escrowWallets.length} гаманців з коштами</span>
 								<button
 									onClick={loadData}
-									className='bg-white border border-gray-200 text-gray-600 px-4 py-2.5 rounded-xl font-semibold hover:bg-gray-50 duration-300 shadow-sm flex items-center gap-2'
+									className='bg-white border border-gray-200 dark:border-slate-600 text-gray-600 px-4 py-2.5 rounded-xl font-semibold hover:bg-gray-50 dark:bg-slate-700/60 duration-300 shadow-sm flex items-center gap-2'
 								>
 									<FontAwesomeIcon icon={faSync} /> Оновити
 								</button>
@@ -807,28 +807,28 @@ const ModerCabinet = () => {
 					{loading ? (
 						<p className='text-center text-gray-400 py-8'>Завантаження балансів...</p>
 					) : escrowWallets.length === 0 ? (
-						<div className='text-center py-16 bg-white rounded-2xl shadow-sm border border-gray-100'>
+						<div className='text-center py-16 bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-gray-100'>
 							<FontAwesomeIcon icon={faWallet} className='text-gray-300 text-5xl mb-4' />
 							<p className='text-gray-400 text-lg'>Усі ескроу гаманці порожні</p>
 						</div>
 					) : (
 						<div className='space-y-4'>
 							{escrowWallets.map(w => (
-								<div key={w.deal_id} className='bg-white rounded-2xl shadow-sm border border-gray-100 p-6 hover:border-blue-200 duration-300'>
+								<div key={w.deal_id} className='bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-gray-100 dark:border-slate-700 p-6 hover:border-blue-200 duration-300'>
 									<div className='flex flex-col lg:flex-row lg:items-start gap-4'>
 										{/* Info */}
 										<div className='flex-1 min-w-0'>
 											<div className='flex items-center gap-3 mb-3'>
-												<span className='text-lg font-bold text-gray-800'>Угода #{w.deal_id}</span>
+												<span className='text-lg font-bold text-gray-800 dark:text-white'>Угода #{w.deal_id}</span>
 												<span className={`text-xs font-semibold px-2.5 py-1 rounded-full ${
-													DEAL_STATUS_LABELS[w.status]?.color || 'bg-gray-100 text-gray-600'
+													DEAL_STATUS_LABELS[w.status]?.color || 'bg-gray-100 text-gray-600 dark:text-gray-300'
 												}`}>
 													{DEAL_STATUS_LABELS[w.status]?.text || w.status}
 												</span>
 											</div>
 											<div className='flex items-center gap-2 mb-2'>
 												<span className='text-sm text-gray-500'>Ескроу:</span>
-												<code className='text-sm bg-gray-50 px-2 py-1 rounded font-mono text-gray-700 break-all'>{w.escrow}</code>
+												<code className='text-sm bg-gray-50 dark:bg-slate-700/60 px-2 py-1 rounded font-mono text-gray-700 break-all'>{w.escrow}</code>
 												<button
 													onClick={() => copyToClipboard(w.escrow)}
 													className='text-gray-400 hover:text-blue-500 duration-200'
@@ -849,7 +849,7 @@ const ModerCabinet = () => {
 													value={sweepTarget[w.deal_id] || ''}
 													onChange={e => setSweepTarget(prev => ({ ...prev, [w.deal_id]: e.target.value }))}
 													placeholder='TRC-20 адреса...'
-													className='flex-1 border border-gray-200 rounded-xl px-4 py-2.5 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-blue-300 focus:border-transparent'
+													className='flex-1 border border-gray-200 dark:border-slate-600 rounded-xl px-4 py-2.5 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-blue-300 focus:border-transparent'
 												/>
 												<button
 													onClick={() => handleSweep(w.deal_id)}

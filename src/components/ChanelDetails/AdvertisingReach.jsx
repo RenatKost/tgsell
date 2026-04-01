@@ -8,7 +8,7 @@ const AdvertisingReach = ({ channel }) => {
 
 	if (!hasAnyData) {
 		return (
-			<div className='bg-white rounded-2xl border border-gray-100 shadow-sm px-5 py-5 w-full'>
+			<div className='bg-white dark:bg-slate-800 rounded-2xl border border-gray-100 dark:border-slate-700 shadow-sm px-5 py-5 w-full'>
 				<p className='text-gray-400 text-xs mb-1'>Рекламне охоплення</p>
 				<p className='text-gray-300 text-center py-8 text-sm'>Дані поки відсутні</p>
 			</div>
@@ -22,7 +22,7 @@ const AdvertisingReach = ({ channel }) => {
 	];
 
 	return (
-		<div className='bg-white rounded-2xl border border-gray-100 shadow-sm px-5 py-5 w-full'>
+		<div className='bg-white dark:bg-slate-800 rounded-2xl border border-gray-100 dark:border-slate-700 shadow-sm px-5 py-5 w-full'>
 			<p className='text-gray-400 text-xs mb-0.5'>Рекламне охоплення</p>
 			<p className='font-bold text-xl text-gray-900 mb-4'>
 				{avgReach?.toLocaleString('uk-UA') || '—'}

@@ -9,6 +9,25 @@ const AppContextProvider = ({ children }) => {
 	const [isAuthenticated, setIsAuthenticated] = useState(false);
 	const [loading, setLoading] = useState(true);
 	const [favoriteIds, setFavoriteIds] = useState(new Set());
+	const [theme, setThemeState] = useState(() => {
+		const saved = localStorage.getItem('theme');
+		return saved || 'dark';
+	});
+
+	// Apply theme class to <html>
+	useEffect(() => {
+		const root = document.documentElement;
+		if (theme === 'dark') {
+			root.classList.add('dark');
+		} else {
+			root.classList.remove('dark');
+		}
+		localStorage.setItem('theme', theme);
+	}, [theme]);
+
+	const toggleTheme = useCallback(() => {
+		setThemeState(prev => prev === 'dark' ? 'light' : 'dark');
+	}, []);
 
 	// Check auth on mount
 	useEffect(() => {
@@ -71,6 +90,7 @@ const AppContextProvider = ({ children }) => {
 			loading,
 			login, logout,
 			favoriteIds, toggleFavorite,
+			theme, toggleTheme,
 		}}>
 			{children}
 		</AppContext.Provider>
@@ -78,8 +98,8 @@ const AppContextProvider = ({ children }) => {
 };
 
 const useAuth = () => {
-	const { user, isAuthenticated, loading, login, logout, favoriteIds, toggleFavorite } = useContext(AppContext);
-	return { user, isAuthenticated, loading, login, logout, favoriteIds, toggleFavorite };
+	const { user, isAuthenticated, loading, login, logout, favoriteIds, toggleFavorite, theme, toggleTheme } = useContext(AppContext);
+	return { user, isAuthenticated, loading, login, logout, favoriteIds, toggleFavorite, theme, toggleTheme };
 };
 
 const useAppContext = () => useContext(AppContext);

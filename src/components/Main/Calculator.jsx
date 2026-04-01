@@ -118,7 +118,7 @@ const Calculator = () => {
 	return (
 		<div className='mt-10'>
 			<div className='mb-10'>
-				<h2 className='font-bold text-xl'>
+				<h2 className='font-bold text-xl dark:text-white'>
 					Калькулятор вартості Telegram каналу
 				</h2>
 			</div>
@@ -164,7 +164,7 @@ const Calculator = () => {
 				<div>
 					<label>Кількість підписників:</label>
 					<input
-						className='focus:border-[#3498db] block border-gray-300 border px-3 py-4 rounded-md mt-1 w-full '
+						className='focus:border-[#3498db] block border-gray-300 dark:border-slate-600 border px-3 py-4 rounded-md mt-1 w-full dark:bg-slate-800 dark:text-white '
 						name='subscribers'
 						type='text'
 						placeholder='Підписників'
@@ -175,7 +175,7 @@ const Calculator = () => {
 				<div>
 					<label>Кількість заявок:</label>
 					<input
-						className='focus:border-[#3498db] block border-gray-300 border px-3 py-4 rounded-md mt-1 w-full '
+						className='focus:border-[#3498db] block border-gray-300 dark:border-slate-600 border px-3 py-4 rounded-md mt-1 w-full dark:bg-slate-800 dark:text-white '
 						name='applications'
 						type='text'
 						placeholder='Заявок'
@@ -186,7 +186,7 @@ const Calculator = () => {
 				<div>
 					<label>Місячний дохід (USDT):</label>
 					<input
-						className='focus:border-[#3498db] block border-gray-300 border px-3 py-4 rounded-md mt-1 w-full '
+						className='focus:border-[#3498db] block border-gray-300 dark:border-slate-600 border px-3 py-4 rounded-md mt-1 w-full dark:bg-slate-800 dark:text-white '
 						name='applications'
 						type='text'
 						placeholder='0 USDT'
@@ -197,7 +197,7 @@ const Calculator = () => {
 				<div>
 					<label>Охоплення:</label>
 					<input
-						className='focus:border-[#3498db] block border-gray-300 border px-3 py-4 rounded-md mt-1 w-full '
+						className='focus:border-[#3498db] block border-gray-300 dark:border-slate-600 border px-3 py-4 rounded-md mt-1 w-full dark:bg-slate-800 dark:text-white '
 						name='applications'
 						type='text'
 						placeholder='Охоплення'
@@ -206,7 +206,7 @@ const Calculator = () => {
 					/>
 				</div>
 			</form>
-			<h3 className='mt-10'>
+			<h3 className='mt-10 dark:text-gray-200'>
 				<span className='font-bold mr-2 text-lg'>Вартість:</span>
 				<span className='text-red-500 font-bold mr-1'>
 					{formatCurrency(calculateTotal())}

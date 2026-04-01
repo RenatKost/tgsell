@@ -59,20 +59,20 @@ const ER = ({ stats = [], current }) => {
 	const formatted = current != null ? `${current.toFixed(1)}%` : '—';
 
 	return (
-		<div className='bg-white rounded-2xl border border-gray-100 shadow-sm px-5 pt-5 w-full'>
+		<div className='bg-white dark:bg-slate-800 rounded-2xl border border-gray-100 dark:border-slate-700 shadow-sm px-5 pt-5 w-full'>
 			<div className='flex items-center justify-between mb-1'>
 				<div>
 					<p className='text-gray-400 text-xs'>Рівень залученості</p>
-					<p className='font-bold text-xl text-gray-900'>{formatted}</p>
+					<p className='font-bold text-xl text-gray-900 dark:text-white'>{formatted}</p>
 				</div>
 				<div className='flex items-center gap-1'>
 					{TF.map((t, i) => (
 						<button key={i} onClick={() => setTf(i)}
 							className={`px-2.5 py-1 rounded-lg text-xs font-semibold transition-all ${
-								tf === i ? 'bg-[#10B981] text-white' : 'bg-gray-50 text-gray-400 hover:bg-gray-100'
+								tf === i ? 'bg-[#10B981] text-white' : 'bg-gray-50 dark:bg-slate-700/60 text-gray-400 hover:bg-gray-100'
 							}`}>{t.label}</button>
 					))}
-					<button onClick={() => setModal(true)} className='ml-1 w-7 h-7 rounded-lg bg-gray-50 hover:bg-gray-100 flex items-center justify-center text-gray-400 hover:text-gray-600 transition-all' title='Розгорнути'>
+					<button onClick={() => setModal(true)} className='ml-1 w-7 h-7 rounded-lg bg-gray-50 dark:bg-slate-700/60 hover:bg-gray-100 flex items-center justify-center text-gray-400 hover:text-gray-600 transition-all' title='Розгорнути'>
 						<svg width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='currentColor' strokeWidth='2' strokeLinecap='round' strokeLinejoin='round'><path d='M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7'/></svg>
 					</button>
 				</div>

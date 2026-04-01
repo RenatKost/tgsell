@@ -5,37 +5,38 @@ const MobileNav = ({ scroll, showMenu, setShowMenu }) => {
 		<>
 			<div
 				onClick={() => setShowMenu(!showMenu)}
-				className='grid relative z-50 cursor-pointer space-y-1'
+				className='grid relative z-50 cursor-pointer space-y-1.5'
 			>
 				<span
-					className={`w-6 h-1 block rounded-md relative  duration-300 ${
+					className={`w-6 h-0.5 block rounded-full relative duration-300 ${
 						showMenu
-							? 'rotate-[145deg] w-8 bg-[#27ae60]'
-							: 'rotate-0 bg-[#3498db]'
+							? 'rotate-45 translate-y-2 bg-blue-500'
+							: 'rotate-0 bg-gray-500 dark:bg-gray-400'
 					}`}
 				/>
 				<span
-					className={`w-6 h-1 block rounded-md relative  duration-300 ${
-						showMenu ? 'ml-[0.4rem] w-10 bg-[#27ae60]' : 'ml-0 bg-[#3498db]'
+					className={`w-6 h-0.5 block rounded-full relative duration-300 ${
+						showMenu ? 'opacity-0 scale-0' : 'opacity-100 bg-gray-500 dark:bg-gray-400'
 					}`}
 				/>
 				<span
-					className={`w-6 h-1 block rounded-md relative  duration-300 ${
+					className={`w-6 h-0.5 block rounded-full relative duration-300 ${
 						showMenu
-							? 'rotate-[-148deg] w-8 bg-[#27ae60]'
-							: 'rotate-0 bg-[#3498db]'
+							? '-rotate-45 -translate-y-2 bg-blue-500'
+							: 'rotate-0 bg-gray-500 dark:bg-gray-400'
 					}`}
 				/>
 			</div>
 			<nav
-				className={`duration-700 px-10 flex flex-col justify-center items-start absolute w-screen h-screen bg-gradient-to-tl from-blue-200 to-white top-0 right-0 left-0 bottom-0 
-${showMenu ? 'translate-x-0' : 'translate-x-[-100%]'}`}
+				className={`duration-500 ease-out px-8 flex flex-col justify-center items-start absolute w-screen h-screen bg-white dark:bg-slate-900 top-0 right-0 left-0 bottom-0 ${
+					showMenu ? 'translate-x-0 opacity-100' : 'translate-x-[-100%] opacity-0'
+				}`}
 			>
-				<ul className='grid space-y-4'>
+				<ul className='grid space-y-3'>
 					<li>
 						<NavLink
 							to='/catalog'
-							className='hover:text-[#3498db] font-bold text-lg duration-300 hover:translate-y-1 block'
+							className='text-gray-800 dark:text-gray-200 font-bold text-lg hover:text-blue-500 transition-colors duration-200 block py-2'
 							onClick={() => setShowMenu(false)}
 						>
 							Каталог каналів
@@ -43,7 +44,7 @@ ${showMenu ? 'translate-x-0' : 'translate-x-[-100%]'}`}
 					</li>
 					<li>
 						<a
-							className='hover:text-[#3498db] font-bold text-lg duration-300 hover:translate-y-1 block'
+							className='text-gray-800 dark:text-gray-200 font-bold text-lg hover:text-blue-500 transition-colors duration-200 block py-2 cursor-pointer'
 							href='#footer'
 							onClick={e => {
 								e.preventDefault();
@@ -55,20 +56,20 @@ ${showMenu ? 'translate-x-0' : 'translate-x-[-100%]'}`}
 						</a>
 					</li>
 				</ul>
-				<div className='grid mt-6 space-y-5'>
+				<div className='grid mt-8 space-y-3 w-full max-w-xs'>
 					<NavLink
-						className='font-bold text-[#27ae60] shadow-md shadow-green-400 py-2 px-6 rounded-md duration-500 bg-white hover:text-white hover:bg-[#27ae60]'
+						className='text-center font-semibold text-blue-500 border border-blue-500/30 py-3 px-6 rounded-xl hover:bg-blue-500 hover:text-white transition-all duration-200'
 						to='/catalog'
 						onClick={() => setShowMenu(false)}
 					>
-						КУПИТИ КАНАЛ
+						Купити канал
 					</NavLink>
 					<NavLink
-						className='font-bold bg-[#27ae60] text-white py-2 px-6 rounded-md shadow-md shadow-green-400 hover:bg-white hover:text-[#27ae60] duration-500'
+						className='text-center font-semibold bg-gradient-to-r from-emerald-500 to-green-500 text-white py-3 px-6 rounded-xl hover:shadow-lg hover:shadow-green-500/25 transition-all duration-200'
 						to='/sell'
 						onClick={() => setShowMenu(false)}
 					>
-						ПРОДАТИ КАНАЛ
+						Продати канал
 					</NavLink>
 				</div>
 			</nav>

@@ -37,7 +37,7 @@ const advantages = [
 const Buy = () => {
 	return (
 		<>
-			<h2 className='text-2xl uppercase leading-normal text-center tracking-widest font-bold text-gray-600'>
+			<h2 className='text-2xl uppercase leading-normal text-center tracking-widest font-bold text-gray-600 dark:text-gray-300'>
 				Етапи покупки
 			</h2>
 			<div className='lg:flex grid md:grid-cols-2 space-y-4 lg:space-y-0 max-w-[700px] lg:max-w-full mx-auto items-center bg-gradient-to-r from-blue-400  to-blue-300 px-6 py-10 rounded-xl shadow-md mt-6 justify-between'>
@@ -45,8 +45,8 @@ const Buy = () => {
 					<StageItem key={text} img={img} text={text} number={number} />
 				))}
 			</div>
-			<div className='text-lg mt-10 tracking-wider'>
-				<h3 className='font-bold'>Ви можете швидко купити Телеграм канал</h3>
+			<div className='text-lg mt-10 tracking-wider dark:text-gray-300'>
+				<h3 className='font-bold dark:text-white'>Ви можете швидко купити Телеграм канал</h3>
 				<ul className='mt-2 space-y-4'>
 					{advantages.map(item => (
 						<li key={item} className='text-start'>

@@ -42,7 +42,7 @@ const advantages = [
 const Sell = () => {
 	return (
 		<>
-			<h2 className='text-2xl uppercase leading-normal text-center tracking-widest font-bold mt-12 text-gray-600'>
+			<h2 className='text-2xl uppercase leading-normal text-center tracking-widest font-bold mt-12 text-gray-600 dark:text-gray-300'>
 				Етапи продажу
 			</h2>
 			<div className='xl:flex items-center grid md:grid-cols-2 space-y-4 xl:space-y-0 max-w-[700px] lg:max-w-full mx-auto bg-gradient-to-r from-blue-400  to-blue-300 px-6 py-10 rounded-xl shadow-md mt-6 justify-between'>
@@ -50,8 +50,8 @@ const Sell = () => {
 					<StageItem key={text} img={img} text={text} number={number} />
 				))}
 			</div>
-			<div className='text-lg mt-10 tracking-wider'>
-				<h3 className='font-bold'>Ви хочете продати свій телеграм канал?</h3>
+			<div className='text-lg mt-10 tracking-wider dark:text-gray-300'>
+				<h3 className='font-bold dark:text-white'>Ви хочете продати свій телеграм канал?</h3>
 				<ul className='mt-2 space-y-4'>
 					{advantages.map(item => (
 						<li key={item} className='text-start'>

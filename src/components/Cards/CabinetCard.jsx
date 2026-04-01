@@ -33,7 +33,7 @@ const CabinetCard = ({ channel, onDelete }) => {
 	};
 
 	return (
-		<div className='bg-white rounded-2xl border border-gray-100 shadow-sm hover:shadow-md duration-300 overflow-hidden'>
+		<div className='bg-white dark:bg-slate-800 rounded-2xl border border-gray-100 dark:border-slate-700 shadow-sm hover:shadow-md duration-300 overflow-hidden'>
 			{/* Top: Avatar + Name + Status */}
 			<div className='p-5 pb-4'>
 				<div className='flex items-start gap-4'>
@@ -46,7 +46,7 @@ const CabinetCard = ({ channel, onDelete }) => {
 					)}
 					<div className='flex-1 min-w-0'>
 						<div className='flex items-start justify-between gap-2'>
-							<NavLink to={`/channel/${channel.id}`} className='font-bold text-gray-800 hover:text-[#3498db] duration-300 truncate block'>
+							<NavLink to={`/channel/${channel.id}`} className='font-bold text-gray-800 dark:text-white hover:text-[#3498db] duration-300 truncate block'>
 								{channel.channel_name}
 							</NavLink>
 							<span className={`text-xs px-2.5 py-1 rounded-full font-medium border whitespace-nowrap ${status.color}`}>
@@ -76,29 +76,29 @@ const CabinetCard = ({ channel, onDelete }) => {
 			</div>
 
 			{/* Stats grid */}
-			<div className='grid grid-cols-2 sm:grid-cols-4 gap-px bg-gray-100 border-t border-gray-100'>
-				<div className='bg-white p-3 text-center'>
-					<p className='text-xs text-gray-400 mb-0.5'>Переглядів</p>
-					<p className='font-semibold text-gray-800 text-sm'>{channel.avg_views?.toLocaleString('uk-UA') || '—'}</p>
+			<div className='grid grid-cols-2 sm:grid-cols-4 gap-px bg-gray-100 dark:bg-slate-700 border-t border-gray-100 dark:border-slate-700'>
+				<div className='bg-white dark:bg-slate-800 p-3 text-center'>
+					<p className='text-xs text-gray-400 dark:text-gray-500 mb-0.5'>Переглядів</p>
+					<p className='font-semibold text-gray-800 dark:text-gray-100 text-sm'>{channel.avg_views?.toLocaleString('uk-UA') || '—'}</p>
 				</div>
-				<div className='bg-white p-3 text-center'>
-					<p className='text-xs text-gray-400 mb-0.5'>ER</p>
-					<p className='font-semibold text-gray-800 text-sm'>{channel.er != null ? `${channel.er.toFixed(1)}%` : '—'}</p>
+				<div className='bg-white dark:bg-slate-800 p-3 text-center'>
+					<p className='text-xs text-gray-400 dark:text-gray-500 mb-0.5'>ER</p>
+					<p className='font-semibold text-gray-800 dark:text-gray-100 text-sm'>{channel.er != null ? `${channel.er.toFixed(1)}%` : '—'}</p>
 				</div>
-				<div className='bg-white p-3 text-center'>
-					<p className='text-xs text-gray-400 mb-0.5'>Вік</p>
-					<p className='font-semibold text-gray-800 text-sm'>{formatAge(channel.age)}</p>
+				<div className='bg-white dark:bg-slate-800 p-3 text-center'>
+					<p className='text-xs text-gray-400 dark:text-gray-500 mb-0.5'>Вік</p>
+					<p className='font-semibold text-gray-800 dark:text-gray-100 text-sm'>{formatAge(channel.age)}</p>
 				</div>
-				<div className='bg-white p-3 text-center'>
-					<p className='text-xs text-gray-400 mb-0.5'>Дохід/міс</p>
-					<p className='font-semibold text-gray-800 text-sm'>
+				<div className='bg-white dark:bg-slate-800 p-3 text-center'>
+					<p className='text-xs text-gray-400 dark:text-gray-500 mb-0.5'>Дохід/міс</p>
+					<p className='font-semibold text-gray-800 dark:text-gray-100 text-sm'>
 						{channel.monthly_income ? `${channel.monthly_income.toLocaleString('uk-UA')}` : '—'}
 					</p>
 				</div>
 			</div>
 
 			{/* Bottom: Price + Actions */}
-			<div className='p-4 pt-3 border-t border-gray-100'>
+			<div className='p-4 pt-3 border-t border-gray-100 dark:border-slate-700'>
 				{channel.rejection_reason && (
 					<div className='mb-3 px-3 py-2 bg-red-50 rounded-lg border border-red-100'>
 						<p className='text-xs text-red-600'>
@@ -108,14 +108,14 @@ const CabinetCard = ({ channel, onDelete }) => {
 				)}
 				<div className='flex items-center justify-between'>
 					<div>
-						<p className='text-xs text-gray-400'>Ціна</p>
-						<p className='text-lg font-bold text-gray-800'>{channel.price?.toLocaleString('uk-UA')} <span className='text-sm text-gray-500'>USDT</span></p>
+						<p className='text-xs text-gray-400 dark:text-gray-500'>Ціна</p>
+						<p className='text-lg font-bold text-gray-800 dark:text-white'>{channel.price?.toLocaleString('uk-UA')} <span className='text-sm text-gray-500'>USDT</span></p>
 					</div>
 					<div className='flex items-center gap-2'>
 						{onDelete && channel.status !== 'sold' && (
 							<button
 								onClick={() => onDelete(channel.id)}
-								className='w-9 h-9 rounded-lg border border-gray-200 text-gray-400 hover:text-red-500 hover:border-red-200 hover:bg-red-50 duration-300 flex items-center justify-center'
+								className='w-9 h-9 rounded-lg border border-gray-200 dark:border-slate-600 text-gray-400 hover:text-red-500 hover:border-red-200 hover:bg-red-50 dark:hover:bg-red-900/30 duration-300 flex items-center justify-center'
 								title='Видалити'
 							>
 								<FontAwesomeIcon icon={faTrash} size='sm' />

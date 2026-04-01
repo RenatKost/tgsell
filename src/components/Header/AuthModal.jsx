@@ -182,7 +182,7 @@ const AuthModal = ({ show, setShow }) => {
 			}}
 			className='fixed inset-0 flex items-center justify-center bg-black/60 backdrop-blur-sm z-50 p-4'
 		>
-			<div className='bg-white rounded-2xl shadow-2xl z-[51] mx-auto text-center max-w-[400px] w-full overflow-hidden animate-fadeIn'>
+			<div className='bg-white dark:bg-slate-800 rounded-2xl shadow-2xl z-[51] mx-auto text-center max-w-[400px] w-full overflow-hidden animate-fadeIn'>
 				{/* Top gradient bar */}
 				<div className='h-24 bg-gradient-to-r from-[#3498db] to-[#27ae60] flex items-center justify-center relative'>
 					<button
@@ -197,8 +197,8 @@ const AuthModal = ({ show, setShow }) => {
 				</div>
 
 				<div className='px-8 py-6'>
-					<h2 className='text-xl font-bold text-gray-800 mb-1'>Вхід в TgSell</h2>
-					<p className='text-gray-400 text-sm mb-6'>Оберіть спосіб авторизації</p>
+					<h2 className='text-xl font-bold text-gray-800 dark:text-white mb-1'>Вхід в TgSell</h2>
+					<p className='text-gray-400 dark:text-gray-500 text-sm mb-6'>Оберіть спосіб авторизації</p>
 
 					{authError && (
 						<div className='bg-red-50 border border-red-200 rounded-xl px-4 py-3 mb-4 text-left'>
@@ -243,9 +243,9 @@ const AuthModal = ({ show, setShow }) => {
 
 						{/* Divider */}
 						<div className='flex items-center gap-3 w-full'>
-							<div className='flex-1 h-px bg-gray-100'></div>
-							<span className='text-gray-300 text-xs uppercase tracking-wider'>або</span>
-							<div className='flex-1 h-px bg-gray-100'></div>
+								<div className='flex-1 h-px bg-gray-100 dark:bg-slate-700'></div>
+								<span className='text-gray-300 dark:text-gray-500 text-xs uppercase tracking-wider'>або</span>
+								<div className='flex-1 h-px bg-gray-100 dark:bg-slate-700'></div>
 						</div>
 
 						{/* Google Sign-In */}

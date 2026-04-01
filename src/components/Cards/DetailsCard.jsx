@@ -52,7 +52,7 @@ const DetailsCard = ({ channel, onBuy, stats = [] }) => {
 	}
 
 	return (
-		<div className='bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden'>
+		<div className='bg-white dark:bg-slate-800 rounded-2xl border border-gray-100 dark:border-slate-700 shadow-sm overflow-hidden'>
 			{/* Header */}
 			<div className='p-5 pb-4'>
 				<div className='flex items-center gap-4'>
@@ -64,8 +64,8 @@ const DetailsCard = ({ channel, onBuy, stats = [] }) => {
 						</div>
 					)}
 					<div className='min-w-0 flex-1'>
-						<h5 className='font-bold text-gray-900 text-lg'>{channel.channel_name}</h5>
-						<p className='text-gray-400 text-sm'>{channel.subscribers_count?.toLocaleString('uk-UA') || '0'} підписників</p>
+						<h5 className='font-bold text-gray-900 dark:text-white text-lg'>{channel.channel_name}</h5>
+						<p className='text-gray-400 dark:text-gray-500 text-sm'>{channel.subscribers_count?.toLocaleString('uk-UA') || '0'} підписників</p>
 						{subTrend && (
 							<span className={`text-xs font-semibold ${subTrend.up ? 'text-emerald-500' : 'text-red-500'}`}>
 								{subTrend.up ? '↑' : '↓'} {Math.abs(subTrend.diff).toLocaleString('uk-UA')} ({subTrend.up ? '+' : ''}{subTrend.pct}%)
@@ -75,7 +75,7 @@ const DetailsCard = ({ channel, onBuy, stats = [] }) => {
 					<button
 						onClick={() => isAuthenticated ? toggleFavorite(channel.id) : alert('Увійдіть щоб додати в обране')}
 						className={`flex-shrink-0 w-10 h-10 rounded-full flex items-center justify-center transition-all duration-300 ${
-							isFav ? 'bg-red-50 text-red-500' : 'bg-gray-50 text-gray-300 hover:text-red-400 hover:bg-red-50'
+						isFav ? 'bg-red-50 dark:bg-red-900/30 text-red-500' : 'bg-gray-50 dark:bg-slate-700 text-gray-300 dark:text-gray-500 hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/30'
 						}`}
 					>
 						<FontAwesomeIcon icon={faHeart} />
@@ -88,13 +88,13 @@ const DetailsCard = ({ channel, onBuy, stats = [] }) => {
 							href={channel.telegram_link}
 							target='_blank'
 							rel='noopener noreferrer'
-							className='inline-flex items-center gap-1.5 text-[#3498db] bg-blue-50 hover:bg-blue-100 text-sm font-semibold px-4 py-2 rounded-xl transition-all duration-300'
+							className='inline-flex items-center gap-1.5 text-[#3498db] bg-blue-50 dark:bg-blue-900/30 hover:bg-blue-100 dark:hover:bg-blue-900/50 text-sm font-semibold px-4 py-2 rounded-xl transition-all duration-300'
 						>
 							↗ Переглянути канал
 						</a>
 					)}
 					{channel.category && (
-						<span className='bg-blue-50 text-[#3498db] text-xs font-semibold px-3 py-2 rounded-xl'>
+						<span className='bg-blue-50 dark:bg-blue-900/30 text-[#3498db] text-xs font-semibold px-3 py-2 rounded-xl'>
 							{channel.category}
 						</span>
 					)}
@@ -105,21 +105,21 @@ const DetailsCard = ({ channel, onBuy, stats = [] }) => {
 			<div className='px-5 pb-2'>
 				<p className='text-xs text-gray-400 font-semibold uppercase tracking-wider mb-2'>Статистика</p>
 				<div className='grid grid-cols-2 gap-2.5'>
-					<div className='bg-gray-50 rounded-xl p-3'>
+					<div className='bg-gray-50 dark:bg-slate-700/60 rounded-xl p-3'>
 						<p className='text-gray-400 text-xs mb-0.5'>Переглядів</p>
-						<p className='font-bold text-gray-800'>{channel.avg_views?.toLocaleString('uk-UA') || '—'}</p>
+						<p className='font-bold text-gray-800 dark:text-gray-100'>{channel.avg_views?.toLocaleString('uk-UA') || '—'}</p>
 					</div>
-					<div className='bg-gray-50 rounded-xl p-3'>
+					<div className='bg-gray-50 dark:bg-slate-700/60 rounded-xl p-3'>
 						<p className='text-gray-400 text-xs mb-0.5'>ER</p>
-						<p className='font-bold text-gray-800'>{channel.er != null ? `${channel.er.toFixed(1)}%` : '—'}</p>
+						<p className='font-bold text-gray-800 dark:text-gray-100'>{channel.er != null ? `${channel.er.toFixed(1)}%` : '—'}</p>
 					</div>
-					<div className='bg-gray-50 rounded-xl p-3'>
+					<div className='bg-gray-50 dark:bg-slate-700/60 rounded-xl p-3'>
 						<p className='text-gray-400 text-xs mb-0.5'>Вік каналу</p>
-						<p className='font-bold text-gray-800'>{formatAge(channel.age)}</p>
+						<p className='font-bold text-gray-800 dark:text-gray-100'>{formatAge(channel.age)}</p>
 					</div>
-					<div className='bg-gray-50 rounded-xl p-3'>
+					<div className='bg-gray-50 dark:bg-slate-700/60 rounded-xl p-3'>
 						<p className='text-gray-400 text-xs mb-0.5'>Прибуток / міс.</p>
-						<p className='font-bold text-gray-800'>
+						<p className='font-bold text-gray-800 dark:text-gray-100'>
 							{channel.monthly_income ? `${channel.monthly_income.toLocaleString('uk-UA')} USDT` : '—'}
 						</p>
 					</div>
@@ -131,27 +131,27 @@ const DetailsCard = ({ channel, onBuy, stats = [] }) => {
 				<div className='px-5 pb-2 pt-2'>
 					<p className='text-xs text-gray-400 font-semibold uppercase tracking-wider mb-2'>Активність</p>
 					<div className='grid grid-cols-2 gap-2.5'>
-						<div className='bg-gray-50 rounded-xl p-3'>
+						<div className='bg-gray-50 dark:bg-slate-700/60 rounded-xl p-3'>
 							<p className='text-gray-400 text-xs mb-0.5'>Усього постів</p>
-							<p className='font-bold text-gray-800'>{channel.total_posts?.toLocaleString('uk-UA') || '—'}</p>
+							<p className='font-bold text-gray-800 dark:text-gray-100'>{channel.total_posts?.toLocaleString('uk-UA') || '—'}</p>
 						</div>
-						<div className='bg-gray-50 rounded-xl p-3'>
+						<div className='bg-gray-50 dark:bg-slate-700/60 rounded-xl p-3'>
 							<p className='text-gray-400 text-xs mb-0.5'>Постів / день</p>
-							<p className='font-bold text-gray-800'>{channel.post_frequency ?? '—'}</p>
+							<p className='font-bold text-gray-800 dark:text-gray-100'>{channel.post_frequency ?? '—'}</p>
 						</div>
-						<div className='bg-gray-50 rounded-xl p-3'>
+						<div className='bg-gray-50 dark:bg-slate-700/60 rounded-xl p-3'>
 							<p className='text-gray-400 text-xs mb-0.5'>Останній пост</p>
-							<p className='font-bold text-gray-800 text-sm'>{formatDate(channel.last_post_date)}</p>
+							<p className='font-bold text-gray-800 dark:text-gray-100 text-sm'>{formatDate(channel.last_post_date)}</p>
 						</div>
-						<div className='bg-gray-50 rounded-xl p-3'>
+						<div className='bg-gray-50 dark:bg-slate-700/60 rounded-xl p-3'>
 							<p className='text-gray-400 text-xs mb-0.5'>⬆ Пересилань</p>
-							<p className='font-bold text-gray-800'>{channel.avg_forwards?.toLocaleString('uk-UA') || '—'}</p>
+							<p className='font-bold text-gray-800 dark:text-gray-100'>{channel.avg_forwards?.toLocaleString('uk-UA') || '—'}</p>
 						</div>
 					</div>
 					{channel.avg_reactions != null && channel.avg_reactions > 0 && (
-						<div className='bg-gray-50 rounded-xl p-3 mt-2.5'>
+						<div className='bg-gray-50 dark:bg-slate-700/60 rounded-xl p-3 mt-2.5'>
 							<p className='text-gray-400 text-xs mb-0.5'>❤️ Реакції / пост</p>
-							<p className='font-bold text-gray-800'>{channel.avg_reactions.toLocaleString('uk-UA')}</p>
+							<p className='font-bold text-gray-800 dark:text-gray-100'>{channel.avg_reactions.toLocaleString('uk-UA')}</p>
 						</div>
 					)}
 				</div>
@@ -162,28 +162,28 @@ const DetailsCard = ({ channel, onBuy, stats = [] }) => {
 				<div className='px-5 pb-2 pt-2'>
 					<p className='text-xs text-gray-400 font-semibold uppercase tracking-wider mb-2'>Аналітика</p>
 					<div className='grid grid-cols-3 gap-2.5'>
-						<div className='bg-violet-50 rounded-xl p-3 text-center'>
+						<div className='bg-violet-50 dark:bg-violet-900/30 rounded-xl p-3 text-center'>
 							<p className='text-violet-400 text-xs mb-0.5'>CPM</p>
-							<p className='font-bold text-violet-700'>{cpm != null ? `$${cpm}` : '—'}</p>
+							<p className='font-bold text-violet-700 dark:text-violet-300'>{cpm != null ? `$${cpm}` : '—'}</p>
 						</div>
-						<div className='bg-amber-50 rounded-xl p-3 text-center'>
+						<div className='bg-amber-50 dark:bg-amber-900/30 rounded-xl p-3 text-center'>
 							<p className='text-amber-500 text-xs mb-0.5'>$/підписник</p>
-							<p className='font-bold text-amber-700'>{pricePerSub ?? '—'}</p>
+							<p className='font-bold text-amber-700 dark:text-amber-300'>{pricePerSub ?? '—'}</p>
 						</div>
-						<div className='bg-emerald-50 rounded-xl p-3 text-center'>
+						<div className='bg-emerald-50 dark:bg-emerald-900/30 rounded-xl p-3 text-center'>
 							<p className='text-emerald-500 text-xs mb-0.5'>Окупність</p>
-							<p className='font-bold text-emerald-700'>{payback ? `${payback} міс.` : '—'}</p>
+							<p className='font-bold text-emerald-700 dark:text-emerald-300'>{payback ? `${payback} міс.` : '—'}</p>
 						</div>
 					</div>
 				</div>
 			)}
 
 			{/* Price + Actions */}
-			<div className='border-t border-gray-100 px-5 py-4 mt-1'>
+			<div className='border-t border-gray-100 dark:border-slate-700 px-5 py-4 mt-1'>
 				<div className='flex items-center justify-between mb-4'>
 					<div>
-						<p className='text-gray-400 text-xs'>Ціна</p>
-						<p className='font-extrabold text-2xl text-gray-900'>
+						<p className='text-gray-400 dark:text-gray-500 text-xs'>Ціна</p>
+						<p className='font-extrabold text-2xl text-gray-900 dark:text-white'>
 							{channel.price?.toLocaleString('uk-UA')}
 							<span className='text-sm font-semibold text-gray-400 ml-1'>USDT</span>
 						</p>
