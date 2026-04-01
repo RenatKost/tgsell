@@ -400,6 +400,20 @@ const DealPage = () => {
 					<p className='text-gray-500 text-sm mb-5'>
 						Переведіть <strong className='text-gray-800'>{deal.amount_usdt} USDT</strong> через мережу <strong className='text-gray-800'>TRC-20</strong>
 					</p>
+					<div className='bg-blue-50 border border-blue-200 rounded-xl p-4 mb-4'>
+						<div className='flex justify-between text-sm mb-1'>
+							<span className='text-gray-600'>Вартість каналу:</span>
+							<span className='font-semibold text-gray-800'>{deal.amount_usdt} USDT</span>
+						</div>
+						<div className='flex justify-between text-sm mb-1'>
+							<span className='text-gray-600'>Комісія сервісу (3%):</span>
+							<span className='text-gray-500'>{deal.service_fee} USDT — утримується при виплаті продавцю</span>
+						</div>
+						<div className='flex justify-between text-sm'>
+							<span className='text-gray-600'>Комісія мережі:</span>
+							<span className='text-gray-500'>~1-2 TRX (~0.1-0.2 USDT)</span>
+						</div>
+					</div>
 					<div className='relative bg-gray-50 border border-gray-200 p-4 rounded-xl mb-4 group'>
 						<p className='font-mono text-sm break-all pr-10 select-all text-gray-700'>
 							{deal.escrow_wallet_address}
@@ -515,7 +529,20 @@ const DealPage = () => {
 					<p className='text-gray-500 text-sm mb-1'>
 						Канал успішно передано! Вкажіть вашу USDT (TRC-20) адресу.
 					</p>
-					<p className='text-gray-400 text-xs mb-5'>Комісія сервісу: 3%</p>
+					<div className='bg-green-50 border border-green-200 rounded-xl p-4 mb-4'>
+						<div className='flex justify-between text-sm mb-1'>
+							<span className='text-gray-600'>Вартість каналу:</span>
+							<span className='font-semibold text-gray-800'>{deal.amount_usdt} USDT</span>
+						</div>
+						<div className='flex justify-between text-sm mb-1'>
+							<span className='text-gray-600'>Комісія сервісу (3%):</span>
+							<span className='text-red-500'>−{deal.service_fee} USDT</span>
+						</div>
+						<div className='border-t border-green-200 mt-2 pt-2 flex justify-between text-sm font-bold'>
+							<span className='text-green-700'>До виплати:</span>
+							<span className='text-green-700'>{(deal.amount_usdt - deal.service_fee).toFixed(2)} USDT</span>
+						</div>
+					</div>
 					<div className='flex gap-2 mb-3'>
 						<input
 							type='text'

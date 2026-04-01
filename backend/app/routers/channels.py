@@ -108,6 +108,19 @@ async def create_channel(
     db: AsyncSession = Depends(get_db),
 ):
     """Create a new channel listing (goes to moderation)."""
+    # Normalize link and check for duplicates
+    import re
+    clean_link = re.sub(r'^(https?://)?(t\.me/|@)', '', body.telegram_link.strip()).strip('/')
+    if clean_link:
+        existing = await db.execute(
+            select(Channel).where(
+                Channel.telegram_link.ilike(f"%{clean_link}%"),
+                Channel.status.in_([ChannelStatus.pending, ChannelStatus.approved]),
+            )
+        )
+        if existing.scalar_one_or_none():
+            raise HTTPException(status_code=409, detail="Цей канал вже розміщений на біржі")
+
     try:
         channel = Channel(
             seller_id=user.id,
@@ -197,6 +210,9 @@ async def create_channel(
         await db.refresh(channel)
     except Exception as e:
         logger.warning(f"Stats fetching failed for channel #{channel.id}: {e}")
+        # Re-fetch channel to ensure it's attached to session
+        result = await db.execute(select(Channel).where(Channel.id == channel.id))
+        channel = result.scalar_one_or_none()
 
     return ChannelResponse.model_validate(channel)
 

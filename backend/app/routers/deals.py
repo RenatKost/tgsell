@@ -17,6 +17,9 @@ from app.schemas.deal import (
 from app.services.escrow import generate_escrow_wallet
 from app.utils.security import get_current_user
 
+import logging
+logger = logging.getLogger(__name__)
+
 router = APIRouter(prefix="/deals", tags=["deals"])
 
 
@@ -97,11 +100,37 @@ async def create_deal(
     await db.commit()
     await db.refresh(deal)
 
-    # TODO: trigger Telegram bot to create deal group
-
     # Get seller for response
     seller_result = await db.execute(select(User).where(User.id == channel.seller_id))
     seller = seller_result.scalar_one_or_none()
+
+    # Add initial system message with deal instructions
+    fee = deal.service_fee
+    payout = deal.amount_usdt - fee
+    init_msg = (
+        f"📋 Угода #{deal.id} створена!\n\n"
+        f"Цикл угоди:\n"
+        f"1️⃣ Обидві сторони підтверджують готовність\n"
+        f"2️⃣ Покупець оплачує {deal.amount_usdt} USDT на ескроу-гаманець\n"
+        f"3️⃣ Продавець передає канал покупцю\n"
+        f"4️⃣ Обидві сторони підтверджують передачу\n"
+        f"5️⃣ Продавець отримує кошти\n\n"
+        f"💰 Вартість: {deal.amount_usdt} USDT\n"
+        f"📊 Комісія сервісу: 3% ({fee:.2f} USDT)\n"
+        f"💵 Продавець отримає: {payout:.2f} USDT"
+    )
+    await _add_system_message(db, deal.id, user.id, init_msg)
+    await db.commit()
+
+    # Notify via Telegram
+    try:
+        from bot.main import notify_new_deal
+        from aiogram import Bot
+        bot = Bot(token=settings.bot_token_alerts)
+        await notify_new_deal(bot, deal, user, seller)
+        await bot.session.close()
+    except Exception as e:
+        logger.error(f"Failed to notify about deal #{deal.id}: {e}")
 
     return _deal_to_response(deal, channel, user, seller)
 
@@ -174,10 +203,14 @@ async def confirm_transfer(
         deal.status = DealStatus.awaiting_payout
         deal.channel.status = ChannelStatus.sold
         payout_amount = deal.amount_usdt - deal.service_fee
-        await _add_system_message(
-            db, deal.id, user.id,
-            f"🎉 Канал успішно передано! Продавець, вкажіть свій USDT (TRC-20) гаманець для отримання {payout_amount:.2f} USDT"
+        payout_msg = (
+            f"🎉 Канал успішно передано!\n\n"
+            f"Продавець, вкажіть свій USDT (TRC-20) гаманець для отримання коштів:\n"
+            f"💰 Вартість каналу: {deal.amount_usdt} USDT\n"
+            f"📊 Комісія сервісу (3%): {deal.service_fee:.2f} USDT\n"
+            f"💵 До виплати: {payout_amount:.2f} USDT"
         )
+        await _add_system_message(db, deal.id, user.id, payout_msg)
 
     await db.commit()
     await db.refresh(deal)
@@ -251,10 +284,15 @@ async def confirm_ready(
     # Both ready → move to payment_pending
     if deal.buyer_ready and deal.seller_ready:
         deal.status = DealStatus.payment_pending
-        await _add_system_message(
-            db, deal.id, user.id,
-            f"💰 Обидві сторони готові! Покупець, переведіть {deal.amount_usdt} USDT (TRC-20) на адресу:\n{deal.escrow_wallet_address}"
+        payment_msg = (
+            f"💰 Обидві сторони готові!\n\n"
+            f"Покупець, переведіть {deal.amount_usdt} USDT (TRC-20) на адресу:\n"
+            f"{deal.escrow_wallet_address}\n\n"
+            f"⚠️ Переводьте тільки USDT через мережу TRC-20!\n"
+            f"📊 Комісія сервісу (3%) буде утримана при виплаті продавцю\n"
+            f"⏱ Оплата перевіряється автоматично кожні 30 секунд"
         )
+        await _add_system_message(db, deal.id, user.id, payment_msg)
 
     await db.commit()
     await db.refresh(deal)
@@ -293,10 +331,14 @@ async def confirm_channel_transfer(
         deal.status = DealStatus.awaiting_payout
         deal.channel.status = ChannelStatus.sold
         payout_amount = deal.amount_usdt - deal.service_fee
-        await _add_system_message(
-            db, deal.id, user.id,
-            f"🎉 Канал успішно передано! Продавець, вкажіть свій USDT (TRC-20) гаманець для отримання {payout_amount:.2f} USDT"
+        payout_msg = (
+            f"🎉 Канал успішно передано!\n\n"
+            f"Продавець, вкажіть свій USDT (TRC-20) гаманець для отримання коштів:\n"
+            f"💰 Вартість каналу: {deal.amount_usdt} USDT\n"
+            f"📊 Комісія сервісу (3%): {deal.service_fee:.2f} USDT\n"
+            f"💵 До виплати: {payout_amount:.2f} USDT"
         )
+        await _add_system_message(db, deal.id, user.id, payout_msg)
 
     await db.commit()
     await db.refresh(deal)
@@ -335,15 +377,24 @@ async def set_seller_wallet(
     payout_amount = deal.amount_usdt - deal.service_fee
     try:
         from app.services.escrow import send_trx_for_gas, transfer_usdt
+        import asyncio
 
         # Send TRX for gas fees first
         gas_tx = send_trx_for_gas(deal.escrow_wallet_address)
         if gas_tx:
-            # Small delay for TRX to arrive
-            import asyncio
-            await asyncio.sleep(5)
+            # Wait for TRX to confirm on TRON network
+            await asyncio.sleep(15)
 
-        tx_hash = transfer_usdt(deal.escrow_private_key_encrypted, wallet, payout_amount)
+        # Try payout with retry
+        tx_hash = None
+        for attempt in range(2):
+            tx_hash = transfer_usdt(deal.escrow_private_key_encrypted, wallet, payout_amount)
+            if tx_hash:
+                break
+            if attempt == 0:
+                logger.warning(f"Payout attempt 1 failed for deal #{deal.id}, retrying in 10s...")
+                await asyncio.sleep(10)
+
         if tx_hash:
             deal.payout_tx_hash = tx_hash
             deal.status = DealStatus.completed
@@ -353,16 +404,19 @@ async def set_seller_wallet(
                 f"✅ Виплата {payout_amount:.2f} USDT відправлена! TX: {tx_hash}"
             )
         else:
+            deal.status = DealStatus.disputed
+            deal.dispute_reason = "Помилка автоматичної виплати"
             await _add_system_message(
                 db, deal.id, user.id,
-                "⚠️ Помилка автоматичної виплати. Адміністратор вирішить це вручну."
+                f"⚠️ Автоматична виплата не вдалася. Адміністратор вирішить це протягом 24 годин."
             )
     except Exception as e:
-        import logging
-        logging.getLogger(__name__).error(f"Payout failed for deal #{deal.id}: {e}")
+        logger.error(f"Payout failed for deal #{deal.id}: {e}")
+        deal.status = DealStatus.disputed
+        deal.dispute_reason = f"Помилка виплати: {e}"
         await _add_system_message(
             db, deal.id, user.id,
-            "⚠️ Помилка виплати. Адміністратор розгляне це питання."
+            "⚠️ Помилка виплати. Адміністратор розгляне це питання протягом 24 годин."
         )
 
     await db.commit()
@@ -392,7 +446,7 @@ async def call_admin(
     msg = DealMessage(
         deal_id=deal_id,
         sender_id=user.id,
-        text=f"🛡️ {user.first_name} викликав адміністратора в чат",
+        text=f"🛡️ {user.first_name} викликав адміністратора в чат\n📩 Повідомлення відправлено адміністраторам. Очікуйте відповіді.",
         is_system=True,
     )
     db.add(msg)
@@ -417,8 +471,7 @@ async def call_admin(
                     pass
         await bot.session.close()
     except Exception as e:
-        import logging
-        logging.getLogger(__name__).error(f"Failed to notify admins for deal #{deal.id}: {e}")
+        logger.error(f"Failed to notify admins for deal #{deal.id}: {e}")
 
     return DealMessageResponse(
         id=msg.id,

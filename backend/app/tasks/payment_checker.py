@@ -64,7 +64,12 @@ async def check_payments_once():
                     sys_msg = DealMessage(
                         deal_id=deal.id,
                         sender_id=deal.buyer_id,
-                        message=f"💰 Оплата {balance} USDT отримана! Продавець, передайте канал покупцю.",
+                        text=(
+                            f"💰 Оплата {balance} USDT отримана!\n\n"
+                            f"Продавець, передайте канал покупцю:\n"
+                            f"Telegram → Settings → Channel → Administrators → Transfer Ownership\n\n"
+                            f"Покупець, після отримання каналу натисніть 'Підтвердити отримання'"
+                        ),
                         is_system=True,
                     )
                     db.add(sys_msg)
