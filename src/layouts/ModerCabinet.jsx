@@ -22,6 +22,10 @@ import {
 	faComments,
 	faBan,
 	faArrowRight,
+	faWallet,
+	faSync,
+	faPaperPlane,
+	faCopy,
 } from '@fortawesome/free-solid-svg-icons';
 
 const TABS = [
@@ -29,6 +33,7 @@ const TABS = [
 	{ text: 'Всі канали', value: 'all_channels', icon: faLayerGroup },
 	{ text: 'Всі угоди', value: 'all_deals', icon: faHandshake },
 	{ text: 'Спірні угоди', value: 'disputes', icon: faScaleBalanced },
+	{ text: 'Ескроу гаманці', value: 'escrow', icon: faWallet },
 ];
 
 const STATUS_FILTERS = [
@@ -168,6 +173,10 @@ const ModerCabinet = () => {
 	const [statusFilter, setStatusFilter] = useState('');
 	const [dealStatusFilter, setDealStatusFilter] = useState('');
 	const [chatDealId, setChatDealId] = useState(null);
+	const [escrowWallets, setEscrowWallets] = useState([]);
+	const [escrowTotal, setEscrowTotal] = useState(0);
+	const [sweepTarget, setSweepTarget] = useState({});
+	const [sweeping, setSweeping] = useState({});
 
 	useEffect(() => {
 		loadData();
@@ -196,9 +205,13 @@ const ModerCabinet = () => {
 					items = items.filter(d => ['created', 'payment_pending', 'paid', 'channel_transferring'].includes(d.status));
 				}
 				setAllDeals(items);
-			} else {
+			} else if (activeTab.value === 'disputes') {
 				const { data } = await adminAPI.getAllDeals({ deal_status: 'disputed' });
 				setDisputes(Array.isArray(data) ? data : data.items || []);
+			} else if (activeTab.value === 'escrow') {
+				const { data } = await adminAPI.getEscrowBalances();
+				setEscrowWallets(data.wallets_with_funds || []);
+				setEscrowTotal(data.total || 0);
 			}
 		} catch (err) {
 			console.error('Failed to load admin data:', err);
@@ -250,6 +263,33 @@ const ModerCabinet = () => {
 		} catch (err) {
 			alert(err.response?.data?.detail || 'Помилка скасування');
 		}
+	};
+
+	const handleSweep = async (dealId) => {
+		const toAddr = sweepTarget[dealId];
+		if (!toAddr || !toAddr.trim() || !toAddr.startsWith('T') || toAddr.length < 30) {
+			alert('Введіть коректну TRC-20 адресу (починається з T)');
+			return;
+		}
+		if (!confirm(`Перевести USDT з ескроу угоди #${dealId} на ${toAddr}?`)) return;
+		setSweeping(prev => ({ ...prev, [dealId]: true }));
+		try {
+			const { data } = await adminAPI.sweepEscrow(dealId, toAddr.trim());
+			if (data.ok) {
+				alert(`Переведено ${data.amount_usdt} USDT!\nTx: ${data.usdt_tx}`);
+				loadData();
+			} else {
+				alert(`Помилка: ${data.error}`);
+			}
+		} catch (err) {
+			alert(err.response?.data?.detail || err.response?.data?.error || 'Помилка переводу');
+		} finally {
+			setSweeping(prev => ({ ...prev, [dealId]: false }));
+		}
+	};
+
+	const copyToClipboard = (text) => {
+		navigator.clipboard.writeText(text);
 	};
 
 	const handleDeleteChannel = async (id) => {
@@ -739,6 +779,94 @@ const ModerCabinet = () => {
 							</div>
 						</div>
 					))}
+				</div>
+			)}
+
+			{/* ═══ Escrow Wallets Tab ═══ */}
+			{activeTab.value === 'escrow' && (
+				<div>
+					{/* Summary */}
+					<div className='bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200 rounded-2xl p-6 mb-6'>
+						<div className='flex items-center justify-between flex-wrap gap-4'>
+							<div>
+								<p className='text-gray-500 text-sm font-medium'>Загальний баланс на ескроу</p>
+								<p className='text-3xl font-bold text-gray-800 mt-1'>{escrowTotal.toFixed(2)} <span className='text-lg text-gray-500'>USDT</span></p>
+							</div>
+							<div className='flex items-center gap-3'>
+								<span className='text-sm text-gray-500'>{escrowWallets.length} гаманців з коштами</span>
+								<button
+									onClick={loadData}
+									className='bg-white border border-gray-200 text-gray-600 px-4 py-2.5 rounded-xl font-semibold hover:bg-gray-50 duration-300 shadow-sm flex items-center gap-2'
+								>
+									<FontAwesomeIcon icon={faSync} /> Оновити
+								</button>
+							</div>
+						</div>
+					</div>
+
+					{loading ? (
+						<p className='text-center text-gray-400 py-8'>Завантаження балансів...</p>
+					) : escrowWallets.length === 0 ? (
+						<div className='text-center py-16 bg-white rounded-2xl shadow-sm border border-gray-100'>
+							<FontAwesomeIcon icon={faWallet} className='text-gray-300 text-5xl mb-4' />
+							<p className='text-gray-400 text-lg'>Усі ескроу гаманці порожні</p>
+						</div>
+					) : (
+						<div className='space-y-4'>
+							{escrowWallets.map(w => (
+								<div key={w.deal_id} className='bg-white rounded-2xl shadow-sm border border-gray-100 p-6 hover:border-blue-200 duration-300'>
+									<div className='flex flex-col lg:flex-row lg:items-start gap-4'>
+										{/* Info */}
+										<div className='flex-1 min-w-0'>
+											<div className='flex items-center gap-3 mb-3'>
+												<span className='text-lg font-bold text-gray-800'>Угода #{w.deal_id}</span>
+												<span className={`text-xs font-semibold px-2.5 py-1 rounded-full ${
+													DEAL_STATUS_LABELS[w.status]?.color || 'bg-gray-100 text-gray-600'
+												}`}>
+													{DEAL_STATUS_LABELS[w.status]?.text || w.status}
+												</span>
+											</div>
+											<div className='flex items-center gap-2 mb-2'>
+												<span className='text-sm text-gray-500'>Ескроу:</span>
+												<code className='text-sm bg-gray-50 px-2 py-1 rounded font-mono text-gray-700 break-all'>{w.escrow}</code>
+												<button
+													onClick={() => copyToClipboard(w.escrow)}
+													className='text-gray-400 hover:text-blue-500 duration-200'
+													title='Копіювати'
+												>
+													<FontAwesomeIcon icon={faCopy} className='text-xs' />
+												</button>
+											</div>
+											<p className='text-2xl font-bold text-green-600'>{w.balance_usdt.toFixed(2)} <span className='text-sm text-gray-400'>USDT</span></p>
+										</div>
+
+										{/* Sweep controls */}
+										<div className='lg:w-96 flex-shrink-0'>
+											<label className='text-sm text-gray-500 font-medium mb-1.5 block'>Перевести на адресу (TRC-20)</label>
+											<div className='flex gap-2'>
+												<input
+													type='text'
+													value={sweepTarget[w.deal_id] || ''}
+													onChange={e => setSweepTarget(prev => ({ ...prev, [w.deal_id]: e.target.value }))}
+													placeholder='TRC-20 адреса...'
+													className='flex-1 border border-gray-200 rounded-xl px-4 py-2.5 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-blue-300 focus:border-transparent'
+												/>
+												<button
+													onClick={() => handleSweep(w.deal_id)}
+													disabled={sweeping[w.deal_id]}
+													className='bg-[#3498db] text-white px-5 py-2.5 rounded-xl font-semibold hover:bg-[#2980b9] duration-300 shadow-sm flex items-center gap-2 disabled:opacity-50 whitespace-nowrap'
+												>
+													<FontAwesomeIcon icon={faPaperPlane} />
+													{sweeping[w.deal_id] ? 'Переводимо...' : 'Перевести'}
+												</button>
+											</div>
+											<p className='text-xs text-gray-400 mt-1.5'>Потрібен TRX на мастер-гаманці для оплати газу</p>
+										</div>
+									</div>
+								</div>
+							))}
+						</div>
+					)}
 				</div>
 			)}
 

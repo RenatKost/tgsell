@@ -169,6 +169,12 @@ export const adminAPI = {
 
 	cancelDeal: (id) =>
 		api.post(`/admin/deals/${id}/cancel`),
+
+	getEscrowBalances: () =>
+		api.get('/admin/escrow/balances'),
+
+	sweepEscrow: (dealId, toAddress) =>
+		api.post(`/admin/escrow/sweep/${dealId}`, { to_address: toAddress }),
 };
 
 // ===== Favorites =====
