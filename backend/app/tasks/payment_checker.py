@@ -65,10 +65,9 @@ async def check_payments_once():
                         deal_id=deal.id,
                         sender_id=deal.buyer_id,
                         text=(
-                            f"💰 Оплата {balance} USDT отримана!\n\n"
-                            f"Продавець, передайте канал покупцю:\n"
-                            f"Telegram → Settings → Channel → Administrators → Transfer Ownership\n\n"
-                            f"Покупець, після отримання каналу натисніть 'Підтвердити отримання'"
+                            f"Оплата {balance} USDT отримана!\n"
+                            f"Продавець, передайте канал покупцю через Telegram.\n"
+                            f"Покупець, після отримання натисніть «Підтвердити отримання»."
                         ),
                         is_system=True,
                     )

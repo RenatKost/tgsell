@@ -88,7 +88,6 @@ const DealChat = ({ dealId, userId, onCallAdmin, deal }) => {
 	useEffect(() => {
 		const container = chatContainerRef.current;
 		if (!container) return;
-		// Auto-scroll only if user is near the bottom or new messages arrived
 		const isNearBottom = container.scrollHeight - container.scrollTop - container.clientHeight < 100;
 		const isNewMessage = messages.length > prevMessageCount.current;
 		if (isNearBottom || isNewMessage) {
@@ -123,84 +122,129 @@ const DealChat = ({ dealId, userId, onCallAdmin, deal }) => {
 		}
 	};
 
+	const formatTime = (dateStr) => {
+		return new Date(dateStr).toLocaleString('uk-UA', {
+			hour: '2-digit',
+			minute: '2-digit',
+			day: '2-digit',
+			month: '2-digit',
+		});
+	};
+
+	const renderSystemMessage = (msg) => {
+		return (
+			<div key={msg.id} className='mb-4 flex justify-start'>
+				<div className='max-w-[85%] flex gap-2.5'>
+					<div className='w-8 h-8 rounded-full bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center flex-shrink-0 mt-0.5 shadow-sm'>
+						<svg className='w-4 h-4 text-white' fill='none' viewBox='0 0 24 24' stroke='currentColor' strokeWidth={2.5}>
+							<path strokeLinecap='round' strokeLinejoin='round' d='M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z' />
+						</svg>
+					</div>
+					<div>
+						<div className='flex items-baseline gap-2 mb-1'>
+							<span className='text-xs font-bold text-blue-600'>TgSell</span>
+							<span className='text-[10px] text-gray-400'>{formatTime(msg.created_at)}</span>
+						</div>
+						<div className='bg-white border border-gray-100 rounded-xl rounded-tl-sm px-4 py-3 shadow-sm'>
+							{msg.text.split('\n').map((line, i) => (
+								<p key={i} className={`text-sm text-gray-700 leading-relaxed ${i > 0 ? 'mt-1' : ''}`}>
+									{line}
+								</p>
+							))}
+						</div>
+					</div>
+				</div>
+			</div>
+		);
+	};
+
 	return (
-		<div className='bg-white rounded-2xl shadow-lg border border-gray-100 overflow-hidden mb-6'>
+		<div className='bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden mb-6'>
 			<div className='flex items-center justify-between px-6 py-4 border-b border-gray-100'>
-				<h3 className='font-bold text-lg'>Чат</h3>
+				<h3 className='font-bold text-gray-900'>Чат угоди</h3>
 				{deal && !['completed', 'cancelled'].includes(deal.status) && (
 					<button
 						onClick={handleCallAdmin}
 						disabled={callingAdmin}
-						className='bg-yellow-50 text-yellow-700 border border-yellow-200 px-4 py-2 rounded-xl text-sm font-semibold hover:bg-yellow-100 transition-all duration-300 disabled:opacity-50'
+						className='flex items-center gap-1.5 bg-gray-50 text-gray-600 border border-gray-200 px-4 py-2 rounded-xl text-sm font-medium hover:bg-gray-100 hover:border-gray-300 transition-all duration-200 disabled:opacity-50'
 					>
-						{callingAdmin ? '...' : '🛡️ Викликати адміна'}
+						<svg className='w-4 h-4' fill='none' viewBox='0 0 24 24' stroke='currentColor' strokeWidth={2}>
+							<path strokeLinecap='round' strokeLinejoin='round' d='M18.364 5.636l-3.536 3.536m0 5.656l3.536 3.536M9.172 9.172L5.636 5.636m3.536 9.192l-3.536 3.536M21 12a9 9 0 11-18 0 9 9 0 0118 0zm-5 0a4 4 0 11-8 0 4 4 0 018 0z' />
+						</svg>
+						{callingAdmin ? '...' : 'Підтримка'}
 					</button>
 				)}
 			</div>
-			<div ref={chatContainerRef} className='bg-gray-50 p-4 h-80 overflow-y-auto'>
+			<div ref={chatContainerRef} className='bg-[#f8f9fb] p-4 h-96 overflow-y-auto'>
 				{messages.length === 0 && (
-					<p className='text-gray-400 text-center mt-20 text-sm'>
-						Повідомлень ще немає. Напишіть першими!
+					<p className='text-gray-400 text-center mt-32 text-sm'>
+						Повідомлень ще немає
 					</p>
 				)}
 				{messages.map((msg) => {
-					if (msg.is_system) {
-						return (
-							<div key={msg.id} className='mb-3 flex justify-center'>
-								<div className='bg-blue-50 text-blue-700 text-xs px-4 py-2 rounded-full font-medium'>
-									{msg.text}
-								</div>
-							</div>
-						);
-					}
+					if (msg.is_system) return renderSystemMessage(msg);
+
 					const isOwn = msg.sender_id === userId;
 					return (
 						<div
 							key={msg.id}
 							className={`mb-3 flex ${isOwn ? 'justify-end' : 'justify-start'}`}
 						>
-							<div
-								className={`max-w-[75%] px-4 py-2 rounded-lg ${
-									isOwn
-										? 'bg-[#3498db] text-white rounded-br-none'
-										: 'bg-gray-200 text-gray-800 rounded-bl-none'
-								}`}
-							>
+							<div className={`max-w-[75%] ${isOwn ? '' : 'flex gap-2.5'}`}>
 								{!isOwn && (
-									<p className='text-xs font-bold mb-1 opacity-70'>
-										{msg.sender_name || 'Користувач'}
-									</p>
+									<div className='w-8 h-8 rounded-full bg-gray-200 flex items-center justify-center flex-shrink-0 mt-0.5 text-xs font-bold text-gray-500'>
+										{(msg.sender_name || 'К')[0]}
+									</div>
 								)}
-								<p className='text-sm whitespace-pre-wrap break-words'>{msg.text}</p>
-								<p className={`text-xs mt-1 ${isOwn ? 'text-blue-100' : 'text-gray-400'}`}>
-									{new Date(msg.created_at).toLocaleString('uk-UA', {
-										hour: '2-digit',
-										minute: '2-digit',
-										day: '2-digit',
-										month: '2-digit',
-									})}
-								</p>
+								<div>
+									{!isOwn && (
+										<span className='text-xs font-medium text-gray-500 mb-1 block'>
+											{msg.sender_name || 'Користувач'}
+										</span>
+									)}
+									<div
+										className={`px-4 py-2.5 rounded-2xl ${
+											isOwn
+												? 'bg-blue-500 text-white rounded-br-sm'
+												: 'bg-white border border-gray-100 text-gray-800 rounded-tl-sm shadow-sm'
+										}`}
+									>
+										<p className='text-sm whitespace-pre-wrap break-words'>{msg.text}</p>
+									</div>
+									<p className={`text-[10px] mt-1 ${isOwn ? 'text-right text-gray-400' : 'text-gray-400'}`}>
+										{formatTime(msg.created_at)}
+									</p>
+								</div>
 							</div>
 						</div>
 					);
 				})}
 				<div ref={messagesEndRef} />
 			</div>
-			<form onSubmit={handleSend} className='flex gap-2 p-4 border-t border-gray-100'>
+			<form onSubmit={handleSend} className='flex gap-2 p-4 border-t border-gray-100 bg-white'>
 				<input
 					type='text'
 					value={newMessage}
 					onChange={(e) => setNewMessage(e.target.value)}
 					placeholder='Напишіть повідомлення...'
 					maxLength={2000}
-					className='flex-1 border border-gray-200 rounded-xl px-4 py-2.5 focus:border-[#3498db] focus:ring-2 focus:ring-blue-100 focus:outline-none transition-all'
+					className='flex-1 border border-gray-200 bg-gray-50 rounded-xl px-4 py-2.5 text-sm focus:border-blue-400 focus:bg-white focus:ring-2 focus:ring-blue-50 focus:outline-none transition-all'
 				/>
 				<button
 					type='submit'
 					disabled={sending || !newMessage.trim()}
-					className='bg-[#3498db] text-white px-6 py-2.5 rounded-xl font-bold hover:bg-blue-600 transition-all duration-300 disabled:opacity-50'
+					className='bg-blue-500 hover:bg-blue-600 text-white w-10 h-10 rounded-xl flex items-center justify-center transition-all duration-200 disabled:opacity-30'
 				>
-					{sending ? '...' : '→'}
+					{sending ? (
+						<svg className='animate-spin w-4 h-4' fill='none' viewBox='0 0 24 24'>
+							<circle className='opacity-25' cx='12' cy='12' r='10' stroke='currentColor' strokeWidth='4' />
+							<path className='opacity-75' fill='currentColor' d='M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z' />
+						</svg>
+					) : (
+						<svg className='w-4 h-4' fill='none' viewBox='0 0 24 24' stroke='currentColor' strokeWidth={2.5}>
+							<path strokeLinecap='round' strokeLinejoin='round' d='M6 12L3.269 3.126A59.768 59.768 0 0121.485 12 59.77 59.77 0 013.27 20.876L5.999 12zm0 0h7.5' />
+						</svg>
+					)}
 				</button>
 			</form>
 		</div>
@@ -302,36 +346,65 @@ const DealPage = () => {
 			)}
 
 			{/* Hero header */}
-			<div className='bg-gradient-to-br from-[#3498db] to-[#2573a7] rounded-2xl p-6 mb-6 text-white shadow-xl shadow-blue-100'>
-				<div className='flex items-start justify-between'>
-					<div>
+			<div className='bg-gradient-to-br from-[#3498db] to-[#1a6fb5] rounded-2xl p-6 mb-6 text-white shadow-lg overflow-hidden relative'>
+				<div className='absolute top-0 right-0 w-40 h-40 bg-white/5 rounded-full -mr-10 -mt-10' />
+				<div className='absolute bottom-0 left-0 w-24 h-24 bg-white/5 rounded-full -ml-6 -mb-6' />
+				<div className='relative flex items-center gap-5'>
+					{deal.channel_avatar_url ? (
+						<img
+							src={deal.channel_avatar_url}
+							alt={deal.channel_name}
+							className='w-16 h-16 rounded-2xl object-cover border-2 border-white/20 shadow-md flex-shrink-0'
+						/>
+					) : (
+						<div className='w-16 h-16 rounded-2xl bg-white/15 backdrop-blur-sm border-2 border-white/20 flex items-center justify-center flex-shrink-0 shadow-md'>
+							<svg className='w-7 h-7 text-white/80' fill='none' viewBox='0 0 24 24' stroke='currentColor' strokeWidth={1.5}>
+								<path strokeLinecap='round' strokeLinejoin='round' d='M6 12L3.269 3.126A59.768 59.768 0 0121.485 12 59.77 59.77 0 013.27 20.876L5.999 12zm0 0h7.5' />
+							</svg>
+						</div>
+					)}
+					<div className='flex-1 min-w-0'>
 						<p className='text-blue-200 text-xs font-medium uppercase tracking-wider mb-1'>
 							{isBuyer ? 'Ви купуєте' : 'Ви продаєте'}
 						</p>
-						<h1 className='text-2xl font-bold mb-1'>
+						<h1 className='text-xl md:text-2xl font-bold truncate'>
 							{deal.channel_name || `Канал #${deal.channel_id}`}
 						</h1>
-						<p className='text-blue-100 text-sm'>
+						<p className='text-blue-200 text-sm mt-0.5'>
 							{isBuyer ? deal.seller_name || 'Продавець' : deal.buyer_name || 'Покупець'} · {new Date(deal.created_at).toLocaleDateString('uk-UA')}
 						</p>
 					</div>
-					<div className='text-right'>
-						<p className='text-3xl font-extrabold'>{deal.amount_usdt}</p>
-						<p className='text-blue-200 text-sm font-medium'>USDT</p>
+					<div className='text-right flex-shrink-0'>
+						<p className='text-3xl md:text-4xl font-extrabold tracking-tight'>{deal.amount_usdt}</p>
+						<p className='text-blue-200 text-xs font-semibold uppercase tracking-wider mt-0.5'>USDT</p>
 					</div>
 				</div>
 			</div>
 
 			{/* Special statuses */}
 			{deal.status === 'disputed' && (
-				<div className='bg-red-50 border border-red-200 rounded-2xl p-5 mb-6 text-center'>
-					<p className='text-red-600 font-bold text-lg'>⚠️ Спір</p>
-					<p className='text-red-500 text-sm mt-1'>Адміністратор розглядає це питання</p>
+				<div className='bg-amber-50 border border-amber-200 rounded-2xl p-5 mb-6 flex items-center gap-4'>
+					<div className='w-10 h-10 rounded-full bg-amber-100 flex items-center justify-center flex-shrink-0'>
+						<svg className='w-5 h-5 text-amber-600' fill='none' viewBox='0 0 24 24' stroke='currentColor' strokeWidth={2}>
+							<path strokeLinecap='round' strokeLinejoin='round' d='M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z' />
+						</svg>
+					</div>
+					<div>
+						<p className='font-bold text-amber-800'>Спір</p>
+						<p className='text-amber-600 text-sm'>Адміністратор розглядає це питання</p>
+					</div>
 				</div>
 			)}
 			{deal.status === 'cancelled' && (
-				<div className='bg-gray-50 border border-gray-200 rounded-2xl p-5 mb-6 text-center'>
-					<p className='text-gray-500 font-bold text-lg'>Угода скасована</p>
+				<div className='bg-gray-50 border border-gray-200 rounded-2xl p-5 mb-6 flex items-center gap-4'>
+					<div className='w-10 h-10 rounded-full bg-gray-100 flex items-center justify-center flex-shrink-0'>
+						<svg className='w-5 h-5 text-gray-500' fill='none' viewBox='0 0 24 24' stroke='currentColor' strokeWidth={2}>
+							<path strokeLinecap='round' strokeLinejoin='round' d='M6 18L18 6M6 6l12 12' />
+						</svg>
+					</div>
+					<div>
+						<p className='font-bold text-gray-700'>Угоду скасовано</p>
+					</div>
 				</div>
 			)}
 

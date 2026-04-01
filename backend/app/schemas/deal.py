@@ -13,6 +13,8 @@ class DealResponse(BaseModel):
     buyer_id: int
     seller_id: int
     channel_name: str | None = None
+    channel_avatar_url: str | None = None
+    channel_link: str | None = None
     buyer_name: str | None = None
     seller_name: str | None = None
     status: str

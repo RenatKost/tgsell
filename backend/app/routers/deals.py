@@ -30,6 +30,8 @@ def _deal_to_response(deal: Deal, channel: Channel | None = None, buyer: User | 
         buyer_id=deal.buyer_id,
         seller_id=deal.seller_id,
         channel_name=channel.channel_name if channel else None,
+        channel_avatar_url=channel.avatar_url if channel else None,
+        channel_link=channel.telegram_link if channel else None,
         buyer_name=buyer.first_name if buyer else None,
         seller_name=seller.first_name if seller else None,
         status=deal.status.value,
@@ -110,16 +112,10 @@ async def create_deal(
     fee = deal.service_fee
     payout = deal.amount_usdt - fee
     init_msg = (
-        f"📋 Угода #{deal.id} створена!\n\n"
-        f"Цикл угоди:\n"
-        f"1️⃣ Обидві сторони підтверджують готовність\n"
-        f"2️⃣ Покупець оплачує {deal.amount_usdt} USDT на ескроу-гаманець\n"
-        f"3️⃣ Продавець передає канал покупцю\n"
-        f"4️⃣ Обидві сторони підтверджують передачу\n"
-        f"5️⃣ Продавець отримує кошти\n\n"
-        f"💰 Вартість: {deal.amount_usdt} USDT\n"
-        f"📊 Комісія сервісу: 3% ({fee:.2f} USDT)\n"
-        f"💵 Продавець отримає: {payout:.2f} USDT"
+        f"Угоду створено! Вартість каналу: {deal.amount_usdt} USDT\n"
+        f"Комісія сервісу: 3% ({fee:.2f} USDT)\n"
+        f"Продавець отримає: {payout:.2f} USDT\n\n"
+        f"Підтвердіть готовність, щоб перейти до оплати."
     )
     await _add_system_message(db, deal.id, user.id, init_msg)
     await db.commit()
@@ -198,21 +194,18 @@ async def confirm_transfer(
 
     if deal.buyer_id == user.id:
         deal.buyer_confirmed_transfer = True
-        await _add_system_message(db, deal.id, user.id, "✅ Покупець підтвердив отримання каналу")
+        await _add_system_message(db, deal.id, user.id, "Покупець підтвердив отримання каналу")
     else:
         deal.seller_confirmed_transfer = True
-        await _add_system_message(db, deal.id, user.id, "✅ Продавець підтвердив передачу каналу")
+        await _add_system_message(db, deal.id, user.id, "Продавець підтвердив передачу каналу")
 
     if deal.buyer_confirmed_transfer and deal.seller_confirmed_transfer:
         deal.status = DealStatus.awaiting_payout
         deal.channel.status = ChannelStatus.sold
         payout_amount = deal.amount_usdt - deal.service_fee
         payout_msg = (
-            f"🎉 Канал успішно передано!\n\n"
-            f"Продавець, вкажіть свій USDT (TRC-20) гаманець для отримання коштів:\n"
-            f"💰 Вартість каналу: {deal.amount_usdt} USDT\n"
-            f"📊 Комісія сервісу (3%): {deal.service_fee:.2f} USDT\n"
-            f"💵 До виплати: {payout_amount:.2f} USDT"
+            f"Канал успішно передано!\n"
+            f"Продавець, вкажіть гаманець для отримання {payout_amount:.2f} USDT."
         )
         await _add_system_message(db, deal.id, user.id, payout_msg)
 
@@ -282,23 +275,19 @@ async def confirm_ready(
     if deal.buyer_id == user.id:
         deal.buyer_ready = True
         logger.info(f"[DEAL] Deal #{deal.id}: BUYER READY (user={user.id})")
-        await _add_system_message(db, deal.id, user.id, f"✅ Покупець {user.first_name} підтвердив готовність до угоди")
+        await _add_system_message(db, deal.id, user.id, f"Покупець підтвердив готовність")
     else:
         deal.seller_ready = True
         logger.info(f"[DEAL] Deal #{deal.id}: SELLER READY (user={user.id})")
-        await _add_system_message(db, deal.id, user.id, f"✅ Продавець {user.first_name} підтвердив готовність до угоди")
+        await _add_system_message(db, deal.id, user.id, f"Продавець підтвердив готовність")
 
     # Both ready → move to payment_pending
     if deal.buyer_ready and deal.seller_ready:
         deal.status = DealStatus.payment_pending
         logger.info(f"[DEAL] Deal #{deal.id}: STATUS → payment_pending, escrow={deal.escrow_wallet_address}, awaiting {deal.amount_usdt} USDT")
         payment_msg = (
-            f"💰 Обидві сторони готові!\n\n"
-            f"Покупець, переведіть {deal.amount_usdt} USDT (TRC-20) на адресу:\n"
-            f"{deal.escrow_wallet_address}\n\n"
-            f"⚠️ Переводьте тільки USDT через мережу TRC-20!\n"
-            f"📊 Комісія сервісу (3%) буде утримана при виплаті продавцю\n"
-            f"⏱ Оплата перевіряється автоматично кожні 30 секунд"
+            f"Обидві сторони готові! Очікуємо оплату {deal.amount_usdt} USDT.\n"
+            f"Адреса для оплати вказана вище."
         )
         await _add_system_message(db, deal.id, user.id, payment_msg)
 
@@ -330,11 +319,11 @@ async def confirm_channel_transfer(
     if deal.buyer_id == user.id:
         deal.buyer_confirmed_transfer = True
         logger.info(f"[DEAL] Deal #{deal.id}: BUYER CONFIRMED TRANSFER (user={user.id})")
-        await _add_system_message(db, deal.id, user.id, f"✅ Покупець підтвердив отримання каналу")
+        await _add_system_message(db, deal.id, user.id, f"Покупець підтвердив отримання каналу")
     else:
         deal.seller_confirmed_transfer = True
         logger.info(f"[DEAL] Deal #{deal.id}: SELLER CONFIRMED TRANSFER (user={user.id})")
-        await _add_system_message(db, deal.id, user.id, f"✅ Продавець підтвердив передачу каналу")
+        await _add_system_message(db, deal.id, user.id, f"Продавець підтвердив передачу каналу")
 
     # Both confirmed → awaiting payout
     if deal.buyer_confirmed_transfer and deal.seller_confirmed_transfer:
@@ -383,7 +372,7 @@ async def set_seller_wallet(
 
     deal.seller_payout_address = wallet
     logger.info(f"[PAYOUT] Deal #{deal.id}: seller wallet set to {wallet}, payout_amount={deal.amount_usdt - deal.service_fee:.2f} USDT")
-    await _add_system_message(db, deal.id, user.id, f"💳 Продавець вказав гаманець для виплати")
+    await _add_system_message(db, deal.id, user.id, f"Продавець вказав гаманець. Виконуємо переказ...")
 
     # Trigger payout
     payout_amount = deal.amount_usdt - deal.service_fee
@@ -429,7 +418,7 @@ async def set_seller_wallet(
             logger.info(f"[PAYOUT] Deal #{deal.id}: STATUS → completed, payout={payout_amount:.2f} USDT, tx={tx_hash}")
             await _add_system_message(
                 db, deal.id, user.id,
-                f"✅ Виплата {payout_amount:.2f} USDT відправлена! TX: {tx_hash}"
+                f"Виплата {payout_amount:.2f} USDT відправлена!\nTX: {tx_hash}"
             )
             # Sweep leftover TRX back to master wallet
             try:
@@ -454,7 +443,7 @@ async def set_seller_wallet(
             logger.error(f"[PAYOUT] Deal #{deal.id}: PAYOUT FAILED after 2 attempts, STATUS → disputed")
             await _add_system_message(
                 db, deal.id, user.id,
-                f"⚠️ Автоматична виплата не вдалася. Адміністратор вирішить це протягом 24 годин."
+                f"Автоматична виплата не вдалася. Адміністратор вирішить це питання."
             )
     except Exception as e:
         logger.error(f"[PAYOUT] Deal #{deal.id}: EXCEPTION during payout: {e}", exc_info=True)
@@ -462,7 +451,7 @@ async def set_seller_wallet(
         deal.dispute_reason = f"Помилка виплати: {e}"
         await _add_system_message(
             db, deal.id, user.id,
-            "⚠️ Помилка виплати. Адміністратор розгляне це питання протягом 24 годин."
+            "Помилка виплати. Адміністратор розгляне це питання."
         )
 
     await db.commit()
@@ -492,7 +481,7 @@ async def call_admin(
     msg = DealMessage(
         deal_id=deal_id,
         sender_id=user.id,
-        text=f"🛡️ {user.first_name} викликав адміністратора в чат\n📩 Повідомлення відправлено адміністраторам. Очікуйте відповіді.",
+        text=f"{user.first_name} викликав адміністратора. Очікуйте відповіді.",
         is_system=True,
     )
     db.add(msg)
