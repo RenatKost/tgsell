@@ -138,6 +138,7 @@ const AuthModal = ({ show, setShow }) => {
 			try {
 				console.log('Telegram auth data:', telegramUser);
 				const { data } = await authAPI.loginTelegram(telegramUser);
+				console.log('Telegram auth response:', data);
 				login(data.user, {
 					access_token: data.access_token,
 					refresh_token: data.refresh_token,
@@ -145,7 +146,9 @@ const AuthModal = ({ show, setShow }) => {
 				setShow(false);
 			} catch (error) {
 				console.error('Telegram auth failed:', error);
-				const msg = error.response?.data?.detail || 'Помилка авторизації';
+				console.error('Response data:', error.response?.data);
+				console.error('Response status:', error.response?.status);
+				const msg = error.response?.data?.detail || 'Помилка авторизації. Перевірте консоль браузера.';
 				setAuthError(msg);
 			}
 		};

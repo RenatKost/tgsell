@@ -32,10 +32,18 @@ async def telegram_login(data: TelegramAuthData, db: AsyncSession = Depends(get_
     auth_dict = data.model_dump()
     is_demo = data.hash == "demo"
 
+    logger.info(f"[AUTH] Telegram login attempt: tg_id={data.id}, username={data.username}, first_name={data.first_name}, auth_date={data.auth_date}, has_photo={'yes' if data.photo_url else 'no'}, has_last_name={'yes' if data.last_name else 'no'}")
+
     if not is_demo and not verify_telegram_auth(auth_dict):
+        # Log detailed debug info
+        check_data = {k: v for k, v in auth_dict.items() if k != "hash" and v is not None}
+        check_string = "\n".join(f"{k}={v}" for k, v in sorted(check_data.items()))
         logger.warning(
-            f"Telegram auth HASH MISMATCH for user {data.id} ({data.username}). "
-            f"auth_date={data.auth_date}, keys={sorted(k for k, v in auth_dict.items() if k != 'hash' and v is not None)}"
+            f"[AUTH] HASH MISMATCH for tg_id={data.id} ({data.username}). "
+            f"auth_date={data.auth_date}, "
+            f"check_keys={sorted(check_data.keys())}, "
+            f"check_string_preview='{check_string[:200]}', "
+            f"received_hash={data.hash[:16]}..."
         )
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -47,6 +55,7 @@ async def telegram_login(data: TelegramAuthData, db: AsyncSession = Depends(get_
     user = result.scalar_one_or_none()
 
     if not user:
+        logger.info(f"[AUTH] Creating NEW user for tg_id={data.id} ({data.username})")
         user = User(
             telegram_id=data.id,
             username=data.username,
@@ -56,7 +65,9 @@ async def telegram_login(data: TelegramAuthData, db: AsyncSession = Depends(get_
         db.add(user)
         await db.commit()
         await db.refresh(user)
+        logger.info(f"[AUTH] New user created: id={user.id}, tg_id={user.telegram_id}")
     else:
+        logger.info(f"[AUTH] Existing user found: id={user.id}, tg_id={user.telegram_id}")
         # Update profile info
         user.username = data.username or user.username
         user.first_name = data.first_name or user.first_name
@@ -66,6 +77,8 @@ async def telegram_login(data: TelegramAuthData, db: AsyncSession = Depends(get_
 
     access_token = create_access_token({"sub": str(user.id)})
     refresh_token = create_refresh_token({"sub": str(user.id)})
+
+    logger.info(f"[AUTH] Telegram login SUCCESS: user_id={user.id}, tg_id={user.telegram_id}, role={user.role}")
 
     return TokenResponse(
         access_token=access_token,

@@ -24,7 +24,13 @@ api.interceptors.response.use(
 	async (error) => {
 		const originalRequest = error.config;
 
-		if (error.response?.status === 401 && !originalRequest._retry) {
+		// Skip 401 handling for auth endpoints (login, register)
+		const isAuthEndpoint = originalRequest?.url?.includes('/auth/telegram') ||
+			originalRequest?.url?.includes('/auth/google') ||
+			originalRequest?.url?.includes('/auth/bot-check') ||
+			originalRequest?.url?.includes('/auth/refresh');
+
+		if (error.response?.status === 401 && !originalRequest._retry && !isAuthEndpoint) {
 			originalRequest._retry = true;
 
 			try {
