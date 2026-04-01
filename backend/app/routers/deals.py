@@ -388,16 +388,16 @@ async def set_seller_wallet(
     # Trigger payout
     payout_amount = deal.amount_usdt - deal.service_fee
     try:
-        from app.services.escrow import send_trx_for_gas, transfer_usdt
+        from app.services.escrow import send_trx_for_gas, transfer_usdt, sweep_trx_to_master
         import asyncio
 
-        # Send TRX for gas fees first
+        # Send TRX for gas fees first (7 TRX is enough for fee_limit=15)
         logger.info(f"[PAYOUT] Deal #{deal.id}: sending TRX for gas to escrow {deal.escrow_wallet_address}")
-        gas_tx = send_trx_for_gas(deal.escrow_wallet_address)
+        gas_tx = send_trx_for_gas(deal.escrow_wallet_address, amount_trx=7)
         logger.info(f"[PAYOUT] Deal #{deal.id}: TRX gas tx={gas_tx or 'FAILED'}")
         if gas_tx:
             # Wait for TRX to confirm on TRON network
-            await asyncio.sleep(15)
+            await asyncio.sleep(6)
 
         # Try payout with retry
         tx_hash = None
@@ -431,6 +431,13 @@ async def set_seller_wallet(
                 db, deal.id, user.id,
                 f"✅ Виплата {payout_amount:.2f} USDT відправлена! TX: {tx_hash}"
             )
+            # Sweep leftover TRX back to master wallet
+            try:
+                await asyncio.sleep(6)
+                sweep_tx = sweep_trx_to_master(deal.escrow_private_key_encrypted)
+                logger.info(f"[PAYOUT] Deal #{deal.id}: TRX sweep-back tx={sweep_tx or 'nothing to sweep'}")
+            except Exception as sweep_err:
+                logger.warning(f"[PAYOUT] Deal #{deal.id}: TRX sweep-back failed (non-critical): {sweep_err}")
         else:
             deal.status = DealStatus.disputed
             deal.dispute_reason = "Помилка автоматичної виплати"

@@ -72,7 +72,7 @@ def transfer_usdt(
 ) -> str | None:
     """Transfer USDT TRC-20 from escrow wallet to target address.
 
-    Note: The from wallet must have TRX for gas fees (~5-10 TRX).
+    Note: The from wallet must have TRX for gas fees.
 
     Returns tx_hash on success, None on failure.
     """
@@ -93,7 +93,7 @@ def transfer_usdt(
         txn = (
             contract.functions.transfer(to_address, amount_raw)
             .with_owner(from_address)
-            .fee_limit(30_000_000)
+            .fee_limit(15_000_000)  # 15 TRX max fee
             .build()
             .sign(priv_key)
         )
@@ -104,6 +104,52 @@ def transfer_usdt(
 
     except Exception as e:
         logger.error(f"[ESCROW] USDT transfer FAILED: {amount_usdt} to {to_address}: {e}", exc_info=True)
+        return None
+
+
+def get_trx_balance(wallet_address: str) -> float:
+    """Check TRX balance of a wallet. Returns TRX amount."""
+    try:
+        client = _get_tron_client()
+        balance_sun = client.get_account_balance(wallet_address)
+        logger.info(f"[ESCROW] TRX balance: {wallet_address} = {balance_sun} TRX")
+        return float(balance_sun)
+    except Exception as e:
+        logger.error(f"[ESCROW] TRX balance check failed for {wallet_address}: {e}")
+        return 0.0
+
+
+def sweep_trx_to_master(from_encrypted_private_key: str) -> str | None:
+    """Send remaining TRX from escrow back to master wallet (minus bandwidth fee).
+
+    Returns tx_hash on success, None on failure or no balance.
+    """
+    try:
+        client = _get_tron_client()
+        private_key_hex = decrypt_private_key(from_encrypted_private_key)
+        priv_key = PrivateKey(bytes.fromhex(private_key_hex))
+        from_address = priv_key.public_key.to_base58check_address()
+
+        balance_sun = client.get_account(from_address).get("balance", 0)
+        # Keep 1.1 TRX for bandwidth to send TRX itself
+        send_amount = balance_sun - 1_100_000
+        if send_amount <= 0:
+            logger.info(f"[ESCROW] No TRX to sweep from {from_address} (balance={balance_sun/1e6:.2f} TRX)")
+            return None
+
+        logger.info(f"[ESCROW] Sweeping {send_amount/1e6:.2f} TRX from {from_address} back to master")
+        txn = (
+            client.trx.transfer(from_address, settings.tron_master_wallet_address, send_amount)
+            .build()
+            .sign(priv_key)
+        )
+        result = txn.broadcast()
+        tx_hash = result.get("txid", "")
+        logger.info(f"[ESCROW] TRX sweep result: txid={tx_hash}")
+        return tx_hash
+
+    except Exception as e:
+        logger.error(f"[ESCROW] TRX sweep failed: {e}", exc_info=True)
         return None
 
 

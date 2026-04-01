@@ -530,10 +530,10 @@ async def sweep_escrow_wallet(
 ):
     """Sweep USDT from an escrow wallet to a target address.
 
-    Steps: check balance → send TRX for gas → wait → transfer USDT.
+    Steps: check balance → send TRX for gas → wait → transfer USDT → sweep leftover TRX back.
     """
     import asyncio
-    from app.services.escrow import get_usdt_balance, send_trx_for_gas, transfer_usdt
+    from app.services.escrow import get_usdt_balance, send_trx_for_gas, transfer_usdt, sweep_trx_to_master
 
     result = await db.execute(select(Deal).where(Deal.id == deal_id))
     deal = result.scalar_one_or_none()
@@ -548,18 +548,22 @@ async def sweep_escrow_wallet(
     if balance <= 0:
         return {"ok": False, "error": f"Escrow {escrow_addr} has 0 USDT"}
 
-    # 2. Send TRX for gas (from master wallet)
-    gas_tx = send_trx_for_gas(escrow_addr, amount_trx=15)
+    # 2. Send TRX for gas (from master wallet) — reduced to 7 TRX
+    gas_tx = send_trx_for_gas(escrow_addr, amount_trx=7)
     if not gas_tx:
         return {"ok": False, "error": "Failed to send TRX for gas. Is master wallet funded with TRX?"}
 
     # 3. Wait for TRX to confirm
-    await asyncio.sleep(10)
+    await asyncio.sleep(6)
 
     # 4. Transfer USDT
     tx_hash = transfer_usdt(encrypted_key, to_address, balance)
     if not tx_hash:
         return {"ok": False, "error": "USDT transfer failed. Check logs for details."}
+
+    # 5. Wait for USDT transfer to confirm, then sweep leftover TRX back to master
+    await asyncio.sleep(6)
+    trx_sweep_tx = sweep_trx_to_master(encrypted_key)
 
     return {
         "ok": True,
@@ -569,6 +573,7 @@ async def sweep_escrow_wallet(
         "amount_usdt": balance,
         "gas_tx": gas_tx,
         "usdt_tx": tx_hash,
+        "trx_sweep_tx": trx_sweep_tx,
     }
 
 
