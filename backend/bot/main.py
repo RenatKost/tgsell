@@ -256,11 +256,14 @@ async def notify_new_deal(bot: Bot, deal: Deal, buyer: User, seller: User):
     else:
         logger.warning(f"[NOTIFY] Buyer {buyer.id} has no telegram_id, skipping notification")
 
+    frontend_url = settings.frontend_url.rstrip("/")
+
     seller_text = (
-        f"🆕 <b>Нова угода #{deal.id}</b>\n\n"
+        f"🆕 <b>Нова угода!</b>\n\n"
         f"Покупець бажає придбати ваш канал.\n"
         f"💰 Сума: {deal.amount_usdt} USDT\n"
-        f"Очікуємо оплату від покупця…"
+        f"Очікуємо оплату від покупця…\n\n"
+        f"<a href='{frontend_url}/deal/{deal.id}'>Перейти до чату угоди →</a>"
     )
     if seller.telegram_id:
         try:
