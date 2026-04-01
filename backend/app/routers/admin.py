@@ -519,3 +519,81 @@ async def recollect_all_channels_stats(
             })
 
     return {"ok": True, "channels_processed": len(results), "details": results}
+
+
+@router.post("/escrow/sweep/{deal_id}")
+async def sweep_escrow_wallet(
+    deal_id: int,
+    to_address: str = Body(..., embed=True),
+    admin: User = Depends(get_admin_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Sweep USDT from an escrow wallet to a target address.
+
+    Steps: check balance → send TRX for gas → wait → transfer USDT.
+    """
+    import asyncio
+    from app.services.escrow import get_usdt_balance, send_trx_for_gas, transfer_usdt
+
+    result = await db.execute(select(Deal).where(Deal.id == deal_id))
+    deal = result.scalar_one_or_none()
+    if not deal:
+        raise HTTPException(status_code=404, detail="Deal not found")
+
+    escrow_addr = deal.escrow_wallet_address
+    encrypted_key = deal.escrow_private_key_encrypted
+
+    # 1. Check USDT balance
+    balance = get_usdt_balance(escrow_addr)
+    if balance <= 0:
+        return {"ok": False, "error": f"Escrow {escrow_addr} has 0 USDT"}
+
+    # 2. Send TRX for gas (from master wallet)
+    gas_tx = send_trx_for_gas(escrow_addr, amount_trx=15)
+    if not gas_tx:
+        return {"ok": False, "error": "Failed to send TRX for gas. Is master wallet funded with TRX?"}
+
+    # 3. Wait for TRX to confirm
+    await asyncio.sleep(10)
+
+    # 4. Transfer USDT
+    tx_hash = transfer_usdt(encrypted_key, to_address, balance)
+    if not tx_hash:
+        return {"ok": False, "error": "USDT transfer failed. Check logs for details."}
+
+    return {
+        "ok": True,
+        "deal_id": deal_id,
+        "escrow": escrow_addr,
+        "to": to_address,
+        "amount_usdt": balance,
+        "gas_tx": gas_tx,
+        "usdt_tx": tx_hash,
+    }
+
+
+@router.get("/escrow/balances")
+async def check_escrow_balances(
+    admin: User = Depends(get_admin_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Check USDT balances of all escrow wallets."""
+    from app.services.escrow import get_usdt_balance
+
+    result = await db.execute(
+        select(Deal).order_by(Deal.id.desc())
+    )
+    deals = result.scalars().all()
+
+    balances = []
+    for deal in deals:
+        balance = get_usdt_balance(deal.escrow_wallet_address)
+        if balance > 0:
+            balances.append({
+                "deal_id": deal.id,
+                "escrow": deal.escrow_wallet_address,
+                "balance_usdt": balance,
+                "status": deal.status.value,
+            })
+
+    return {"wallets_with_funds": balances, "total": sum(b["balance_usdt"] for b in balances)}
