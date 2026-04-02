@@ -140,6 +140,154 @@ async def get_channel_posts(
     )
 
 
+@router.get("/{channel_id}/health")
+async def get_channel_health(channel_id: int, db: AsyncSession = Depends(get_db)):
+    """Analyze channel health: bot detection, engagement quality, view patterns."""
+    from app.schemas.channel import ChannelHealthResponse
+
+    # Get channel
+    result = await db.execute(select(Channel).where(Channel.id == channel_id))
+    channel = result.scalar_one_or_none()
+    if not channel:
+        raise HTTPException(status_code=404, detail="Channel not found")
+
+    subs = channel.subscribers_count or 0
+    avg_views = channel.avg_views or 0
+    er = channel.er or 0.0
+
+    # Get posts with view dynamics
+    result = await db.execute(
+        select(ChannelPost)
+        .where(ChannelPost.channel_id == channel_id)
+        .order_by(ChannelPost.date.desc())
+        .limit(100)
+    )
+    posts = result.scalars().all()
+
+    flags = []
+    score = 50  # start neutral
+    posts_analyzed = len(posts)
+    suspicious_posts = 0
+
+    # ── 1. View velocity analysis (bot detection) ──
+    # If 90%+ views come in the first hour → likely bot views
+    velocity_ratios = []
+    for p in posts:
+        if p.views_1h and p.views and p.views > 0:
+            ratio = p.views_1h / p.views
+            velocity_ratios.append(ratio)
+            if ratio > 0.9:
+                suspicious_posts += 1
+
+    avg_velocity = sum(velocity_ratios) / len(velocity_ratios) if velocity_ratios else None
+
+    if avg_velocity is not None:
+        if avg_velocity > 0.85:
+            view_velocity_label = "Накрутка"
+            score -= 30
+            flags.append("⚠️ 90%+ переглядів за першу годину — ознака ботів")
+        elif avg_velocity > 0.7:
+            view_velocity_label = "Підозріло"
+            score -= 15
+            flags.append("⚡ Висока швидкість набору переглядів")
+        else:
+            view_velocity_label = "Нормально"
+            score += 10
+    else:
+        view_velocity_label = "Немає даних"
+
+    # ── 2. Subscriber-to-views ratio ──
+    if subs > 0 and avg_views > 0:
+        views_to_subs = avg_views / subs * 100
+        if views_to_subs < 1:
+            activity_label = "Мертвий канал"
+            score -= 30
+            flags.append(f"💀 Лише {views_to_subs:.1f}% підписників бачать пости")
+        elif views_to_subs < 5:
+            activity_label = "Низька активність"
+            score -= 15
+            flags.append(f"📉 Низький охват: {views_to_subs:.1f}% підписників")
+        elif views_to_subs < 20:
+            activity_label = "Нормальна активність"
+            score += 10
+        else:
+            activity_label = "Високий охват"
+            score += 15
+    else:
+        views_to_subs = None
+        activity_label = "Немає даних"
+
+    # ── 3. ER analysis ──
+    if er > 0:
+        if er < 1:
+            er_label = "Дуже низький"
+            score -= 10
+        elif er < 5:
+            er_label = "Низький"
+        elif er < 15:
+            er_label = "Нормальний"
+            score += 10
+        elif er < 30:
+            er_label = "Високий"
+            score += 15
+        else:
+            er_label = "Підозріло високий"
+            score -= 5
+            flags.append("🤔 Надзвичайно високий ER — можлива накрутка реакцій")
+    else:
+        er_label = "Немає даних"
+
+    # ── 4. Posts with zero/very low views ──
+    if posts_analyzed > 0:
+        dead_posts = sum(1 for p in posts if p.views < 10)
+        dead_ratio = dead_posts / posts_analyzed
+        if dead_ratio > 0.5:
+            score -= 15
+            flags.append(f"👻 {int(dead_ratio*100)}% постів з менше 10 переглядами")
+
+    # ── 5. View consistency check ──
+    if posts_analyzed >= 5:
+        view_list = [p.views for p in posts if p.views > 0]
+        if view_list:
+            avg_v = sum(view_list) / len(view_list)
+            max_v = max(view_list)
+            min_v = min(view_list)
+            if avg_v > 0 and max_v > avg_v * 10:
+                flags.append("📊 Великий розкид переглядів — можливо рекламні пости")
+            if avg_v > 0 and min_v < avg_v * 0.05:
+                flags.append("📉 Деякі пости з мізерними переглядами")
+
+    # Clamp score
+    score = max(0, min(100, score))
+
+    # Overall health label
+    if score >= 70:
+        health_label = "Здоровий"
+    elif score >= 40:
+        health_label = "Підозрілий"
+    else:
+        health_label = "Мертвий канал"
+
+    if not flags:
+        flags.append("✅ Підозрілих ознак не виявлено")
+
+    return ChannelHealthResponse(
+        health_score=score,
+        health_label=health_label,
+        views_1h_ratio=round(avg_velocity * 100, 1) if avg_velocity is not None else None,
+        view_velocity_label=view_velocity_label,
+        views_to_subs_ratio=round(views_to_subs, 1) if views_to_subs is not None else None,
+        activity_label=activity_label,
+        er=er if er else None,
+        er_label=er_label,
+        avg_views=avg_views if avg_views else None,
+        subscribers=subs if subs else None,
+        posts_analyzed=posts_analyzed,
+        suspicious_posts=suspicious_posts,
+        flags=flags,
+    )
+
+
 @router.post("", response_model=ChannelResponse, status_code=status.HTTP_201_CREATED)
 async def create_channel(
     body: ChannelCreate,

@@ -3,6 +3,7 @@ import { useParams, useNavigate, NavLink } from 'react-router-dom';
 import { channelsAPI, dealsAPI } from '../services/api';
 import { useAuth } from '../context/AppContext';
 import DetailsCard from '../components/Cards/DetailsCard';
+import ChannelHealth from '../components/ChanelDetails/ChannelHealth';
 import AdvertisingReach from '../components/ChanelDetails/AdvertisingReach';
 import PostsPerDay from '../components/ChanelDetails/Coverage';
 import ER from '../components/ChanelDetails/ER';
@@ -75,6 +76,7 @@ const ChannelDetailsPage = () => {
 				{/* Left column */}
 				<div className='w-full lg:w-[460px] flex-shrink-0 space-y-5'>
 					<DetailsCard channel={channel} onBuy={handleBuy} stats={stats} />
+					<ChannelHealth channelId={channel.id} />
 
 					{channel.description && (
 						<div className='bg-white dark:bg-slate-800 rounded-2xl border border-gray-100 dark:border-slate-700 shadow-sm p-5'>

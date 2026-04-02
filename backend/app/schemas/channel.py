@@ -101,3 +101,31 @@ class ChannelListResponse(BaseModel):
     total: int
     total_pages: int
     page: int
+
+
+class ChannelHealthResponse(BaseModel):
+    """Bot detection & channel health analysis."""
+    # Overall score 0-100 (higher = healthier)
+    health_score: int = 0
+    health_label: str = "Невідомо"  # Здоровий / Підозрілий / Мертвий
+
+    # View velocity analysis
+    views_1h_ratio: float | None = None  # % of total views gained in 1st hour
+    view_velocity_label: str = "Невідомо"  # Нормально / Підозріло / Накрутка
+
+    # Subscriber-to-views ratio (engagement)
+    views_to_subs_ratio: float | None = None  # avg_views / subscribers * 100
+    activity_label: str = "Невідомо"  # Активний / Низька активність / Мертвий
+
+    # ER analysis
+    er: float | None = None
+    er_label: str = "Невідомо"
+
+    # Posts consistency
+    avg_views: int | None = None
+    subscribers: int | None = None
+    posts_analyzed: int = 0
+    suspicious_posts: int = 0  # posts with bot-like view patterns
+
+    # Detailed flags
+    flags: list[str] = []  # textual warnings

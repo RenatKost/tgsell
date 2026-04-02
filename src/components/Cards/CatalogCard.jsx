@@ -10,6 +10,19 @@ const CatalogCard = ({ channel }) => {
 
 	const isFav = favoriteIds.has(channel.id);
 
+	// Health badge calculation (client-side from existing data)
+	const getHealthBadge = () => {
+		const subs = channel.subscribers_count || 0;
+		const views = channel.avg_views || 0;
+		if (!subs || !views) return null;
+		const ratio = views / subs * 100;
+		if (ratio < 1) return { label: '💀', title: 'Мертвий канал — дуже низький охват', color: 'bg-red-100 dark:bg-red-900/40 text-red-600' };
+		if (ratio < 5) return { label: '📉', title: 'Низька активність', color: 'bg-amber-100 dark:bg-amber-900/40 text-amber-600' };
+		if (ratio >= 20) return { label: '🔥', title: 'Високий охват', color: 'bg-emerald-100 dark:bg-emerald-900/40 text-emerald-600' };
+		return { label: '✅', title: 'Нормальна активність', color: 'bg-emerald-100 dark:bg-emerald-900/40 text-emerald-600' };
+	};
+	const healthBadge = getHealthBadge();
+
 	const formatAge = (months) => {
 		if (!months) return '—';
 		const m = typeof months === 'string' ? parseInt(months, 10) : months;
@@ -45,7 +58,14 @@ const CatalogCard = ({ channel }) => {
 						</div>
 					)}
 					<div className='min-w-0'>
-						<h5 className='font-bold text-gray-900 dark:text-white truncate'>{channel.channel_name || 'Без назви'}</h5>
+						<div className='flex items-center gap-1.5'>
+							<h5 className='font-bold text-gray-900 dark:text-white truncate'>{channel.channel_name || 'Без назви'}</h5>
+							{healthBadge && (
+								<span title={healthBadge.title} className={`flex-shrink-0 w-6 h-6 rounded-full flex items-center justify-center text-xs cursor-help ${healthBadge.color}`}>
+									{healthBadge.label}
+								</span>
+							)}
+						</div>
 						<p className='text-gray-400 dark:text-gray-500 text-sm'>
 							{channel.subscribers_count?.toLocaleString('uk-UA') || '0'} підписників
 						</p>

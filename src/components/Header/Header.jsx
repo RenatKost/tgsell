@@ -29,11 +29,11 @@ const Header = () => {
 			} md:px-8 px-4`}
 		>
 			<div className='max-w-7xl mx-auto flex items-center justify-between'>
-				<NavLink to='/' className='flex items-center gap-1 group'>
+				<NavLink to='/' className='flex items-center group -ml-2'>
 					<img
 						src='/logo.png'
 						alt='TgSell'
-						className='h-20 w-auto object-contain transition-transform duration-300 group-hover:scale-105'
+						className='h-16 w-auto object-contain transition-transform duration-300 group-hover:scale-105'
 					/>
 				</NavLink>
 				<Navigation />
