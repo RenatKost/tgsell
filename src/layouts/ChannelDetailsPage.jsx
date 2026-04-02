@@ -64,7 +64,7 @@ const ChannelDetailsPage = () => {
 	const resources = channel.resources ? channel.resources.split(',').map(r => r.trim()).filter(Boolean) : [];
 
 	return (
-		<section className='mt-28'>
+		<section className='pt-28 pb-10'>
 			{/* Breadcrumb */}
 			<div className='flex items-center gap-2 text-sm mb-6 px-1'>
 				<NavLink to='/catalog' className='text-gray-400 dark:text-gray-500 hover:text-[#3498db] transition-colors'>Каталог</NavLink>

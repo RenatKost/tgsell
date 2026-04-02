@@ -36,9 +36,9 @@ const CatalogPage = () => {
 	}, [search, category, sortBy, page]);
 
 	return (
-		<section className='my-28'>
+		<section className='pt-28 pb-10'>
 			{/* Hero header */}
-			<div className='mb-8 lg:px-[3%]'>
+			<div className='mb-8'>
 				<h1 className='font-bold text-2xl text-center sm:text-start md:text-4xl text-gray-900 dark:text-white mb-2'>
 					Каталог каналів
 				</h1>
@@ -47,7 +47,7 @@ const CatalogPage = () => {
 				</p>
 			</div>
 
-			<div className='lg:px-10'>
+			<div>
 				{/* Search & Filters */}
 				<div className='bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-gray-100 dark:border-slate-700 p-4 md:p-5 mb-8'>
 					<div className='flex flex-col md:flex-row gap-3'>

@@ -191,7 +191,7 @@ const SellForm = () => {
 
 	return (
 		<>
-			<section className='min-h-screen py-20 px-4'>
+			<section className='min-h-screen pt-28 pb-10'>
 				<div className='max-w-3xl mx-auto'>
 					{/* Header */}
 					<div className='text-center mb-10'>

@@ -62,9 +62,7 @@ a {
 	backdrop-filter: blur(15px);
 }
 
-.content-container {
-	width: 90%;
-}
+
 
 .apexcharts-xaxistooltip.apexcharts-active {
 	display: none;

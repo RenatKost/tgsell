@@ -7,9 +7,7 @@ const Home = () => {
 	return (
 		<>
 			<Main />
-			<div className='max-w-7xl mx-auto px-4'>
-				<ActivityTicker />
-			</div>
+			<ActivityTicker />
 			<Stages />
 			<Advantages />
 		</>

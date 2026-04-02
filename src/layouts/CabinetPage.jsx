@@ -119,7 +119,7 @@ const CabinetPage = () => {
 	};
 
 	return (
-		<section className='mt-28 mb-16 max-w-7xl mx-auto px-4'>
+		<section className='pt-28 mb-16'>
 			{/* Header */}
 			<div className='flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-8'>
 				<div>
