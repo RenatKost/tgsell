@@ -91,6 +91,72 @@ async def list_auctions(
     )
 
 
+@router.post("/from-channel", response_model=AuctionResponse)
+async def create_auction_from_channel(
+    channel_id: int = Query(...),
+    start_price: float = Query(..., gt=0),
+    bid_step: float = Query(10.0, gt=0),
+    duration_hours: int = Query(48, ge=12, le=336),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Create an auction from an existing approved channel owned by the user."""
+    result = await db.execute(
+        select(Channel).where(Channel.id == channel_id)
+    )
+    channel = result.scalar_one_or_none()
+    if not channel:
+        raise HTTPException(status_code=404, detail="Канал не знайдено")
+    if channel.seller_id != user.id:
+        raise HTTPException(status_code=403, detail="Це не ваш канал")
+    if channel.status != "approved":
+        raise HTTPException(status_code=400, detail="Канал повинен бути опублікований")
+
+    # Check no active auction already exists for this channel
+    existing = await db.execute(
+        select(Auction).where(
+            Auction.channel_id == channel_id,
+            Auction.status.in_(["active", "scheduled"]),
+        )
+    )
+    if existing.scalar_one_or_none():
+        raise HTTPException(status_code=409, detail="На цей канал вже є активний аукціон")
+
+    # Update channel listing_type
+    if channel.listing_type == "sale":
+        channel.listing_type = "both"
+    elif channel.listing_type != "both":
+        channel.listing_type = "auction"
+    channel.auction_start_price = start_price
+    channel.auction_bid_step = bid_step
+    channel.auction_duration_hours = duration_hours
+
+    auction = Auction(
+        channel_id=channel.id,
+        seller_id=user.id,
+        start_price=start_price,
+        bid_step=bid_step,
+        current_price=start_price,
+        buyout_price=None,
+        status="active",
+        starts_at=datetime.utcnow(),
+        ends_at=datetime.utcnow() + timedelta(hours=duration_hours),
+    )
+    db.add(auction)
+    await db.commit()
+
+    # Reload with channel relationship
+    result = await db.execute(
+        select(Auction)
+        .options(selectinload(Auction.channel))
+        .where(Auction.id == auction.id)
+    )
+    auction = result.scalar_one()
+    logger.info(f"Auction created from channel #{channel.id} by user #{user.id}")
+
+    return _auction_to_response(auction)
+
+
 @router.get("/stats")
 async def auction_stats(db: AsyncSession = Depends(get_db)):
     """Gamification stats for display."""

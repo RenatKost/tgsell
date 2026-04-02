@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { NavLink } from 'react-router-dom';
+import { NavLink, useNavigate } from 'react-router-dom';
 import { channelsAPI, favoritesAPI, dealsAPI, auctionsAPI } from '../services/api';
 import { useAuth } from '../context/AppContext';
 import CabinetCard from '../components/Cards/CabinetCard';
@@ -13,6 +13,8 @@ import {
 	faHandshake,
 	faArrowRight,
 	faGavel,
+	faUsers,
+	faChevronRight,
 } from '@fortawesome/free-solid-svg-icons';
 
 const TABS = [
@@ -49,6 +51,7 @@ const DEAL_FILTERS = [
 
 const CabinetPage = () => {
 	const { user } = useAuth();
+	const navigate = useNavigate();
 	const [activeTab, setActiveTab] = useState(TABS[0]);
 	const [activeFilter, setActiveFilter] = useState(STATUS_FILTERS[0]);
 	const [dealFilter, setDealFilter] = useState(DEAL_FILTERS[0]);
@@ -57,6 +60,14 @@ const CabinetPage = () => {
 	const [deals, setDeals] = useState([]);
 	const [myAuctions, setMyAuctions] = useState([]);
 	const [loading, setLoading] = useState(true);
+
+	// Auction creation modal
+	const [showAuctionModal, setShowAuctionModal] = useState(false);
+	const [availableChannels, setAvailableChannels] = useState([]);
+	const [selectedChannelId, setSelectedChannelId] = useState(null);
+	const [auctionForm, setAuctionForm] = useState({ start_price: '', bid_step: '10', duration_hours: '48' });
+	const [auctionSubmitting, setAuctionSubmitting] = useState(false);
+	const [auctionError, setAuctionError] = useState('');
 
 	useEffect(() => {
 		const fetchData = async () => {
@@ -70,8 +81,12 @@ const CabinetPage = () => {
 					const { data } = await channelsAPI.getAll(params);
 					setChannels(data.items || data);
 				} else if (activeTab.value === 'auctions') {
-					const { data } = await auctionsAPI.getAll({ seller_id: user?.id });
-					setMyAuctions(data.items || []);
+					const [auctRes, chRes] = await Promise.all([
+						auctionsAPI.getAll({ seller_id: user?.id }),
+						channelsAPI.getAll({ seller_id: user?.id, status: 'approved' }),
+					]);
+					setMyAuctions(auctRes.data.items || []);
+					setAvailableChannels((chRes.data.items || chRes.data || []));
 				} else if (activeTab.value === 'deals') {
 					const { data } = await dealsAPI.getMy();
 					setDeals(Array.isArray(data) ? data : []);
@@ -95,6 +110,43 @@ const CabinetPage = () => {
 			setChannels(prev => prev.filter(c => c.id !== channelId));
 		} catch (err) {
 			alert(err.response?.data?.detail || 'Помилка видалення');
+		}
+	};
+
+	const handleOpenAuctionModal = () => {
+		if (availableChannels.length === 0) {
+			navigate('/sell');
+			return;
+		}
+		setSelectedChannelId(null);
+		setAuctionForm({ start_price: '', bid_step: '10', duration_hours: '48' });
+		setAuctionError('');
+		setShowAuctionModal(true);
+	};
+
+	const handleCreateAuction = async () => {
+		if (!selectedChannelId) { setAuctionError('Оберіть канал'); return; }
+		const sp = parseFloat(auctionForm.start_price);
+		const bs = parseFloat(auctionForm.bid_step);
+		if (!sp || sp <= 0) { setAuctionError('Вкажіть коректну стартову ціну'); return; }
+		if (!bs || bs <= 0) { setAuctionError('Вкажіть коректний крок ставки'); return; }
+		setAuctionError('');
+		setAuctionSubmitting(true);
+		try {
+			await auctionsAPI.createFromChannel({
+				channel_id: selectedChannelId,
+				start_price: sp,
+				bid_step: bs,
+				duration_hours: parseInt(auctionForm.duration_hours),
+			});
+			setShowAuctionModal(false);
+			// Refresh auctions
+			const { data } = await auctionsAPI.getAll({ seller_id: user?.id });
+			setMyAuctions(data.items || []);
+		} catch (err) {
+			setAuctionError(err.response?.data?.detail || 'Помилка створення аукціону');
+		} finally {
+			setAuctionSubmitting(false);
 		}
 	};
 
@@ -223,6 +275,17 @@ const CabinetPage = () => {
 				</>
 			) : activeTab.value === 'auctions' ? (
 				<>
+					{/* Add auction button */}
+					<div className='flex justify-end mb-6'>
+						<button
+							onClick={handleOpenAuctionModal}
+							className='inline-flex items-center gap-2 bg-gradient-to-r from-orange-500 to-red-500 hover:from-orange-600 hover:to-red-600 text-white font-semibold py-3 px-6 rounded-xl shadow-lg shadow-orange-200 dark:shadow-orange-900/30 duration-300'
+						>
+							<FontAwesomeIcon icon={faGavel} />
+							Виставити на аукціон
+						</button>
+					</div>
+
 					{loading ? (
 						<div className='flex justify-center py-20'>
 							<div className='animate-spin rounded-full h-10 w-10 border-b-2 border-blue-500' />
@@ -230,15 +293,19 @@ const CabinetPage = () => {
 					) : myAuctions.length === 0 ? (
 						<div className='text-center py-16 bg-white dark:bg-slate-800 rounded-2xl border border-dashed border-gray-300 dark:border-slate-600'>
 							<div className='text-5xl mb-4'>🔥</div>
-							<p className='text-lg font-semibold text-gray-700 dark:text-gray-200 mb-2'>У вас немає аукціонів</p>
-							<p className='text-gray-500 dark:text-gray-400 mb-6'>Подайте канал на аукціон через форму продажу</p>
-							<NavLink
+							<p className='text-lg font-semibold text-gray-700 dark:text-gray-200 mb-2'>У вас ще немає аукціонів</p>
+							<p className='text-gray-500 dark:text-gray-400 mb-6'>
+								{availableChannels.length > 0
+									? 'Виставте один зі своїх каналів на аукціон'
+									: 'Спершу додайте канал через форму, потім зможете виставити його на аукціон'}
+							</p>
+							<button
+								onClick={handleOpenAuctionModal}
 								className='inline-flex items-center gap-2 font-bold bg-orange-500 text-white py-3 px-8 rounded-xl shadow-lg shadow-orange-200 hover:bg-orange-600 duration-300'
-								to='/sell'
 							>
 								<FontAwesomeIcon icon={faPlus} />
-								Подати на аукціон
-							</NavLink>
+								{availableChannels.length > 0 ? 'Обрати канал' : 'Додати канал'}
+							</button>
 						</div>
 					) : (
 						<div className='grid gap-4'>
@@ -435,6 +502,161 @@ const CabinetPage = () => {
 						</div>
 					)}
 				</>
+			)}
+
+			{/* Auction creation modal */}
+			{showAuctionModal && (
+				<div
+					className='fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm'
+					onClick={() => setShowAuctionModal(false)}
+				>
+					<div
+						className='bg-white dark:bg-slate-800 rounded-2xl shadow-2xl max-w-lg w-full overflow-hidden'
+						onClick={e => e.stopPropagation()}
+					>
+						{/* Header */}
+						<div className='bg-gradient-to-r from-orange-500 to-red-500 px-6 py-5 text-white'>
+							<h3 className='text-lg font-bold'>Виставити на аукціон</h3>
+							<p className='text-sm text-white/80 mt-1'>
+								{selectedChannelId ? 'Вкажіть параметри аукціону' : 'Оберіть канал зі списку'}
+							</p>
+						</div>
+
+						<div className='p-6'>
+							{!selectedChannelId ? (
+								/* Step 1: Select channel */
+								<div className='space-y-2 max-h-[360px] overflow-y-auto'>
+									{availableChannels.map(ch => (
+										<button
+											key={ch.id}
+											onClick={() => setSelectedChannelId(ch.id)}
+											className='w-full flex items-center gap-3 p-3 rounded-xl border border-gray-200 dark:border-slate-600 hover:border-orange-400 hover:bg-orange-50 dark:hover:bg-orange-900/10 transition-all text-left'
+										>
+											{ch.avatar_url ? (
+												<img className='w-10 h-10 rounded-lg object-cover' src={ch.avatar_url} alt='' />
+											) : (
+												<div className='w-10 h-10 rounded-lg bg-gradient-to-br from-blue-400 to-blue-600 flex items-center justify-center text-sm font-bold text-white'>
+													{ch.channel_name?.[0] || '?'}
+												</div>
+											)}
+											<div className='flex-1 min-w-0'>
+												<p className='font-semibold text-gray-800 dark:text-white truncate text-sm'>{ch.channel_name}</p>
+												<div className='flex items-center gap-3 text-xs text-gray-500 dark:text-gray-400'>
+													<span><FontAwesomeIcon icon={faUsers} className='mr-1' />{ch.subscribers_count?.toLocaleString('uk-UA') || '0'}</span>
+													<span>{ch.price} USDT</span>
+												</div>
+											</div>
+											<FontAwesomeIcon icon={faChevronRight} className='text-gray-300 dark:text-gray-600' />
+										</button>
+									))}
+								</div>
+							) : (
+								/* Step 2: Auction params */
+								<div className='space-y-4'>
+									{/* Selected channel preview */}
+									{(() => {
+										const ch = availableChannels.find(c => c.id === selectedChannelId);
+										return ch ? (
+											<div className='flex items-center gap-3 p-3 bg-orange-50 dark:bg-orange-900/10 rounded-xl border border-orange-200 dark:border-orange-800/30'>
+												{ch.avatar_url ? (
+													<img className='w-10 h-10 rounded-lg object-cover' src={ch.avatar_url} alt='' />
+												) : (
+													<div className='w-10 h-10 rounded-lg bg-gradient-to-br from-blue-400 to-blue-600 flex items-center justify-center text-sm font-bold text-white'>
+														{ch.channel_name?.[0] || '?'}
+													</div>
+												)}
+												<div className='flex-1 min-w-0'>
+													<p className='font-semibold text-gray-800 dark:text-white text-sm truncate'>{ch.channel_name}</p>
+													<p className='text-xs text-gray-500 dark:text-gray-400'>{ch.subscribers_count?.toLocaleString('uk-UA')} підписників</p>
+												</div>
+												<button onClick={() => setSelectedChannelId(null)} className='text-xs text-orange-500 hover:text-orange-700 font-medium'>
+													Змінити
+												</button>
+											</div>
+										) : null;
+									})()}
+
+									<div>
+										<label className='text-sm font-medium text-gray-600 dark:text-gray-400 mb-1.5 block'>Стартова ціна (USDT)</label>
+										<input
+											type='number'
+											value={auctionForm.start_price}
+											onChange={e => setAuctionForm(p => ({ ...p, start_price: e.target.value }))}
+											className='w-full border border-gray-200 dark:border-slate-600 rounded-xl px-4 py-3 text-sm bg-gray-50/50 dark:bg-slate-700/50 dark:text-white focus:border-orange-400 focus:ring-4 focus:ring-orange-50 dark:focus:ring-orange-900/30 transition-all'
+											placeholder='100'
+											min='1'
+										/>
+									</div>
+
+									<div>
+										<label className='text-sm font-medium text-gray-600 dark:text-gray-400 mb-1.5 block'>Крок ставки (USDT)</label>
+										<input
+											type='number'
+											value={auctionForm.bid_step}
+											onChange={e => setAuctionForm(p => ({ ...p, bid_step: e.target.value }))}
+											className='w-full border border-gray-200 dark:border-slate-600 rounded-xl px-4 py-3 text-sm bg-gray-50/50 dark:bg-slate-700/50 dark:text-white focus:border-orange-400 focus:ring-4 focus:ring-orange-50 dark:focus:ring-orange-900/30 transition-all'
+											placeholder='10'
+											min='1'
+										/>
+									</div>
+
+									<div>
+										<label className='text-sm font-medium text-gray-600 dark:text-gray-400 mb-1.5 block'>Тривалість</label>
+										<select
+											value={auctionForm.duration_hours}
+											onChange={e => setAuctionForm(p => ({ ...p, duration_hours: e.target.value }))}
+											className='w-full border border-gray-200 dark:border-slate-600 rounded-xl px-4 py-3 text-sm bg-gray-50/50 dark:bg-slate-700/50 dark:text-white focus:border-orange-400 focus:ring-4 focus:ring-orange-50 dark:focus:ring-orange-900/30 transition-all'
+										>
+											<option value='24'>24 години</option>
+											<option value='48'>48 годин</option>
+											<option value='72'>72 години</option>
+											<option value='168'>7 днів</option>
+										</select>
+									</div>
+
+									<p className='text-xs text-gray-400 dark:text-gray-500'>
+										💡 Аукціон триватиме до завершення часу або поки ви не закриєте лот за останньою ціною
+									</p>
+								</div>
+							)}
+
+							{auctionError && (
+								<div className='flex items-center gap-2 bg-red-50 dark:bg-red-900/20 border border-red-100 dark:border-red-800 text-red-600 dark:text-red-400 text-sm px-4 py-3 rounded-xl mt-4'>
+									<svg className='w-4 h-4 flex-shrink-0' fill='currentColor' viewBox='0 0 20 20'>
+										<path fillRule='evenodd' d='M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z' clipRule='evenodd' />
+									</svg>
+									{auctionError}
+								</div>
+							)}
+
+							{/* Actions */}
+							<div className='flex gap-3 mt-5'>
+								<button
+									onClick={() => setShowAuctionModal(false)}
+									className='flex-1 py-3 rounded-xl text-sm font-semibold text-gray-600 dark:text-gray-400 border border-gray-200 dark:border-slate-600 hover:bg-gray-50 dark:hover:bg-slate-700 transition-all'
+								>
+									Скасувати
+								</button>
+								{selectedChannelId && (
+									<button
+										onClick={handleCreateAuction}
+										disabled={auctionSubmitting}
+										className='flex-[2] py-3 rounded-xl text-sm font-semibold bg-gradient-to-r from-orange-500 to-red-500 hover:from-orange-600 hover:to-red-600 text-white shadow-md hover:shadow-lg transition-all disabled:opacity-50 flex items-center justify-center gap-2'
+									>
+										{auctionSubmitting ? (
+											<svg className='animate-spin w-5 h-5' fill='none' viewBox='0 0 24 24'>
+												<circle className='opacity-25' cx='12' cy='12' r='10' stroke='currentColor' strokeWidth='4' />
+												<path className='opacity-75' fill='currentColor' d='M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z' />
+											</svg>
+										) : (
+											<>🔥 Створити аукціон</>
+										)}
+									</button>
+								)}
+							</div>
+						</div>
+					</div>
+				</div>
 			)}
 		</section>
 	);

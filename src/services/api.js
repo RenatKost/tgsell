@@ -237,6 +237,9 @@ export const auctionsAPI = {
 
 	getStats: () =>
 		api.get('/auctions/stats'),
+
+	createFromChannel: (params) =>
+		api.post('/auctions/from-channel', null, { params }),
 };
 
 // ===== Activity / Gamification =====
