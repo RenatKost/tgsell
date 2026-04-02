@@ -173,18 +173,18 @@ const AuthModal = ({ show, setShow }) => {
 						<button
 							onClick={handleBotLogin}
 							disabled={isLoading || isWaiting}
-							className='w-full flex items-center justify-center gap-3 bg-[#f5c518] hover:bg-[#e6b800] disabled:bg-[#f5c518]/70 text-gray-900 py-4 px-6 rounded-xl font-semibold text-base shadow-md hover:shadow-lg duration-300 disabled:cursor-wait'
+							className='w-full flex items-center justify-center gap-3 bg-[#2AABEE] hover:bg-[#229ED9] disabled:bg-[#2AABEE]/70 text-white py-4 px-6 rounded-xl font-semibold text-base shadow-md hover:shadow-lg hover:shadow-blue-200/50 duration-300 disabled:cursor-wait'
 						>
 							{isLoading ? (
-								<FontAwesomeIcon icon={faSpinner} className='animate-spin text-lg' />
+								<FontAwesomeIcon icon={faSpinner} className='animate-spin text-xl' />
 							) : (
-								<FontAwesomeIcon icon={faTelegram} className='text-xl' />
+								<FontAwesomeIcon icon={faTelegram} className='text-2xl' />
 							)}
-							{isLoading
+							<span>{isLoading
 								? 'Підключення...'
 								: isWaiting
 									? 'Очікуємо підтвердження...'
-									: 'Авторизуватися через Телеграм'}
+									: 'Авторизуватися через Телеграм'}</span>
 						</button>
 
 						{isWaiting && (

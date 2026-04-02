@@ -364,19 +364,6 @@ async def auth_cmd_start(message: Message):
     if len(args) > 1 and args[1].startswith("auth_"):
         token = args[1][5:]  # strip "auth_" prefix
 
-        # Check if token is still valid before showing confirmation
-        from app.utils.auth_tokens import check_auth_token
-        token_data = check_auth_token(token)
-        if token_data is None:
-            # Token doesn't exist — already expired or invalid
-            from app.utils.auth_tokens import _pending
-            if token not in _pending:
-                await message.answer(
-                    "❌ Посилання для входу недійсне або вже використане.\n"
-                    "Спробуйте ще раз на сайті.",
-                )
-                return
-
         # Store user data for this token
         user = message.from_user
         display_name = user.first_name or "User"
