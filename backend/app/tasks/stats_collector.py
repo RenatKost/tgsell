@@ -300,8 +300,8 @@ async def run_view_tracker(interval_hours: int = 6):
     """Run view tracker loop — updates post views more frequently than full stats."""
     interval_seconds = interval_hours * 3600
     logger.info(f"View tracker started (interval: {interval_hours}h)")
-    # Initial delay — wait 1h after startup to let first stats collection finish
-    await asyncio.sleep(3600)
+    # Initial delay — wait 30min after startup to let first stats collection finish
+    await asyncio.sleep(1800)
     while True:
         try:
             await update_post_views_once()
