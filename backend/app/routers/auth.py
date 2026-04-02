@@ -198,8 +198,14 @@ async def create_bot_auth_token():
 @router.get("/bot-check")
 async def check_bot_auth(token: str, db: AsyncSession = Depends(get_db)):
     """Poll this endpoint to check if bot auth completed."""
-    from app.utils.auth_tokens import consume_auth_token
+    from app.utils.auth_tokens import check_auth_token, consume_auth_token
 
+    # Non-destructive check first (polling every 2s)
+    user_data = check_auth_token(token)
+    if not user_data:
+        return {"status": "pending"}
+
+    # Auth completed — now consume (remove) the token
     user_data = consume_auth_token(token)
     if not user_data:
         return {"status": "pending"}
