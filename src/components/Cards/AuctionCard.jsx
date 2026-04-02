@@ -88,16 +88,6 @@ const AuctionCard = ({ auction, onBid }) => {
 							{auction.current_price.toLocaleString()} <span className='text-sm font-normal'>USDT</span>
 						</div>
 					</div>
-					{auction.buyout_price && (
-						<div className='text-right'>
-							<div className='text-xs text-gray-500 dark:text-gray-400 mb-0.5'>
-								Викуп
-							</div>
-							<div className='text-sm font-semibold text-gray-600 dark:text-gray-300'>
-								{auction.buyout_price.toLocaleString()} USDT
-							</div>
-						</div>
-					)}
 				</div>
 			</div>
 

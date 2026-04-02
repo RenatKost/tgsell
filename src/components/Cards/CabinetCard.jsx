@@ -49,9 +49,14 @@ const CabinetCard = ({ channel, onDelete }) => {
 							<NavLink to={`/channel/${channel.id}`} className='font-bold text-gray-800 dark:text-white hover:text-[#3498db] duration-300 truncate block'>
 								{channel.channel_name}
 							</NavLink>
-							<span className={`text-xs px-2.5 py-1 rounded-full font-medium border whitespace-nowrap ${status.color}`}>
-								{status.text}
-							</span>
+							<div className='flex items-center gap-1.5 flex-shrink-0'>
+								{(channel.listing_type === 'auction' || channel.listing_type === 'both') && (
+									<span className='text-xs px-2 py-0.5 rounded-full font-medium bg-orange-50 text-orange-600 border border-orange-200'>🔥</span>
+								)}
+								<span className={`text-xs px-2.5 py-1 rounded-full font-medium border whitespace-nowrap ${status.color}`}>
+									{status.text}
+								</span>
+							</div>
 						</div>
 						<div className='flex items-center gap-3 mt-1.5 text-sm text-gray-500'>
 							<span className='flex items-center gap-1'>

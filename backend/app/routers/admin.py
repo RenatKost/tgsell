@@ -135,8 +135,8 @@ async def approve_channel(
         except Exception as e:
             logger.warning(f"Stats refresh on approve failed for channel #{channel_id}: {e}")
 
-        # Auto-create auction if listing_type is 'auction'
-        if channel.listing_type == "auction" and channel.auction_start_price:
+        # Auto-create auction if listing_type is 'auction' or 'both'
+        if channel.listing_type in ("auction", "both") and channel.auction_start_price:
             try:
                 from app.models.auction import Auction
                 auction = Auction(
@@ -145,7 +145,7 @@ async def approve_channel(
                     start_price=channel.auction_start_price,
                     bid_step=channel.auction_bid_step or 10.0,
                     current_price=channel.auction_start_price,
-                    buyout_price=channel.price if channel.price > channel.auction_start_price else None,
+                    buyout_price=None,
                     status="active",
                     starts_at=datetime.utcnow(),
                     ends_at=datetime.utcnow() + timedelta(hours=channel.auction_duration_hours or 48),

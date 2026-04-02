@@ -54,14 +54,19 @@ async def list_auctions(
     category: str = Query("", max_length=100),
     sort: str = Query("ending_soon"),
     status_filter: str = Query("active", alias="status"),
+    seller_id: int | None = Query(None),
     db: AsyncSession = Depends(get_db),
 ):
     """List auctions with filters."""
     query = (
         select(Auction)
         .options(selectinload(Auction.channel))
-        .where(Auction.status == status_filter)
     )
+
+    if seller_id:
+        query = query.where(Auction.seller_id == seller_id)
+    else:
+        query = query.where(Auction.status == status_filter)
 
     if category:
         query = query.join(Channel).where(Channel.category == category)

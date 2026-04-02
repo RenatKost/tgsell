@@ -121,17 +121,6 @@ const BidModal = ({ auction, onClose, onSuccess }) => {
 						</span>
 					</div>
 
-					{/* Buyout hint */}
-					{auction.buyout_price && (
-						<button
-							type='button'
-							onClick={() => setAmount(String(auction.buyout_price))}
-							className='w-full mb-4 py-2.5 rounded-xl text-sm font-medium border-2 border-dashed border-green-300 dark:border-green-700 text-green-600 dark:text-green-400 hover:bg-green-50 dark:hover:bg-green-900/10 transition-all'
-						>
-							⚡ Миттєвий викуп за {auction.buyout_price.toLocaleString()} USDT
-						</button>
-					)}
-
 					{error && (
 						<div className='flex items-center gap-2 bg-red-50 dark:bg-red-900/20 border border-red-100 dark:border-red-800 text-red-600 dark:text-red-400 text-sm px-4 py-3 rounded-xl mb-4'>
 							<svg className='w-4 h-4 flex-shrink-0' fill='currentColor' viewBox='0 0 20 20'>

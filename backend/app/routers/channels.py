@@ -321,6 +321,10 @@ async def create_channel(
             monthly_income=body.monthly_income,
             description=body.description,
             resources=body.resources,
+            listing_type=body.listing_type or "sale",
+            auction_start_price=body.auction_start_price,
+            auction_bid_step=body.auction_bid_step,
+            auction_duration_hours=body.auction_duration_hours,
             status=ChannelStatus.pending,
         )
         db.add(channel)
@@ -430,10 +434,12 @@ async def create_channel(
         from app.config import settings as cfg
         if cfg.admin_group_id and cfg.bot_token_alerts:
             bot = Bot(token=cfg.bot_token_alerts)
+            listing_label = {"sale": "Каталог", "auction": "Аукціон", "both": "Каталог + Аукціон"}.get(channel.listing_type, "Каталог")
             admin_text = (
                 f"📺 <b>Новий канал на модерацію!</b>\n\n"
                 f"Канал: {channel.channel_name or channel.telegram_link}\n"
                 f"Продавець: {user.first_name} (id={user.id})\n"
+                f"Тип: {listing_label}\n"
                 f"Ціна: {channel.price} USDT"
             )
             await bot.send_message(cfg.admin_group_id, admin_text, parse_mode=ParseMode.HTML)

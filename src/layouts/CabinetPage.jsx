@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { NavLink } from 'react-router-dom';
-import { channelsAPI, favoritesAPI, dealsAPI } from '../services/api';
+import { channelsAPI, favoritesAPI, dealsAPI, auctionsAPI } from '../services/api';
 import { useAuth } from '../context/AppContext';
 import CabinetCard from '../components/Cards/CabinetCard';
 import CatalogCard from '../components/Cards/CatalogCard';
@@ -12,10 +12,12 @@ import {
 	faFilter,
 	faHandshake,
 	faArrowRight,
+	faGavel,
 } from '@fortawesome/free-solid-svg-icons';
 
 const TABS = [
 	{ text: 'Мої оголошення', value: 'my', icon: faList },
+	{ text: 'Мої аукціони', value: 'auctions', icon: faGavel },
 	{ text: 'Мої угоди', value: 'deals', icon: faHandshake },
 	{ text: 'Обране', value: 'favorites', icon: faHeart },
 ];
@@ -53,6 +55,7 @@ const CabinetPage = () => {
 	const [channels, setChannels] = useState([]);
 	const [favorites, setFavorites] = useState([]);
 	const [deals, setDeals] = useState([]);
+	const [myAuctions, setMyAuctions] = useState([]);
 	const [loading, setLoading] = useState(true);
 
 	useEffect(() => {
@@ -66,6 +69,9 @@ const CabinetPage = () => {
 					}
 					const { data } = await channelsAPI.getAll(params);
 					setChannels(data.items || data);
+				} else if (activeTab.value === 'auctions') {
+					const { data } = await auctionsAPI.getAll({ seller_id: user?.id });
+					setMyAuctions(data.items || []);
 				} else if (activeTab.value === 'deals') {
 					const { data } = await dealsAPI.getMy();
 					setDeals(Array.isArray(data) ? data : []);
@@ -151,6 +157,9 @@ const CabinetPage = () => {
 					>
 						<FontAwesomeIcon icon={tab.icon} />
 						{tab.text}
+						{tab.value === 'auctions' && myAuctions.length > 0 && (
+							<span className='bg-orange-100 text-orange-600 text-xs px-2 py-0.5 rounded-full'>{myAuctions.length}</span>
+						)}
 						{tab.value === 'deals' && deals.length > 0 && (
 							<span className='bg-blue-100 text-blue-600 text-xs px-2 py-0.5 rounded-full'>{deals.length}</span>
 						)}
@@ -209,6 +218,97 @@ const CabinetPage = () => {
 							{filteredChannels.map(channel => (
 								<CabinetCard key={channel.id} channel={channel} onDelete={handleDelete} />
 							))}
+						</div>
+					)}
+				</>
+			) : activeTab.value === 'auctions' ? (
+				<>
+					{loading ? (
+						<div className='flex justify-center py-20'>
+							<div className='animate-spin rounded-full h-10 w-10 border-b-2 border-blue-500' />
+						</div>
+					) : myAuctions.length === 0 ? (
+						<div className='text-center py-16 bg-white dark:bg-slate-800 rounded-2xl border border-dashed border-gray-300 dark:border-slate-600'>
+							<div className='text-5xl mb-4'>🔥</div>
+							<p className='text-lg font-semibold text-gray-700 dark:text-gray-200 mb-2'>У вас немає аукціонів</p>
+							<p className='text-gray-500 dark:text-gray-400 mb-6'>Подайте канал на аукціон через форму продажу</p>
+							<NavLink
+								className='inline-flex items-center gap-2 font-bold bg-orange-500 text-white py-3 px-8 rounded-xl shadow-lg shadow-orange-200 hover:bg-orange-600 duration-300'
+								to='/sell'
+							>
+								<FontAwesomeIcon icon={faPlus} />
+								Подати на аукціон
+							</NavLink>
+						</div>
+					) : (
+						<div className='grid gap-4'>
+							{myAuctions.map(auction => {
+								const isEnded = auction.status === 'ended';
+								const isActive = auction.status === 'active';
+								const endDate = auction.ends_at ? new Date(auction.ends_at) : null;
+								const timeRemaining = endDate ? Math.max(0, endDate - Date.now()) : 0;
+								const hoursLeft = Math.floor(timeRemaining / 3600000);
+								const minsLeft = Math.floor((timeRemaining % 3600000) / 60000);
+								const timeStr = timeRemaining > 0 ? `${hoursLeft}г ${minsLeft}хв` : 'Завершено';
+								const statusColors = {
+									active: 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400',
+									scheduled: 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400',
+									ended: 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400',
+									cancelled: 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400',
+								};
+								const statusTexts = { active: 'Активний', scheduled: 'Запланований', ended: 'Завершений', cancelled: 'Скасований' };
+								return (
+									<div key={auction.id} className='bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-gray-100 dark:border-slate-700 p-5 hover:shadow-md duration-300'>
+										<div className='flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-3'>
+											<div className='flex items-center gap-3'>
+												{auction.channel_avatar ? (
+													<img className='w-12 h-12 rounded-xl object-cover' src={auction.channel_avatar} alt='' />
+												) : (
+													<div className='w-12 h-12 rounded-xl bg-gradient-to-br from-orange-400 to-red-500 flex items-center justify-center text-lg font-bold text-white'>
+														{(auction.channel_name || '?')[0]}
+													</div>
+												)}
+												<div>
+													<NavLink to={`/channel/${auction.channel_id}`} className='font-bold text-gray-800 dark:text-white hover:text-orange-500 duration-300'>
+														{auction.channel_name || `Канал #${auction.channel_id}`}
+													</NavLink>
+													<p className='text-gray-500 dark:text-gray-400 text-sm'>
+														Аукціон #{auction.id}
+													</p>
+												</div>
+											</div>
+											<div className='flex items-center gap-3'>
+												<span className={`text-xs px-3 py-1 rounded-full font-semibold ${statusColors[auction.status] || statusColors.active}`}>
+													{statusTexts[auction.status] || auction.status}
+												</span>
+												{isActive && (
+													<span className='text-xs px-3 py-1 rounded-full font-medium bg-gray-100 dark:bg-slate-700 text-gray-700 dark:text-gray-300'>
+														⏱ {timeStr}
+													</span>
+												)}
+											</div>
+										</div>
+										<div className='grid grid-cols-2 sm:grid-cols-4 gap-3 text-sm'>
+											<div className='bg-orange-50 dark:bg-orange-900/20 p-3 rounded-xl'>
+												<span className='font-semibold text-orange-600'>{auction.current_price} USDT</span>
+												<p className='text-gray-400 dark:text-gray-500 text-xs mt-0.5'>поточна ціна</p>
+											</div>
+											<div className='bg-gray-50 dark:bg-slate-700/60 p-3 rounded-xl'>
+												<span className='font-semibold dark:text-gray-200'>{auction.start_price} USDT</span>
+												<p className='text-gray-400 dark:text-gray-500 text-xs mt-0.5'>стартова ціна</p>
+											</div>
+											<div className='bg-gray-50 dark:bg-slate-700/60 p-3 rounded-xl'>
+												<span className='font-semibold dark:text-gray-200'>{auction.bid_step} USDT</span>
+												<p className='text-gray-400 dark:text-gray-500 text-xs mt-0.5'>крок ставки</p>
+											</div>
+											<div className='bg-gray-50 dark:bg-slate-700/60 p-3 rounded-xl'>
+												<span className='font-semibold dark:text-gray-200'>{auction.bid_count}</span>
+												<p className='text-gray-400 dark:text-gray-500 text-xs mt-0.5'>ставок</p>
+											</div>
+										</div>
+									</div>
+								);
+							})}
 						</div>
 					)}
 				</>

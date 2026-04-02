@@ -553,9 +553,20 @@ const ModerCabinet = () => {
 												)}
 												<div>
 													<h3 className='font-bold text-lg text-gray-800 dark:text-white'>{channel.channel_name}</h3>
-													<a href={channel.telegram_link} target='_blank' rel='noopener noreferrer' className='text-blue-500 text-sm hover:underline'>
-														{channel.telegram_link} <FontAwesomeIcon icon={faExternalLinkAlt} size='xs' />
-													</a>
+													<div className='flex items-center gap-2 mt-1'>
+														<a href={channel.telegram_link} target='_blank' rel='noopener noreferrer' className='text-blue-500 text-sm hover:underline'>
+															{channel.telegram_link} <FontAwesomeIcon icon={faExternalLinkAlt} size='xs' />
+														</a>
+														{channel.listing_type === 'auction' && (
+															<span className='text-xs px-2 py-0.5 rounded-full bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400 font-medium'>🔥 Аукціон</span>
+														)}
+														{channel.listing_type === 'both' && (
+															<span className='text-xs px-2 py-0.5 rounded-full bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400 font-medium'>🏷️ Каталог + 🔥 Аукціон</span>
+														)}
+														{(!channel.listing_type || channel.listing_type === 'sale') && (
+															<span className='text-xs px-2 py-0.5 rounded-full bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400 font-medium'>🏷️ Каталог</span>
+														)}
+													</div>
 												</div>
 											</div>
 											<div className='flex gap-3'>
@@ -588,6 +599,22 @@ const ModerCabinet = () => {
 												<p className='text-gray-400 text-xs mt-0.5'>ціна</p>
 											</div>
 										</div>
+										{(channel.listing_type === 'auction' || channel.listing_type === 'both') && channel.auction_start_price && (
+											<div className='grid grid-cols-2 md:grid-cols-3 gap-3 text-sm mt-3'>
+												<div className='bg-orange-50 dark:bg-orange-900/20 p-3 rounded-xl'>
+													<span className='font-semibold text-orange-600'>{channel.auction_start_price} USDT</span>
+													<p className='text-gray-400 text-xs mt-0.5'>старт аукціону</p>
+												</div>
+												<div className='bg-orange-50 dark:bg-orange-900/20 p-3 rounded-xl'>
+													<span className='font-semibold text-orange-600'>{channel.auction_bid_step} USDT</span>
+													<p className='text-gray-400 text-xs mt-0.5'>крок ставки</p>
+												</div>
+												<div className='bg-orange-50 dark:bg-orange-900/20 p-3 rounded-xl'>
+													<span className='font-semibold text-orange-600'>{channel.auction_duration_hours}г</span>
+													<p className='text-gray-400 text-xs mt-0.5'>тривалість</p>
+												</div>
+											</div>
+										)}
 										{channel.description && (
 											<p className='mt-4 text-gray-600 dark:text-gray-300 text-sm bg-blue-50 dark:bg-blue-900/20 p-3 rounded-xl'>{channel.description}</p>
 										)}
