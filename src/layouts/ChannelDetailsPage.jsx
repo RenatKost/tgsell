@@ -8,6 +8,7 @@ import PostsPerDay from '../components/ChanelDetails/Coverage';
 import ER from '../components/ChanelDetails/ER';
 import Subscribers from '../components/ChanelDetails/Subscribers';
 import Views from '../components/ChanelDetails/Views';
+import PostsList from '../components/ChanelDetails/PostsList';
 
 const ChannelDetailsPage = () => {
 	const { id } = useParams();
@@ -112,6 +113,11 @@ const ChannelDetailsPage = () => {
 					<PostsPerDay stats={stats} />
 					<AdvertisingReach channel={channel} />
 				</div>
+			</div>
+
+			{/* Posts section — full width below */}
+			<div className='mt-6'>
+				<PostsList channelId={channel.id} />
 			</div>
 		</section>
 	);

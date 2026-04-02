@@ -90,7 +90,8 @@ async def get_channel_stats_telethon(channel_username: str, message_limit: int =
 
     Collects historical daily stats from messages for graphs.
     Returns: {avg_views, er, avg_reach, adv_reach_12h, adv_reach_24h, adv_reach_48h,
-              channel_age_months, daily_stats: [{date, views, subscribers}]}
+              channel_age_months, daily_stats: [{date, views, subscribers}],
+              posts: [{telegram_msg_id, date, text, media_type, link, views, forwards, reactions, comments}]}
     """
     client = await _get_telethon_client()
     if not client:
@@ -105,6 +106,7 @@ async def get_channel_stats_telethon(channel_username: str, message_limit: int =
         full_channel = await client(GetFullChannelRequest(entity))
 
         subscribers = full_channel.full_chat.participants_count
+        username = getattr(entity, 'username', channel_username)
 
         # Calculate channel age
         channel_age_months = None
@@ -139,6 +141,11 @@ async def get_channel_stats_telethon(channel_username: str, message_limit: int =
 
         # Group views by date for daily stats
         daily_views = defaultdict(list)
+        daily_forwards = defaultdict(list)
+        daily_reactions = defaultdict(list)
+
+        # Individual posts data
+        posts_data = []
 
         for msg in messages:
             msg_date = msg.date.replace(tzinfo=timezone.utc)
@@ -150,6 +157,47 @@ async def get_channel_stats_telethon(channel_username: str, message_limit: int =
             # Count posts in last 30 days
             if (now - msg_date).days <= 30:
                 posts_last_30d += 1
+
+            # Determine media type
+            media_type = None
+            if msg.photo:
+                media_type = "photo"
+            elif msg.video:
+                media_type = "video"
+            elif msg.document:
+                media_type = "document"
+            elif msg.audio:
+                media_type = "audio"
+            elif msg.voice:
+                media_type = "voice"
+
+            # Count reactions
+            msg_reactions = 0
+            if hasattr(msg, 'reactions') and msg.reactions:
+                if hasattr(msg.reactions, 'results'):
+                    msg_reactions = sum(r.count for r in msg.reactions.results)
+
+            # Count comments
+            msg_comments = 0
+            if hasattr(msg, 'replies') and msg.replies:
+                msg_comments = msg.replies.replies or 0
+
+            # Build post link
+            post_link = f"t.me/{username}/{msg.id}" if username else None
+
+            # Store individual post data (last 200 posts for storage)
+            if len(posts_data) < 200:
+                posts_data.append({
+                    "telegram_msg_id": msg.id,
+                    "date": msg_date.isoformat(),
+                    "text": (msg.text or "")[:2000],  # Truncate long texts
+                    "media_type": media_type,
+                    "link": post_link,
+                    "views": msg.views or 0,
+                    "forwards": msg.forwards or 0,
+                    "reactions": msg_reactions,
+                    "comments": msg_comments,
+                })
 
             if msg.views is not None:
                 views_list.append(msg.views)
@@ -169,14 +217,14 @@ async def get_channel_stats_telethon(channel_username: str, message_limit: int =
             # Forwards
             if msg.forwards is not None:
                 forwards_list.append(msg.forwards)
+                day_key = msg_date.strftime("%Y-%m-%d")
+                daily_forwards[day_key].append(msg.forwards)
 
             # Reactions
-            if hasattr(msg, 'reactions') and msg.reactions:
-                total_react = sum(
-                    r.count for r in msg.reactions.results
-                ) if hasattr(msg.reactions, 'results') else 0
-                if total_react > 0:
-                    reactions_list.append(total_react)
+            if msg_reactions > 0:
+                reactions_list.append(msg_reactions)
+                day_key = msg_date.strftime("%Y-%m-%d")
+                daily_reactions[day_key].append(msg_reactions)
 
         avg_views = sum(views_list) // len(views_list) if views_list else 0
         er = round((avg_views / subscribers * 100), 2) if subscribers > 0 else 0.0
@@ -190,12 +238,16 @@ async def get_channel_stats_telethon(channel_username: str, message_limit: int =
             day_views = daily_views[date_str]
             day_avg = sum(day_views) // len(day_views)
             day_er = round((day_avg / subscribers * 100), 2) if subscribers > 0 else 0.0
+            day_fwd = daily_forwards.get(date_str, [])
+            day_react = daily_reactions.get(date_str, [])
             daily_stats.append({
                 "date": date_str,
                 "avg_views": day_avg,
                 "subscribers": subscribers,
                 "er": day_er,
                 "post_count": len(day_views),
+                "avg_forwards": sum(day_fwd) // len(day_fwd) if day_fwd else 0,
+                "avg_reactions": sum(day_react) // len(day_react) if day_react else 0,
             })
 
         # Add delay to avoid rate-limiting
@@ -216,6 +268,7 @@ async def get_channel_stats_telethon(channel_username: str, message_limit: int =
             "last_post_date": last_post_date.isoformat() if last_post_date else None,
             "avg_forwards": avg_forwards,
             "avg_reactions": avg_reactions,
+            "posts": posts_data,
         }
     except Exception as e:
         logger.error(f"Telethon stats failed for @{channel_username}: {e}")
@@ -250,6 +303,7 @@ async def collect_channel_stats(telegram_link: str) -> dict:
         "last_post_date": None,
         "avg_forwards": None,
         "avg_reactions": None,
+        "posts": [],
     }
 
     # Step 1: Bot API (safe, always works)
@@ -275,5 +329,6 @@ async def collect_channel_stats(telegram_link: str) -> dict:
         result["last_post_date"] = telethon_stats.get("last_post_date")
         result["avg_forwards"] = telethon_stats.get("avg_forwards")
         result["avg_reactions"] = telethon_stats.get("avg_reactions")
+        result["posts"] = telethon_stats.get("posts", [])
 
     return result

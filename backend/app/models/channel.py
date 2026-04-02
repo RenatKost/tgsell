@@ -59,6 +59,7 @@ class Channel(Base):
     # Relationships
     seller = relationship("User", back_populates="channels", foreign_keys=[seller_id])
     stats = relationship("ChannelStats", back_populates="channel", cascade="all, delete-orphan")
+    posts = relationship("ChannelPost", back_populates="channel", cascade="all, delete-orphan")
     deals = relationship("Deal", back_populates="channel")
 
 
@@ -73,9 +74,42 @@ class ChannelStats(Base):
     avg_reach: Mapped[int] = mapped_column(Integer, default=0)
     er: Mapped[float] = mapped_column(Float, default=0.0)
     post_count: Mapped[int | None] = mapped_column(Integer, nullable=True, default=0)
+    avg_forwards: Mapped[int | None] = mapped_column(Integer, nullable=True, default=0)
+    avg_reactions: Mapped[int | None] = mapped_column(Integer, nullable=True, default=0)
     recorded_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
 
     channel = relationship("Channel", back_populates="stats")
+
+
+class ChannelPost(Base):
+    __tablename__ = "channel_posts"
+    __table_args__ = (
+        UniqueConstraint("channel_id", "telegram_msg_id", name="uq_channel_post"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    channel_id: Mapped[int] = mapped_column(ForeignKey("channels.id", ondelete="CASCADE"))
+    telegram_msg_id: Mapped[int] = mapped_column(Integer)
+    date: Mapped[datetime] = mapped_column(DateTime)
+    text: Mapped[str | None] = mapped_column(Text, nullable=True)
+    media_type: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    link: Mapped[str | None] = mapped_column(String(255), nullable=True)
+
+    views: Mapped[int] = mapped_column(Integer, default=0)
+    views_1h: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    views_12h: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    views_24h: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    views_48h: Mapped[int | None] = mapped_column(Integer, nullable=True)
+
+    forwards: Mapped[int] = mapped_column(Integer, default=0)
+    reactions: Mapped[int] = mapped_column(Integer, default=0)
+    comments: Mapped[int] = mapped_column(Integer, default=0)
+    is_deleted: Mapped[bool] = mapped_column(default=False)
+
+    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), onupdate=func.now())
+
+    channel = relationship("Channel", back_populates="posts")
 
 
 class Favorite(Base):

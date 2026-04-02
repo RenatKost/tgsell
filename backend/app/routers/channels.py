@@ -6,11 +6,13 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
-from app.models.channel import Channel, ChannelStats, ChannelStatus
+from app.models.channel import Channel, ChannelPost, ChannelStats, ChannelStatus
 from app.models.user import User
 from app.schemas.channel import (
     ChannelCreate,
     ChannelListResponse,
+    ChannelPostResponse,
+    ChannelPostsListResponse,
     ChannelResponse,
     ChannelStatsResponse,
     ChannelUpdate,
@@ -99,6 +101,43 @@ async def get_channel_stats(channel_id: int, db: AsyncSession = Depends(get_db))
     )
     stats = result.scalars().all()
     return [ChannelStatsResponse.model_validate(s) for s in stats]
+
+
+@router.get("/{channel_id}/posts", response_model=ChannelPostsListResponse)
+async def get_channel_posts(
+    channel_id: int,
+    limit: int = Query(50, ge=1, le=200),
+    offset: int = Query(0, ge=0),
+    db: AsyncSession = Depends(get_db),
+):
+    """Get individual posts for a channel with detailed stats."""
+    # Verify channel exists
+    ch = await db.execute(select(Channel.id).where(Channel.id == channel_id))
+    if not ch.scalar_one_or_none():
+        raise HTTPException(status_code=404, detail="Channel not found")
+
+    # Count total
+    total_result = await db.execute(
+        select(func.count()).select_from(ChannelPost).where(
+            ChannelPost.channel_id == channel_id
+        )
+    )
+    total = total_result.scalar() or 0
+
+    # Get posts sorted by date desc (newest first)
+    result = await db.execute(
+        select(ChannelPost)
+        .where(ChannelPost.channel_id == channel_id)
+        .order_by(ChannelPost.date.desc())
+        .offset(offset)
+        .limit(limit)
+    )
+    posts = result.scalars().all()
+
+    return ChannelPostsListResponse(
+        items=[ChannelPostResponse.model_validate(p) for p in posts],
+        total=total,
+    )
 
 
 @router.post("", response_model=ChannelResponse, status_code=status.HTTP_201_CREATED)
@@ -209,6 +248,26 @@ async def create_channel(
             )
             db.add(stat_record)
         await db.commit()
+
+        # Save individual posts
+        posts_data = stats.get("posts", [])
+        if posts_data:
+            for p in posts_data:
+                post_date = dt.fromisoformat(p["date"]) if isinstance(p["date"], str) else p["date"]
+                db.add(ChannelPost(
+                    channel_id=channel.id,
+                    telegram_msg_id=p["telegram_msg_id"],
+                    date=post_date,
+                    text=p.get("text"),
+                    media_type=p.get("media_type"),
+                    link=p.get("link"),
+                    views=p["views"],
+                    forwards=p["forwards"],
+                    reactions=p["reactions"],
+                    comments=p.get("comments", 0),
+                ))
+            await db.commit()
+
         await db.refresh(channel)
     except Exception as e:
         logger.warning(f"Stats fetching failed for channel #{channel.id}: {e}")

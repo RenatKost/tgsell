@@ -95,6 +95,9 @@ export const channelsAPI = {
 	getStats: (id) =>
 		api.get(`/channels/${id}/stats`),
 
+	getPosts: (id, params = {}) =>
+		api.get(`/channels/${id}/posts`, { params }),
+
 	create: (channelData) =>
 		api.post('/channels', channelData),
 

@@ -64,8 +64,36 @@ class ChannelStatsResponse(BaseModel):
     avg_reach: int
     er: float
     post_count: int | None = 0
+    avg_forwards: int | None = 0
+    avg_reactions: int | None = 0
 
     model_config = {"from_attributes": True}
+
+
+class ChannelPostResponse(BaseModel):
+    id: int
+    channel_id: int
+    telegram_msg_id: int
+    date: datetime
+    text: str | None = None
+    media_type: str | None = None
+    link: str | None = None
+    views: int = 0
+    views_1h: int | None = None
+    views_12h: int | None = None
+    views_24h: int | None = None
+    views_48h: int | None = None
+    forwards: int = 0
+    reactions: int = 0
+    comments: int = 0
+    is_deleted: bool = False
+
+    model_config = {"from_attributes": True}
+
+
+class ChannelPostsListResponse(BaseModel):
+    items: list[ChannelPostResponse]
+    total: int
 
 
 class ChannelListResponse(BaseModel):

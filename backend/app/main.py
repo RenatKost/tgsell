@@ -13,7 +13,7 @@ from fastapi.responses import FileResponse
 from app.config import settings
 from app.routers import auth, channels, deals, admin, users, favorites
 from app.tasks.payment_checker import run_payment_checker
-from app.tasks.stats_collector import run_stats_collector
+from app.tasks.stats_collector import run_stats_collector, run_view_tracker
 from bot.main import run_bots_background
 
 logging.basicConfig(
@@ -32,6 +32,7 @@ async def lifespan(app: FastAPI):
     loop = asyncio.get_event_loop()
     background_tasks.append(loop.create_task(run_payment_checker(interval_seconds=30)))
     background_tasks.append(loop.create_task(run_stats_collector(interval_hours=24)))
+    background_tasks.append(loop.create_task(run_view_tracker(interval_hours=6)))
     background_tasks.append(loop.create_task(run_bots_background()))
     yield
     logger.info("Shutting down background tasks…")
