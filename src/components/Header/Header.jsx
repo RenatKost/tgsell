@@ -33,7 +33,7 @@ const Header = () => {
 					<img
 						src='/logo.png'
 						alt='TgSell'
-						className='h-10 w-auto object-contain transition-transform duration-300 group-hover:scale-105'
+						className='h-20 w-auto object-contain transition-transform duration-300 group-hover:scale-105'
 					/>
 				</NavLink>
 				<Navigation />
