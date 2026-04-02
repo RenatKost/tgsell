@@ -2,12 +2,13 @@ import logging
 from datetime import datetime, timedelta, timezone
 import os
 
-from fastapi import APIRouter, Body, Depends, HTTPException, status
-from sqlalchemy import select
+from fastapi import APIRouter, Body, Depends, HTTPException, Query, status
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.database import get_db
+from app.models.auction import Auction, AuctionBid
 from app.models.channel import Channel, ChannelStatus
 from app.models.deal import Deal, DealStatus
 from app.models.user import User, UserRole
@@ -624,3 +625,248 @@ async def check_escrow_balances(
             })
 
     return {"wallets_with_funds": balances, "total": sum(b["balance_usdt"] for b in balances)}
+
+
+# ═══════════════════════════════════════════════════════════════
+#   AUCTION MANAGEMENT
+# ═══════════════════════════════════════════════════════════════
+
+@router.get("/auctions")
+async def admin_list_auctions(
+    status_filter: str = Query("", alias="status"),
+    admin: User = Depends(get_admin_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """List all auctions for admin panel."""
+    query = (
+        select(Auction)
+        .options(selectinload(Auction.channel), selectinload(Auction.seller), selectinload(Auction.winner))
+        .order_by(Auction.created_at.desc())
+    )
+    if status_filter:
+        query = query.where(Auction.status == status_filter)
+
+    result = await db.execute(query)
+    auctions = result.scalars().all()
+
+    items = []
+    for a in auctions:
+        bid_count_real = (await db.execute(
+            select(func.count()).select_from(AuctionBid).where(AuctionBid.auction_id == a.id)
+        )).scalar() or 0
+
+        items.append({
+            "id": a.id,
+            "channel_id": a.channel_id,
+            "channel_name": a.channel.channel_name if a.channel else None,
+            "channel_avatar": a.channel.avatar_url if a.channel else None,
+            "seller_name": a.seller.first_name if a.seller else None,
+            "seller_id": a.seller_id,
+            "start_price": a.start_price,
+            "current_price": a.current_price,
+            "buyout_price": a.buyout_price,
+            "bid_step": a.bid_step,
+            "bid_count": bid_count_real,
+            "status": a.status,
+            "starts_at": a.starts_at.isoformat() if a.starts_at else None,
+            "ends_at": a.ends_at.isoformat() if a.ends_at else None,
+            "winner_id": a.winner_id,
+            "winner_name": a.winner.first_name if a.winner else None,
+            "created_at": a.created_at.isoformat() if a.created_at else None,
+        })
+    return {"items": items, "total": len(items)}
+
+
+@router.post("/auctions/{auction_id}/cancel")
+async def admin_cancel_auction(
+    auction_id: int,
+    admin: User = Depends(get_admin_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Admin cancel an auction."""
+    result = await db.execute(select(Auction).where(Auction.id == auction_id))
+    auction = result.scalar_one_or_none()
+    if not auction:
+        raise HTTPException(status_code=404, detail="Auction not found")
+    if auction.status in ("ended", "cancelled"):
+        raise HTTPException(status_code=400, detail="Auction already finished")
+
+    auction.status = "cancelled"
+    await db.commit()
+    return {"ok": True, "auction_id": auction_id, "status": "cancelled"}
+
+
+@router.post("/auctions/{auction_id}/extend")
+async def admin_extend_auction(
+    auction_id: int,
+    hours: int = Body(..., embed=True),
+    admin: User = Depends(get_admin_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Admin extend auction end time by N hours."""
+    result = await db.execute(select(Auction).where(Auction.id == auction_id))
+    auction = result.scalar_one_or_none()
+    if not auction:
+        raise HTTPException(status_code=404, detail="Auction not found")
+    if auction.status not in ("active", "scheduled"):
+        raise HTTPException(status_code=400, detail="Can only extend active/scheduled auctions")
+
+    auction.ends_at = auction.ends_at + timedelta(hours=hours)
+    await db.commit()
+    return {"ok": True, "auction_id": auction_id, "new_ends_at": auction.ends_at.isoformat()}
+
+
+@router.put("/auctions/{auction_id}")
+async def admin_update_auction(
+    auction_id: int,
+    bid_step: float | None = Body(None),
+    buyout_price: float | None = Body(None),
+    start_price: float | None = Body(None),
+    admin: User = Depends(get_admin_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Admin edit auction parameters."""
+    result = await db.execute(select(Auction).where(Auction.id == auction_id))
+    auction = result.scalar_one_or_none()
+    if not auction:
+        raise HTTPException(status_code=404, detail="Auction not found")
+
+    if bid_step is not None:
+        auction.bid_step = bid_step
+    if buyout_price is not None:
+        auction.buyout_price = buyout_price
+    if start_price is not None and auction.bid_count == 0:
+        auction.start_price = start_price
+        auction.current_price = start_price
+
+    await db.commit()
+    return {"ok": True, "auction_id": auction_id}
+
+
+@router.delete("/auctions/{auction_id}", status_code=204)
+async def admin_delete_auction(
+    auction_id: int,
+    admin: User = Depends(get_admin_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Admin delete auction and its bids."""
+    result = await db.execute(select(Auction).where(Auction.id == auction_id))
+    auction = result.scalar_one_or_none()
+    if not auction:
+        raise HTTPException(status_code=404, detail="Auction not found")
+    await db.delete(auction)
+    await db.commit()
+
+
+# ═══════════════════════════════════════════════════════════════
+#   ACTIVITY / FAKE MANAGEMENT
+# ═══════════════════════════════════════════════════════════════
+
+# In-memory config — survives until restart, configurable from admin UI
+_activity_config = {
+    "online_investors_min": 80,
+    "online_investors_max": 150,
+    "deals_week_min": 8,
+    "deals_week_max": 20,
+    "bids_today_min": 15,
+    "bids_today_max": 40,
+    "active_auctions_min": 3,
+    "active_auctions_max": 8,
+    "channels_min": 40,
+    "channels_max": 80,
+    "feed_generated_count": 15,
+    "enabled": True,
+}
+
+
+def get_activity_config():
+    return _activity_config
+
+
+@router.get("/activity-config")
+async def get_activity_config_endpoint(
+    admin: User = Depends(get_admin_user),
+):
+    """Get current activity boost config."""
+    return _activity_config
+
+
+@router.put("/activity-config")
+async def update_activity_config(
+    config: dict = Body(...),
+    admin: User = Depends(get_admin_user),
+):
+    """Update activity boost config."""
+    allowed_keys = set(_activity_config.keys())
+    for key, value in config.items():
+        if key in allowed_keys:
+            if key == "enabled":
+                _activity_config[key] = bool(value)
+            else:
+                _activity_config[key] = int(value)
+    return _activity_config
+
+
+@router.get("/dashboard-stats")
+async def admin_dashboard_stats(
+    admin: User = Depends(get_admin_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Aggregate stats for admin dashboard overview."""
+    now = datetime.utcnow()
+    week_ago = now - timedelta(days=7)
+
+    total_channels = (await db.execute(
+        select(func.count()).select_from(Channel)
+    )).scalar() or 0
+
+    pending_channels = (await db.execute(
+        select(func.count()).select_from(Channel).where(Channel.status == "pending")
+    )).scalar() or 0
+
+    approved_channels = (await db.execute(
+        select(func.count()).select_from(Channel).where(Channel.status == "approved")
+    )).scalar() or 0
+
+    total_deals = (await db.execute(
+        select(func.count()).select_from(Deal)
+    )).scalar() or 0
+
+    active_deals = (await db.execute(
+        select(func.count()).select_from(Deal).where(
+            Deal.status.in_(["created", "payment_pending", "paid", "channel_transferring"])
+        )
+    )).scalar() or 0
+
+    disputed_deals = (await db.execute(
+        select(func.count()).select_from(Deal).where(Deal.status == "disputed")
+    )).scalar() or 0
+
+    active_auctions = (await db.execute(
+        select(func.count()).select_from(Auction).where(Auction.status == "active")
+    )).scalar() or 0
+
+    total_users = (await db.execute(
+        select(func.count()).select_from(User)
+    )).scalar() or 0
+
+    deals_this_week = (await db.execute(
+        select(func.count()).select_from(Deal).where(Deal.created_at >= week_ago)
+    )).scalar() or 0
+
+    total_revenue = (await db.execute(
+        select(func.sum(Deal.service_fee)).where(Deal.status == "completed")
+    )).scalar() or 0
+
+    return {
+        "total_channels": total_channels,
+        "pending_channels": pending_channels,
+        "approved_channels": approved_channels,
+        "total_deals": total_deals,
+        "active_deals": active_deals,
+        "disputed_deals": disputed_deals,
+        "active_auctions": active_auctions,
+        "total_users": total_users,
+        "deals_this_week": deals_this_week,
+        "total_revenue": round(float(total_revenue), 2),
+    }

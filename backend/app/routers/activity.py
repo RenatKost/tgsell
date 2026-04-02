@@ -55,6 +55,34 @@ def _hour_factor(hour: int) -> float:
 @router.get("/activity")
 async def get_activity_stats(db: AsyncSession = Depends(get_db)):
     """Boosted activity stats. Offsets auto-shrink as real data grows."""
+    from app.routers.admin import get_activity_config
+    config = get_activity_config()
+
+    if not config.get("enabled", True):
+        # Return real-only stats
+        real_channels = (await db.execute(
+            select(func.count()).select_from(Channel).where(Channel.status == "approved")
+        )).scalar() or 0
+        now = datetime.utcnow()
+        week_ago = now - timedelta(days=7)
+        today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+        real_deals_week = (await db.execute(
+            select(func.count()).select_from(Deal).where(Deal.created_at >= week_ago)
+        )).scalar() or 0
+        real_bids_today = (await db.execute(
+            select(func.count()).select_from(AuctionBid).where(AuctionBid.created_at >= today_start)
+        )).scalar() or 0
+        real_active_auctions = (await db.execute(
+            select(func.count()).select_from(Auction).where(Auction.status == "active")
+        )).scalar() or 0
+        return {
+            "channels_count": real_channels,
+            "online_investors": 0,
+            "deals_this_week": real_deals_week,
+            "bids_today": real_bids_today,
+            "active_auctions": real_active_auctions,
+        }
+
     now = datetime.utcnow()
     seed_str = f"{now.strftime('%Y-%m-%d-%H')}"
     rng = _seed_random(seed_str)
@@ -87,17 +115,20 @@ async def get_activity_stats(db: AsyncSession = Depends(get_db)):
         return real + offset
 
     return {
-        "channels_count": boosted(real_channels, 40, 80),
-        "online_investors": boosted(0, 80, 150),
-        "deals_this_week": boosted(real_deals_week, 8, 20),
-        "bids_today": boosted(real_bids_today, 15, 40),
-        "active_auctions": boosted(real_active_auctions, 3, 8),
+        "channels_count": boosted(real_channels, config["channels_min"], config["channels_max"]),
+        "online_investors": boosted(0, config["online_investors_min"], config["online_investors_max"]),
+        "deals_this_week": boosted(real_deals_week, config["deals_week_min"], config["deals_week_max"]),
+        "bids_today": boosted(real_bids_today, config["bids_today_min"], config["bids_today_max"]),
+        "active_auctions": boosted(real_active_auctions, config["active_auctions_min"], config["active_auctions_max"]),
     }
 
 
 @router.get("/feed")
 async def get_activity_feed(db: AsyncSession = Depends(get_db)):
     """Mixed real + generated events feed. All events look identical."""
+    from app.routers.admin import get_activity_config
+    config = get_activity_config()
+
     now = datetime.utcnow()
     events = []
 
@@ -141,11 +172,12 @@ async def get_activity_feed(db: AsyncSession = Depends(get_db)):
         })
 
     # --- Generated events to fill gaps ---
+    gen_count = config.get("feed_generated_count", 15) if config.get("enabled", True) else 0
     seed_str = f"{now.strftime('%Y-%m-%d')}"
     rng = _seed_random(seed_str)
 
-    # Generate 15 events spread across the day
-    for i in range(15):
+    # Generate events spread across the day
+    for i in range(gen_count):
         event_rng = _seed_random(f"{seed_str}-{i}")
         # Non-uniform gaps: 3-15 min apart
         minutes_ago = sum(event_rng.randint(3, 15) for _ in range(i + 1))

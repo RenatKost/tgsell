@@ -149,6 +149,9 @@ export const dealsAPI = {
 
 // ===== Admin =====
 export const adminAPI = {
+	getDashboardStats: () =>
+		api.get('/admin/dashboard-stats'),
+
 	getPendingChannels: () =>
 		api.get('/admin/channels/pending'),
 
@@ -181,6 +184,29 @@ export const adminAPI = {
 
 	sweepEscrow: (dealId, toAddress) =>
 		api.post(`/admin/escrow/sweep/${dealId}`, { to_address: toAddress }),
+
+	// Auction management
+	getAuctions: (params = {}) =>
+		api.get('/admin/auctions', { params }),
+
+	cancelAuction: (id) =>
+		api.post(`/admin/auctions/${id}/cancel`),
+
+	extendAuction: (id, hours) =>
+		api.post(`/admin/auctions/${id}/extend`, { hours }),
+
+	updateAuction: (id, data) =>
+		api.put(`/admin/auctions/${id}`, data),
+
+	deleteAuction: (id) =>
+		api.delete(`/admin/auctions/${id}`),
+
+	// Activity config
+	getActivityConfig: () =>
+		api.get('/admin/activity-config'),
+
+	updateActivityConfig: (config) =>
+		api.put('/admin/activity-config', config),
 };
 
 // ===== Favorites =====
