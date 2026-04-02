@@ -124,9 +124,9 @@ const Calculator = () => {
 			</div>
 			<form className='grid sm:grid-cols-2 gap-8'>
 				<div>
-					<label>Категорія:</label>
+					<label className='dark:text-gray-200'>Категорія:</label>
 					<select
-						className='focus:border-[#3498db] block border-gray-300 border px-3 py-4 rounded-md mt-1 w-full'
+						className='focus:border-[#3498db] block border-gray-300 dark:border-slate-600 border px-3 py-4 rounded-md mt-1 w-full dark:bg-slate-800 dark:text-white'
 						name='theme'
 						type='text'
 						defaultValue='placeholder'
@@ -143,9 +143,9 @@ const Calculator = () => {
 					</select>
 				</div>
 				<div>
-					<label>Трафік:</label>
+					<label className='dark:text-gray-200'>Трафік:</label>
 					<select
-						className='focus:border-[#3498db] block border-gray-300 border px-3 py-4 rounded-md mt-1 w-full'
+						className='focus:border-[#3498db] block border-gray-300 dark:border-slate-600 border px-3 py-4 rounded-md mt-1 w-full dark:bg-slate-800 dark:text-white'
 						name='theme'
 						type='text'
 						defaultValue='placeholder'
@@ -162,7 +162,7 @@ const Calculator = () => {
 					</select>
 				</div>
 				<div>
-					<label>Кількість підписників:</label>
+					<label className='dark:text-gray-200'>Кількість підписників:</label>
 					<input
 						className='focus:border-[#3498db] block border-gray-300 dark:border-slate-600 border px-3 py-4 rounded-md mt-1 w-full dark:bg-slate-800 dark:text-white '
 						name='subscribers'
@@ -173,7 +173,7 @@ const Calculator = () => {
 					/>
 				</div>
 				<div>
-					<label>Кількість заявок:</label>
+					<label className='dark:text-gray-200'>Кількість заявок:</label>
 					<input
 						className='focus:border-[#3498db] block border-gray-300 dark:border-slate-600 border px-3 py-4 rounded-md mt-1 w-full dark:bg-slate-800 dark:text-white '
 						name='applications'
@@ -184,7 +184,7 @@ const Calculator = () => {
 					/>
 				</div>
 				<div>
-					<label>Місячний дохід (USDT):</label>
+					<label className='dark:text-gray-200'>Місячний дохід (USDT):</label>
 					<input
 						className='focus:border-[#3498db] block border-gray-300 dark:border-slate-600 border px-3 py-4 rounded-md mt-1 w-full dark:bg-slate-800 dark:text-white '
 						name='applications'
@@ -195,7 +195,7 @@ const Calculator = () => {
 					/>
 				</div>
 				<div>
-					<label>Охоплення:</label>
+					<label className='dark:text-gray-200'>Охоплення:</label>
 					<input
 						className='focus:border-[#3498db] block border-gray-300 dark:border-slate-600 border px-3 py-4 rounded-md mt-1 w-full dark:bg-slate-800 dark:text-white '
 						name='applications'
