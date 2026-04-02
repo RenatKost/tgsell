@@ -353,6 +353,9 @@ async def notify_admin_called(bot: Bot, deal_id: int, channel_name: str, caller_
 
 auth_router = Router()
 
+# Store pending auth tokens per user message (token -> message.from_user.id)
+_pending_auth: dict[str, dict] = {}
+
 
 @auth_router.message(CommandStart())
 async def auth_cmd_start(message: Message):
@@ -360,28 +363,87 @@ async def auth_cmd_start(message: Message):
     args = message.text.split(maxsplit=1)
     if len(args) > 1 and args[1].startswith("auth_"):
         token = args[1][5:]  # strip "auth_" prefix
-        from app.utils.auth_tokens import complete_auth_token
 
-        user_data = {
-            "id": message.from_user.id,
-            "first_name": message.from_user.first_name or "User",
-            "username": message.from_user.username,
+        # Check if token is still valid before showing confirmation
+        from app.utils.auth_tokens import check_auth_token
+        token_data = check_auth_token(token)
+        if token_data is None:
+            # Token doesn't exist — already expired or invalid
+            from app.utils.auth_tokens import _pending
+            if token not in _pending:
+                await message.answer(
+                    "❌ Посилання для входу недійсне або вже використане.\n"
+                    "Спробуйте ще раз на сайті.",
+                )
+                return
+
+        # Store user data for this token
+        user = message.from_user
+        display_name = user.first_name or "User"
+        if user.last_name:
+            display_name += f" {user.last_name}"
+
+        _pending_auth[token] = {
+            "id": user.id,
+            "first_name": user.first_name or "User",
+            "username": user.username,
         }
-        if complete_auth_token(token, user_data):
-            await message.answer(
-                "✅ Авторизація успішна! Поверніться на сайт — вхід виконається автоматично.",
-            )
-        else:
-            await message.answer(
-                "❌ Посилання для входу недійсне або вже використане.\n"
-                "Спробуйте ще раз на сайті.",
-            )
+
+        # Show confirmation like Telemetr
+        keyboard = InlineKeyboardMarkup(inline_keyboard=[
+            [InlineKeyboardButton(text="Увійти в TgSell", callback_data=f"auth_confirm:{token}")],
+            [InlineKeyboardButton(text="Скасувати", callback_data=f"auth_cancel:{token}")],
+        ])
+
+        await message.answer(
+            f'Ви авторизуєтесь в сервісі TgSell під обліковим записом "{display_name}".\n\n'
+            f"Для продовження авторизації на сайті натисніть кнопку «Увійти в TgSell».\n\n"
+            f"<i>Якщо ви не здійснювали цих дій або потрапили сюди в результаті дій третіх осіб, "
+            f'натисніть кнопку «Скасувати».</i>',
+            reply_markup=keyboard,
+            parse_mode=ParseMode.HTML,
+        )
         return
 
     await message.answer(
         "👋 Вітаю! Я бот авторизації TgSell.\n"
         "Використовуйте кнопку на сайті для входу.",
     )
+
+
+@auth_router.callback_query(F.data.startswith("auth_confirm:"))
+async def auth_confirm_callback(callback: CallbackQuery):
+    """User confirmed login — complete the auth token."""
+    token = callback.data.split(":", 1)[1]
+    user_data = _pending_auth.pop(token, None)
+
+    if not user_data:
+        await callback.answer("Сесія закінчилась. Спробуйте ще раз на сайті.", show_alert=True)
+        await callback.message.edit_text("❌ Сесія авторизації закінчилась.")
+        return
+
+    from app.utils.auth_tokens import complete_auth_token
+
+    if complete_auth_token(token, user_data):
+        await callback.message.edit_text(
+            "✅ Авторизація успішна! Поверніться на сайт — вхід виконається автоматично."
+        )
+        await callback.answer()
+    else:
+        await callback.answer("Посилання вже недійсне. Спробуйте ще раз.", show_alert=True)
+        await callback.message.edit_text(
+            "❌ Посилання для входу недійсне або вже використане.\n"
+            "Спробуйте ще раз на сайті."
+        )
+
+
+@auth_router.callback_query(F.data.startswith("auth_cancel:"))
+async def auth_cancel_callback(callback: CallbackQuery):
+    """User cancelled login."""
+    token = callback.data.split(":", 1)[1]
+    _pending_auth.pop(token, None)
+    await callback.message.edit_text("🚫 Авторизацію скасовано.")
+    await callback.answer()
 
 
 # ── Bot runner ────────────────────────────────────────────────────────
