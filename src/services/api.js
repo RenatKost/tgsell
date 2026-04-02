@@ -198,6 +198,30 @@ export const favoritesAPI = {
 		api.delete(`/favorites/${channelId}`),
 };
 
+// ===== Auctions =====
+export const auctionsAPI = {
+	getAll: (params = {}) =>
+		api.get('/auctions', { params }),
+
+	getById: (id) =>
+		api.get(`/auctions/${id}`),
+
+	bid: (id, data) =>
+		api.post(`/auctions/${id}/bid`, data),
+
+	getStats: () =>
+		api.get('/auctions/stats'),
+};
+
+// ===== Activity / Gamification =====
+export const activityAPI = {
+	getStats: () =>
+		api.get('/stats/activity'),
+
+	getFeed: () =>
+		api.get('/stats/feed'),
+};
+
 // ===== Users =====
 export const usersAPI = {
 	getProfile: (id) =>

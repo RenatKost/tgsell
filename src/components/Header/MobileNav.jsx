@@ -43,6 +43,15 @@ const MobileNav = ({ scroll, showMenu, setShowMenu }) => {
 						</NavLink>
 					</li>
 					<li>
+						<NavLink
+							to='/auction'
+							className='text-gray-800 dark:text-gray-200 font-bold text-lg hover:text-orange-500 transition-colors duration-200 block py-2 flex items-center gap-2'
+							onClick={() => setShowMenu(false)}
+						>
+							🔥 Аукціон
+						</NavLink>
+					</li>
+					<li>
 						<a
 							className='text-gray-800 dark:text-gray-200 font-bold text-lg hover:text-blue-500 transition-colors duration-200 block py-2 cursor-pointer'
 							href='#footer'

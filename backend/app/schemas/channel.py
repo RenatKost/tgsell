@@ -12,6 +12,10 @@ class ChannelCreate(BaseModel):
     monthly_income: float | None = None
     description: str | None = None
     resources: str | None = None
+    listing_type: str = "sale"
+    auction_start_price: float | None = None
+    auction_bid_step: float | None = None
+    auction_duration_hours: int | None = None
 
 
 class ChannelUpdate(BaseModel):
@@ -49,6 +53,10 @@ class ChannelResponse(BaseModel):
     last_post_date: datetime | None = None
     avg_forwards: int | None = None
     avg_reactions: int | None = None
+    listing_type: str = "sale"
+    auction_start_price: float | None = None
+    auction_bid_step: float | None = None
+    auction_duration_hours: int | None = None
     status: str
     created_at: datetime
 

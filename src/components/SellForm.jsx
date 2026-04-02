@@ -114,6 +114,7 @@ const SellForm = () => {
 		errors,
 		touched,
 		isSubmitting,
+		setFieldValue,
 	} = useFormik({
 		initialValues: {
 			telegram_link: '',
@@ -124,6 +125,10 @@ const SellForm = () => {
 			description: '',
 			resource1: '',
 			resource2: '',
+			listing_type: 'sale',
+			auction_start_price: '',
+			auction_bid_step: '',
+			auction_duration_hours: '48',
 		},
 		validationSchema: Yup.object({
 			telegram_link: Yup.string()
@@ -137,6 +142,20 @@ const SellForm = () => {
 				.typeError('Введіть число')
 				.positive('Ціна повинна бути більше 0')
 				.required('Поле обов\'язкове для заповнення'),
+			auction_start_price: Yup.number()
+				.typeError('Введіть число')
+				.positive('Ціна повинна бути більше 0')
+				.when('listing_type', {
+					is: 'auction',
+					then: (schema) => schema.required('Вкажіть стартову ціну'),
+				}),
+			auction_bid_step: Yup.number()
+				.typeError('Введіть число')
+				.positive('Крок повинен бути більше 0')
+				.when('listing_type', {
+					is: 'auction',
+					then: (schema) => schema.required('Вкажіть крок ставки'),
+				}),
 		}),
 		onSubmit: async (vals, { resetForm }) => {
 			if (!isAuthenticated) {
@@ -146,7 +165,7 @@ const SellForm = () => {
 			setSubmitError('');
 			try {
 				const resources = [vals.resource1, vals.resource2].filter(Boolean).join('\n');
-				await channelsAPI.create({
+				const payload = {
 					telegram_link: vals.telegram_link,
 					seller_telegram: vals.seller_telegram,
 					category: vals.category,
@@ -154,7 +173,14 @@ const SellForm = () => {
 					monthly_income: vals.monthly_income ? parseFloat(vals.monthly_income) : null,
 					description: vals.description || null,
 					resources: resources || null,
-				});
+					listing_type: vals.listing_type,
+				};
+				if (vals.listing_type === 'auction') {
+					payload.auction_start_price = parseFloat(vals.auction_start_price);
+					payload.auction_bid_step = parseFloat(vals.auction_bid_step);
+					payload.auction_duration_hours = parseInt(vals.auction_duration_hours);
+				}
+				await channelsAPI.create(payload);
 				resetForm();
 				setShowModal(true);
 			} catch (err) {
@@ -253,6 +279,91 @@ const SellForm = () => {
 									/>
 								</InputField>
 							</div>
+
+							{/* Listing Type */}
+							<div className='mt-6'>
+								<label className='text-sm font-medium text-gray-600 dark:text-gray-400 mb-3 block'>
+									Тип розміщення
+								</label>
+								<div className='grid grid-cols-2 gap-3'>
+									<button
+										type='button'
+										onClick={() => setFieldValue('listing_type', 'sale')}
+										className={`p-4 rounded-xl border-2 transition-all duration-200 text-left ${
+											values.listing_type === 'sale'
+												? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20'
+												: 'border-gray-200 dark:border-slate-600 hover:border-gray-300 dark:hover:border-slate-500'
+										}`}
+									>
+										<div className='text-lg mb-1'>🏷️</div>
+										<div className='font-semibold text-sm text-gray-900 dark:text-white'>Продаж</div>
+										<div className='text-xs text-gray-500 dark:text-gray-400'>Фіксована ціна</div>
+									</button>
+									<button
+										type='button'
+										onClick={() => setFieldValue('listing_type', 'auction')}
+										className={`p-4 rounded-xl border-2 transition-all duration-200 text-left ${
+											values.listing_type === 'auction'
+												? 'border-orange-500 bg-orange-50 dark:bg-orange-900/20'
+												: 'border-gray-200 dark:border-slate-600 hover:border-gray-300 dark:hover:border-slate-500'
+										}`}
+									>
+										<div className='text-lg mb-1'>🔥</div>
+										<div className='font-semibold text-sm text-gray-900 dark:text-white'>Аукціон</div>
+										<div className='text-xs text-gray-500 dark:text-gray-400'>Ставки покупців</div>
+									</button>
+								</div>
+							</div>
+
+							{/* Auction fields */}
+							{values.listing_type === 'auction' && (
+								<div className='mt-5 p-5 bg-orange-50/50 dark:bg-orange-900/10 border border-orange-200 dark:border-orange-800/30 rounded-xl space-y-4'>
+									<div className='flex items-center gap-2 mb-2'>
+										<span className='text-orange-500 text-lg'>🔥</span>
+										<span className='font-semibold text-sm text-gray-900 dark:text-white'>Параметри аукціону</span>
+									</div>
+									<div className='grid md:grid-cols-3 gap-4'>
+										<InputField label='Стартова ціна (USDT)' error={errors.auction_start_price} touched={touched.auction_start_price}>
+											<input
+												className={inputClass}
+												name='auction_start_price'
+												value={values.auction_start_price}
+												onChange={handleChange}
+												onBlur={handleBlur}
+												type='text'
+												placeholder='100'
+											/>
+										</InputField>
+										<InputField label='Крок ставки (USDT)' error={errors.auction_bid_step} touched={touched.auction_bid_step}>
+											<input
+												className={inputClass}
+												name='auction_bid_step'
+												value={values.auction_bid_step}
+												onChange={handleChange}
+												onBlur={handleBlur}
+												type='text'
+												placeholder='10'
+											/>
+										</InputField>
+										<InputField label='Тривалість'>
+											<select
+												className={`${inputClass} text-gray-900 dark:text-white`}
+												name='auction_duration_hours'
+												value={values.auction_duration_hours}
+												onChange={handleChange}
+											>
+												<option value='24'>24 години</option>
+												<option value='48'>48 годин</option>
+												<option value='72'>72 години</option>
+												<option value='168'>7 днів</option>
+											</select>
+										</InputField>
+									</div>
+									<p className='text-xs text-gray-500 dark:text-gray-400'>
+										💡 Ціна вище (USDT) буде використана як ціна миттєвого викупу
+									</p>
+								</div>
+							)}
 						</div>
 
 						{/* Divider */}

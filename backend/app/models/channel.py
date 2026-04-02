@@ -17,6 +17,11 @@ class ChannelStatus(str, enum.Enum):
     sold = "sold"
 
 
+class ListingType(str, enum.Enum):
+    sale = "sale"
+    auction = "auction"
+
+
 class Channel(Base):
     __tablename__ = "channels"
 
@@ -47,6 +52,14 @@ class Channel(Base):
     avg_forwards: Mapped[int | None] = mapped_column(Integer, nullable=True)
     avg_reactions: Mapped[int | None] = mapped_column(Integer, nullable=True)
 
+    # Listing type & auction params
+    listing_type: Mapped[str] = mapped_column(
+        String(20), default="sale"
+    )
+    auction_start_price: Mapped[float | None] = mapped_column(Float, nullable=True)
+    auction_bid_step: Mapped[float | None] = mapped_column(Float, nullable=True)
+    auction_duration_hours: Mapped[int | None] = mapped_column(Integer, nullable=True)
+
     status: Mapped[ChannelStatus] = mapped_column(
         Enum(ChannelStatus), default=ChannelStatus.pending
     )
@@ -61,6 +74,7 @@ class Channel(Base):
     stats = relationship("ChannelStats", back_populates="channel", cascade="all, delete-orphan")
     posts = relationship("ChannelPost", back_populates="channel", cascade="all, delete-orphan")
     deals = relationship("Deal", back_populates="channel")
+    auction = relationship("Auction", back_populates="channel", uselist=False)
 
 
 class ChannelStats(Base):

@@ -1,5 +1,5 @@
 import logging
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 import os
 
 from fastapi import APIRouter, Body, Depends, HTTPException, status
@@ -133,6 +133,28 @@ async def approve_channel(
             await db.refresh(channel)
         except Exception as e:
             logger.warning(f"Stats refresh on approve failed for channel #{channel_id}: {e}")
+
+        # Auto-create auction if listing_type is 'auction'
+        if channel.listing_type == "auction" and channel.auction_start_price:
+            try:
+                from app.models.auction import Auction
+                auction = Auction(
+                    channel_id=channel.id,
+                    seller_id=channel.seller_id,
+                    start_price=channel.auction_start_price,
+                    bid_step=channel.auction_bid_step or 10.0,
+                    current_price=channel.auction_start_price,
+                    buyout_price=channel.price if channel.price > channel.auction_start_price else None,
+                    status="active",
+                    starts_at=datetime.utcnow(),
+                    ends_at=datetime.utcnow() + timedelta(hours=channel.auction_duration_hours or 48),
+                )
+                db.add(auction)
+                await db.commit()
+                await db.refresh(channel)
+                logger.info(f"Auction auto-created for channel #{channel.id}")
+            except Exception as e:
+                logger.error(f"Failed to auto-create auction for channel #{channel_id}: {e}")
 
         return ChannelResponse.model_validate(channel)
     except HTTPException:

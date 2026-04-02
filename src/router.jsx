@@ -9,6 +9,7 @@ import ErrorsPage from './layouts/ErrorsPage';
 import ChannelDetailsPage from './layouts/ChannelDetailsPage';
 import DealPage from './layouts/DealPage';
 import ProfilePage from './layouts/ProfilePage';
+import AuctionPage from './layouts/AuctionPage';
 import PrivateRoute from './components/PrivateRoute';
 
 export const router = createBrowserRouter([
@@ -32,6 +33,10 @@ export const router = createBrowserRouter([
 			{
 				path: '/catalog',
 				element: <CatalogPage />,
+			},
+			{
+				path: '/auction',
+				element: <AuctionPage />,
 			},
 			{
 				path: '/cabinet',
