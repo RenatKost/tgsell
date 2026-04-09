@@ -1,7 +1,7 @@
 const AIRiskScore = ({ health, loading }) => {
 	if (loading) {
 		return (
-			<div className='bg-white dark:bg-card rounded-xl border border-gray-100 dark:border-card-border shadow-sm px-4 pt-4 pb-3 w-full'>
+			<div className='bg-white dark:bg-card rounded-xl border border-gray-100 dark:border-card-border shadow-sm dark:shadow-neon px-4 pt-4 pb-3 w-full'>
 				<p className='text-gray-400 text-xs'>AI Risk Assessment</p>
 				<div className='flex justify-center py-6'>
 					<div className='w-32 h-16 rounded-t-full bg-gray-100 dark:bg-card-inner animate-pulse' />
@@ -12,7 +12,7 @@ const AIRiskScore = ({ health, loading }) => {
 
 	if (!health) {
 		return (
-			<div className='bg-white dark:bg-card rounded-xl border border-gray-100 dark:border-card-border shadow-sm px-4 pt-4 pb-3 w-full'>
+			<div className='bg-white dark:bg-card rounded-xl border border-gray-100 dark:border-card-border shadow-sm dark:shadow-neon px-4 pt-4 pb-3 w-full'>
 				<p className='text-gray-400 text-xs'>AI Risk Assessment</p>
 				<p className='text-gray-500 text-center py-8 text-xs'>Немає даних</p>
 			</div>
@@ -34,12 +34,12 @@ const AIRiskScore = ({ health, loading }) => {
 		: '';
 
 	return (
-		<div className='bg-white dark:bg-card rounded-xl border border-gray-100 dark:border-card-border shadow-sm px-4 pt-4 pb-3 w-full'>
+		<div className='bg-white dark:bg-card rounded-xl border border-gray-100 dark:border-card-border shadow-sm dark:shadow-neon px-4 pt-4 pb-3 w-full'>
 			<p className='text-gray-400 text-xs mb-1'>AI Risk Assessment</p>
 			<div className='flex flex-col items-center'>
 				<svg width='160' height='85' viewBox='0 0 160 85'>
 					{/* Background arc */}
-					<path d={bgPath} fill='none' stroke='#1e2d3d' strokeWidth='10' strokeLinecap='round' />
+					<path d={bgPath} fill='none' stroke='#1A3A2A' strokeWidth='10' strokeLinecap='round' />
 					{/* Colored gradient arc */}
 					<defs>
 						<linearGradient id='gaugeGrad' x1='0%' y1='0%' x2='100%' y2='0%'>
@@ -53,7 +53,7 @@ const AIRiskScore = ({ health, loading }) => {
 					)}
 					{/* Needle indicator */}
 					{score > 0 && (
-						<circle cx={endX} cy={endY} r='5' fill={color} stroke='#0F1923' strokeWidth='2' />
+						<circle cx={endX} cy={endY} r='5' fill={color} stroke='#080E0E' strokeWidth='2' />
 					)}
 				</svg>
 				<div className='text-center -mt-5'>

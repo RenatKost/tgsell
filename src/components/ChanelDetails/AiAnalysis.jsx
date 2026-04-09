@@ -54,7 +54,7 @@ const AiAnalysis = ({ channelId, channel }) => {
 
 	if (loading) {
 		return (
-			<div className='bg-white dark:bg-card rounded-xl border border-gray-100 dark:border-card-border shadow-sm p-4'>
+			<div className='bg-white dark:bg-card rounded-xl border border-gray-100 dark:border-card-border shadow-sm dark:shadow-neon p-4'>
 				<div className='flex items-center gap-3 mb-4'>
 					<div className='w-8 h-8 rounded-lg bg-indigo-100 dark:bg-card-inner flex items-center justify-center animate-pulse'>
 						<span className='text-sm'>🤖</span>
@@ -79,7 +79,7 @@ const AiAnalysis = ({ channelId, channel }) => {
 
 	if (error) {
 		return (
-			<div className='bg-white dark:bg-card rounded-xl border border-gray-100 dark:border-card-border shadow-sm p-4'>
+			<div className='bg-white dark:bg-card rounded-xl border border-gray-100 dark:border-card-border shadow-sm dark:shadow-neon p-4'>
 				{/* Still show AdvReach even if AI fails */}
 				{(reach12h || reach24h || reach48h) && (
 					<div className='mb-4'>
@@ -102,12 +102,16 @@ const AiAnalysis = ({ channelId, channel }) => {
 	const verdict = verdictConfig[data.verdict] || verdictConfig.hold;
 
 	return (
-		<div className='bg-white dark:bg-card rounded-xl border border-gray-100 dark:border-card-border shadow-sm overflow-hidden'>
+		<div className='bg-white dark:bg-card rounded-xl border border-gray-100 dark:border-card-border shadow-sm dark:shadow-neon overflow-hidden'>
 			{/* Header */}
 			<div className='px-4 py-3 border-b border-gray-100 dark:border-card-border'>
 				<div className='flex items-center justify-between'>
 					<div className='flex items-center gap-2'>
-						<span className='text-base'>🤖</span>
+						<div className='w-6 h-6 rounded-lg bg-accent/20 flex items-center justify-center'>
+							<svg className='w-3.5 h-3.5 text-accent' fill='none' viewBox='0 0 24 24' stroke='currentColor' strokeWidth='2'>
+								<path strokeLinecap='round' strokeLinejoin='round' d='M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z' />
+							</svg>
+						</div>
 						<p className='text-sm font-bold text-gray-900 dark:text-white'>AI АНАЛІЗ І МОНЕТИЗАЦІЯ</p>
 					</div>
 					<div className={`${verdict.bg} ${verdict.border} border rounded-lg px-2.5 py-1 text-center`}>

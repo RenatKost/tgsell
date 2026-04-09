@@ -15,7 +15,7 @@ const Views = ({ stats = [], current, viewsHidden }) => {
 
 	if (viewsHidden) {
 		return (
-			<div className='bg-white dark:bg-card rounded-xl border border-gray-100 dark:border-card-border shadow-sm px-4 pt-4 pb-4 w-full'>
+			<div className='bg-white dark:bg-card rounded-xl border border-gray-100 dark:border-card-border shadow-sm dark:shadow-neon px-4 pt-4 pb-4 w-full'>
 				<p className='text-gray-400 text-xs mb-1'>Добовий перегляд</p>
 				<div className='flex items-center gap-2 mb-3'>
 					<span className='text-lg'>🔒</span>
@@ -63,7 +63,7 @@ const Views = ({ stats = [], current, viewsHidden }) => {
 						tooltip: { enabled: false },
 					},
 					yaxis: { min: yMin, max: yMax, labels: { show: false } },
-					grid: { show: true, borderColor: '#243447', strokeDashArray: 4, xaxis: { lines: { show: false } }, padding: { bottom: 0 } },
+					grid: { show: true, borderColor: '#1A3A2A', strokeDashArray: 4, xaxis: { lines: { show: false } }, padding: { bottom: 0 } },
 					legend: { show: false },
 					tooltip: { x: { show: true }, y: { formatter: v => v?.toLocaleString('uk-UA') } },
 					colors: ['#EC4899'],
@@ -76,7 +76,7 @@ const Views = ({ stats = [], current, viewsHidden }) => {
 	const formatted = (current || dataPoints[dataPoints.length - 1])?.toLocaleString('uk-UA') || '—';
 
 	return (
-		<div className='bg-white dark:bg-card rounded-xl border border-gray-100 dark:border-card-border shadow-sm px-4 pt-4 w-full'>
+		<div className='bg-white dark:bg-card rounded-xl border border-gray-100 dark:border-card-border shadow-sm dark:shadow-neon px-4 pt-4 w-full'>
 			<div className='flex items-center justify-between mb-1'>
 				<div>
 					<p className='text-gray-400 text-xs'>Добовий перегляд</p>

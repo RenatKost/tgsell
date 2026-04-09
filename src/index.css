@@ -31,7 +31,7 @@ body {
 	-moz-tap-highlight-color: transparent;
 	-ms-tap-highlight-color: transparent;
 	color: #e2e8f0;
-	background-color: #0F1923;
+	background-color: #080E0E;
 	font-family: 'Montserrat', sans-serif;
 	overflow-x: hidden;
 	transition: background-color 0.3s, color 0.3s;
@@ -70,14 +70,14 @@ a {
 
 /* ApexCharts dark mode tooltip */
 html.dark .apexcharts-tooltip {
-	background: #1A2332 !important;
-	border-color: #243447 !important;
+	background: #0D1717 !important;
+	border-color: #1A3A2A !important;
 	color: #e2e8f0 !important;
 }
 
 html.dark .apexcharts-tooltip-title {
-	background: #0F1923 !important;
-	border-color: #243447 !important;
+	background: #080E0E !important;
+	border-color: #1A3A2A !important;
 	color: #94a3b8 !important;
 }
 

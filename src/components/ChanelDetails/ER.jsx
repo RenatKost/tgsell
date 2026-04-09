@@ -46,7 +46,7 @@ const ER = ({ stats = [], current }) => {
 						tooltip: { enabled: false },
 					},
 					yaxis: { min: yMin, max: yMax, labels: { show: false } },
-					grid: { show: true, borderColor: '#243447', strokeDashArray: 4, xaxis: { lines: { show: false } }, padding: { bottom: 0 } },
+					grid: { show: true, borderColor: '#1A3A2A', strokeDashArray: 4, xaxis: { lines: { show: false } }, padding: { bottom: 0 } },
 					legend: { show: false },
 					tooltip: { x: { show: true }, y: { formatter: v => `${v?.toFixed(2)}%` } },
 					colors: ['#10B981'],
@@ -59,7 +59,7 @@ const ER = ({ stats = [], current }) => {
 	const formatted = current != null ? `${current.toFixed(1)}%` : '—';
 
 	return (
-		<div className='bg-white dark:bg-card rounded-xl border border-gray-100 dark:border-card-border shadow-sm px-4 pt-4 w-full'>
+		<div className='bg-white dark:bg-card rounded-xl border border-gray-100 dark:border-card-border shadow-sm dark:shadow-neon px-4 pt-4 w-full'>
 			<div className='flex items-center justify-between mb-1'>
 				<div>
 					<p className='text-gray-400 text-xs'>Рівень залученості</p>

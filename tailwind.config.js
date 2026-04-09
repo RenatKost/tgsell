@@ -5,12 +5,16 @@ export default {
 	theme: {
 		extend: {
 			colors: {
-				page: '#0F1923',
-				card: '#1A2332',
-				'card-border': '#243447',
-				'card-inner': '#152238',
-				'card-hover': '#1F2D42',
-				accent: '#22C55E',
+				page: '#080E0E',
+				card: '#0D1717',
+				'card-border': '#1A3A2A',
+				'card-inner': '#0A1414',
+				'card-hover': '#122222',
+				accent: '#00FF88',
+			},
+			boxShadow: {
+				neon: '0 0 15px rgba(0, 255, 136, 0.08)',
+				'neon-lg': '0 0 30px rgba(0, 255, 136, 0.12)',
 			},
 			keyframes: {
 				fadeIn: {

@@ -127,7 +127,7 @@ const PostsList = ({ channelId }) => {
 
 	if (loading) {
 		return (
-			<div className='bg-white dark:bg-card rounded-xl border border-gray-100 dark:border-card-border shadow-sm p-4'>
+			<div className='bg-white dark:bg-card rounded-xl border border-gray-100 dark:border-card-border shadow-sm dark:shadow-neon p-4'>
 				<p className='text-[10px] text-gray-400 font-semibold uppercase tracking-wider mb-3'>Публікації каналу</p>
 				<div className='flex justify-center py-6'>
 					<div className='animate-spin rounded-full h-5 w-5 border-2 border-gray-200 dark:border-card-border border-t-accent' />
@@ -138,7 +138,7 @@ const PostsList = ({ channelId }) => {
 
 	if (!posts.length) {
 		return (
-			<div className='bg-white dark:bg-card rounded-xl border border-gray-100 dark:border-card-border shadow-sm p-4'>
+			<div className='bg-white dark:bg-card rounded-xl border border-gray-100 dark:border-card-border shadow-sm dark:shadow-neon p-4'>
 				<p className='text-[10px] text-gray-400 font-semibold uppercase tracking-wider mb-1'>Публікації каналу</p>
 				<p className='text-gray-300 dark:text-gray-600 text-center py-6 text-xs'>Дані поки відсутні</p>
 			</div>
@@ -163,7 +163,7 @@ const PostsList = ({ channelId }) => {
 	};
 
 	return (
-		<div className='bg-white dark:bg-card rounded-xl border border-gray-100 dark:border-card-border shadow-sm p-4'>
+		<div className='bg-white dark:bg-card rounded-xl border border-gray-100 dark:border-card-border shadow-sm dark:shadow-neon p-4'>
 			<div className='flex items-center justify-between mb-4'>
 				<div>
 					<p className='text-[10px] text-gray-400 font-semibold uppercase tracking-wider'>Публікації каналу</p>

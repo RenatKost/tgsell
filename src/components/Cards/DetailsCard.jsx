@@ -69,7 +69,7 @@ const DetailsCard = ({ channel, onBuy, stats = [] }) => {
 	}
 
 	return (
-		<div className='bg-white dark:bg-card rounded-xl border border-gray-100 dark:border-card-border shadow-sm'>
+		<div className='bg-white dark:bg-card rounded-xl border border-gray-100 dark:border-card-border shadow-sm dark:shadow-neon'>
 			{/* Channel header */}
 			<div className='p-4'>
 				<div className='flex items-center gap-3'>
@@ -255,7 +255,7 @@ const DetailsCard = ({ channel, onBuy, stats = [] }) => {
 				</div>
 				<button
 					onClick={onBuy}
-					className='w-full font-bold bg-accent text-white py-2.5 rounded-lg shadow-lg shadow-accent/20 hover:bg-emerald-600 transition-all text-sm'
+					className='w-full font-bold bg-accent text-black py-2.5 rounded-lg shadow-lg shadow-accent/30 hover:shadow-accent/50 hover:brightness-110 transition-all text-sm'
 				>
 					Купити канал
 				</button>
