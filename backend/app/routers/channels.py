@@ -317,12 +317,12 @@ async def get_ai_analysis(channel_id: int, db: AsyncSession = Depends(get_db)):
         "description": channel.description,
     }
 
-    # Get all posts for deep analysis
+    # Get last 20 posts for AI analysis
     posts_result = await db.execute(
         select(ChannelPost)
         .where(ChannelPost.channel_id == channel_id)
         .order_by(ChannelPost.date.desc())
-        .limit(50)
+        .limit(20)
     )
     posts = posts_result.scalars().all()
     posts_data = [

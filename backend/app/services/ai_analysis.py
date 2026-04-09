@@ -36,34 +36,32 @@ async def analyze_channel(channel_data: dict, posts_data: list[dict], stats_data
         f"Опис власника: {channel_data.get('description', '') or 'Немає'}\n"
     )
 
-    # All posts for content analysis
+    # Top 20 posts for content analysis (trim text to save tokens)
     posts_text = ""
-    for i, p in enumerate(posts_data, 1):
-        text_preview = (p.get("text") or "")[:300]
+    for i, p in enumerate(posts_data[:20], 1):
+        text_preview = (p.get("text") or "")[:150]
         posts_text += (
-            f"\nПост #{i}: {text_preview}\n"
-            f"  👁 {p.get('views', 0)} переглядів | ❤️ {p.get('reactions', 0)} реакцій | "
-            f"🔄 {p.get('forwards', 0)} пересилань | 📎 {p.get('media_type', 'текст')}\n"
+            f"#{i}: {text_preview}\n"
+            f"  👁{p.get('views', 0)} ❤️{p.get('reactions', 0)} 🔄{p.get('forwards', 0)} 📎{p.get('media_type', 'txt')}\n"
         )
 
-    # Full stats history
+    # Last 14 stats entries (enough to see trend)
     stats_text = ""
-    if stats_data:
-        for s in stats_data:
-            stats_text += (
-                f"  {s.get('date', '?')}: підписників={s.get('subscribers', 0):,}, "
-                f"перегляди={s.get('avg_views', 0):,}, er={s.get('er', 0):.2f}%\n"
-            )
+    for s in (stats_data or [])[-14:]:
+        stats_text += (
+            f"  {s.get('date', '?')}: subs={s.get('subscribers', 0)}, "
+            f"views={s.get('avg_views', 0)}, er={s.get('er', 0):.1f}%\n"
+        )
 
     prompt = f"""Ти — топовий аналітик Telegram-каналів з досвідом оцінки та монетизації медіа-активів. Проведи ГЛИБОКИЙ аналіз каналу для потенційного покупця.
 
 ══════ ДАНІ КАНАЛУ ══════
 {channel_info}
 
-══════ ВСІ ПУБЛІКАЦІЇ ({len(posts_data)} шт.) ══════
+══════ ПУБЛІКАЦІЇ (останні 20) ══════
 {posts_text if posts_text else "Немає публікацій"}
 
-══════ ПОВНА ІСТОРІЯ СТАТИСТИКИ ({len(stats_data)} записів) ══════
+══════ СТАТИСТИКА (останні 14 днів) ══════
 {stats_text if stats_text else "Немає історичних даних"}
 
 ══════ ЗАВДАННЯ ══════
