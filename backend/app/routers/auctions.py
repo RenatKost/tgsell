@@ -2,11 +2,14 @@
 import logging
 from datetime import datetime, timedelta
 
+from aiogram import Bot
+from aiogram.enums import ParseMode
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
+from app.config import settings
 from app.database import get_db
 from app.models.auction import Auction, AuctionBid, AuctionStatus
 from app.models.channel import Channel
@@ -275,6 +278,36 @@ async def place_bid(
 
     await db.commit()
     await db.refresh(bid)
+
+    # Notify seller about the new bid (fire-and-forget)
+    try:
+        channel = await db.get(Channel, auction.channel_id)
+        seller = await db.get(User, auction.seller_id)
+        channel_name = channel.channel_name if channel else "—"
+        if seller and seller.telegram_id:
+            bot = Bot(token=settings.bot_token_alerts)
+            try:
+                if is_buyout:
+                    text = (
+                        f"💥 <b>Викуп по аукціону!</b>\n\n"
+                        f"📺 Канал: {channel_name}\n"
+                        f"💰 Ціна викупу: {body.amount} USDT\n"
+                        f"👤 Покупець: {user.first_name}\n\n"
+                        f"Аукціон завершено. Угоду буде створено автоматично."
+                    )
+                else:
+                    text = (
+                        f"🔔 <b>Нова ставка на аукціоні!</b>\n\n"
+                        f"📺 Канал: {channel_name}\n"
+                        f"💰 Ставка: {body.amount} USDT\n"
+                        f"👤 Учасник: {user.first_name}\n"
+                        f"📊 Всього ставок: {auction.bid_count}"
+                    )
+                await bot.send_message(seller.telegram_id, text, parse_mode=ParseMode.HTML)
+            finally:
+                await bot.session.close()
+    except Exception as e:
+        logger.warning(f"Failed to notify seller about bid on auction #{auction.id}: {e}")
 
     return AuctionBidResponse(
         id=bid.id,
