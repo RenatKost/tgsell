@@ -65,15 +65,15 @@ const Subscribers = ({ stats = [], current }) => {
 					<p className='text-gray-400 text-xs'>Підписники</p>
 					<p className='font-bold text-lg text-gray-900 dark:text-white'>{formatted}</p>
 				</div>
-				<div className='flex items-center gap-1'>
+				<div className='flex items-center gap-0.5 flex-shrink-0'>
 					{TF.map((t, i) => (
 						<button key={i} onClick={() => setTf(i)}
-							className={`px-2.5 py-1 rounded-lg text-xs font-semibold transition-all ${
+							className={`px-1.5 py-0.5 rounded text-[10px] font-semibold transition-all ${
 								tf === i ? 'bg-[#27ACD2] text-white' : 'bg-gray-50 dark:bg-slate-700/60 text-gray-400 hover:bg-gray-100'
 							}`}>{t.label}</button>
 					))}
-					<button onClick={() => setModal(true)} className='ml-1 w-7 h-7 rounded-lg bg-gray-50 dark:bg-slate-700/60 hover:bg-gray-100 flex items-center justify-center text-gray-400 hover:text-gray-600 transition-all' title='Розгорнути'>
-						<svg width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='currentColor' strokeWidth='2' strokeLinecap='round' strokeLinejoin='round'><path d='M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7'/></svg>
+					<button onClick={() => setModal(true)} className='ml-0.5 w-6 h-6 rounded bg-gray-50 dark:bg-slate-700/60 hover:bg-gray-100 flex items-center justify-center text-gray-400 hover:text-gray-600 transition-all' title='Розгорнути'>
+						<svg width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='currentColor' strokeWidth='2' strokeLinecap='round' strokeLinejoin='round'><path d='M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7'/></svg>
 					</button>
 				</div>
 			</div>

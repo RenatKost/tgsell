@@ -1,6 +1,25 @@
 import { faHeart } from '@fortawesome/free-solid-svg-icons';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
+import { useState } from 'react';
 import { useAuth } from '../../context/AppContext';
+
+const Tooltip = ({ children, text, desc }) => {
+	const [show, setShow] = useState(false);
+	return (
+		<div className='relative' onMouseEnter={() => setShow(true)} onMouseLeave={() => setShow(false)}>
+			{children}
+			{show && (
+				<div className='absolute bottom-full left-1/2 -translate-x-1/2 mb-2 z-50 pointer-events-none'>
+					<div className='bg-gray-900 dark:bg-slate-700 text-white rounded-lg px-3 py-2 shadow-xl border border-gray-700 dark:border-slate-600 min-w-[160px] max-w-[220px]'>
+						<p className='text-[11px] font-semibold mb-0.5 whitespace-nowrap'>{text}</p>
+						{desc && <p className='text-[10px] text-gray-300 dark:text-gray-400 leading-snug'>{desc}</p>}
+					</div>
+					<div className='absolute top-full left-1/2 -translate-x-1/2 w-0 h-0 border-x-[5px] border-x-transparent border-t-[5px] border-t-gray-900 dark:border-t-slate-700' />
+				</div>
+			)}
+		</div>
+	);
+};
 
 const DetailsCard = ({ channel, onBuy, stats = [] }) => {
 	const { isAuthenticated, favoriteIds, toggleFavorite } = useAuth();
@@ -126,35 +145,70 @@ const DetailsCard = ({ channel, onBuy, stats = [] }) => {
 				</div>
 			</div>
 
-			{/* Activity - compact horizontal pills */}
+			{/* Activity - icons with tooltips */}
 			{(channel.total_posts || channel.post_frequency || channel.last_post_date || channel.avg_forwards || channel.avg_reactions) && (
 				<div className='px-4 pb-3'>
 					<p className='text-[10px] text-gray-400 font-semibold uppercase tracking-wider mb-2'>Активність</p>
-					<div className='flex flex-wrap gap-1.5'>
+					<div className='flex flex-wrap gap-2'>
 						{channel.total_posts != null && (
-							<span className='bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400 text-[11px] font-medium px-2 py-1 rounded-md'>
-								📝 {channel.total_posts.toLocaleString('uk-UA')} постів
-							</span>
+							<Tooltip text='Усього постів' desc='Загальна кількість публікацій каналу за весь час'>
+								<div className='flex items-center gap-1.5 bg-blue-50 dark:bg-blue-900/20 border border-blue-100 dark:border-blue-800/40 rounded-lg px-2.5 py-1.5 cursor-default'>
+									<div className='w-5 h-5 rounded-md bg-blue-100 dark:bg-blue-800/50 flex items-center justify-center'>
+										<svg className='w-3 h-3 text-blue-500' fill='none' viewBox='0 0 24 24' stroke='currentColor' strokeWidth='2'>
+											<path strokeLinecap='round' strokeLinejoin='round' d='M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z' />
+										</svg>
+									</div>
+									<span className='text-[11px] font-semibold text-blue-700 dark:text-blue-300'>{channel.total_posts.toLocaleString('uk-UA')}</span>
+								</div>
+							</Tooltip>
 						)}
 						{channel.post_frequency != null && (
-							<span className='bg-orange-50 dark:bg-orange-900/20 text-orange-600 dark:text-orange-400 text-[11px] font-medium px-2 py-1 rounded-md'>
-								📊 ~{channel.post_frequency}/день
-							</span>
+							<Tooltip text='Публікацій / день' desc='Середня частота публікацій за останній період'>
+								<div className='flex items-center gap-1.5 bg-orange-50 dark:bg-orange-900/20 border border-orange-100 dark:border-orange-800/40 rounded-lg px-2.5 py-1.5 cursor-default'>
+									<div className='w-5 h-5 rounded-md bg-orange-100 dark:bg-orange-800/50 flex items-center justify-center'>
+										<svg className='w-3 h-3 text-orange-500' fill='none' viewBox='0 0 24 24' stroke='currentColor' strokeWidth='2'>
+											<path strokeLinecap='round' strokeLinejoin='round' d='M13 7h8m0 0v8m0-8l-8 8-4-4-6 6' />
+										</svg>
+									</div>
+									<span className='text-[11px] font-semibold text-orange-700 dark:text-orange-300'>~{channel.post_frequency}/д</span>
+								</div>
+							</Tooltip>
 						)}
 						{channel.last_post_date && (
-							<span className='bg-gray-100 dark:bg-slate-700 text-gray-600 dark:text-gray-400 text-[11px] font-medium px-2 py-1 rounded-md'>
-								⏱ {formatDate(channel.last_post_date)}
-							</span>
+							<Tooltip text='Останній пост' desc='Скільки часу минуло з останньої публікації'>
+								<div className='flex items-center gap-1.5 bg-gray-100 dark:bg-slate-700 border border-gray-200 dark:border-slate-600 rounded-lg px-2.5 py-1.5 cursor-default'>
+									<div className='w-5 h-5 rounded-md bg-gray-200 dark:bg-slate-600 flex items-center justify-center'>
+										<svg className='w-3 h-3 text-gray-500' fill='none' viewBox='0 0 24 24' stroke='currentColor' strokeWidth='2'>
+											<path strokeLinecap='round' strokeLinejoin='round' d='M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z' />
+										</svg>
+									</div>
+									<span className='text-[11px] font-semibold text-gray-600 dark:text-gray-300'>{formatDate(channel.last_post_date)}</span>
+								</div>
+							</Tooltip>
 						)}
 						{channel.avg_forwards > 0 && (
-							<span className='bg-teal-50 dark:bg-teal-900/20 text-teal-600 dark:text-teal-400 text-[11px] font-medium px-2 py-1 rounded-md'>
-								⬆ {channel.avg_forwards.toLocaleString('uk-UA')}
-							</span>
+							<Tooltip text='Пересилань / пост' desc='Скільки разів у середньому пересилають пости каналу'>
+								<div className='flex items-center gap-1.5 bg-teal-50 dark:bg-teal-900/20 border border-teal-100 dark:border-teal-800/40 rounded-lg px-2.5 py-1.5 cursor-default'>
+									<div className='w-5 h-5 rounded-md bg-teal-100 dark:bg-teal-800/50 flex items-center justify-center'>
+										<svg className='w-3 h-3 text-teal-500' fill='none' viewBox='0 0 24 24' stroke='currentColor' strokeWidth='2'>
+											<path strokeLinecap='round' strokeLinejoin='round' d='M13 7l5 5m0 0l-5 5m5-5H6' />
+										</svg>
+									</div>
+									<span className='text-[11px] font-semibold text-teal-700 dark:text-teal-300'>{channel.avg_forwards.toLocaleString('uk-UA')}</span>
+								</div>
+							</Tooltip>
 						)}
 						{channel.avg_reactions > 0 && (
-							<span className='bg-pink-50 dark:bg-pink-900/20 text-pink-600 dark:text-pink-400 text-[11px] font-medium px-2 py-1 rounded-md'>
-								❤️ {channel.avg_reactions.toLocaleString('uk-UA')}
-							</span>
+							<Tooltip text='Реакцій / пост' desc='Середня кількість реакцій на публікацію'>
+								<div className='flex items-center gap-1.5 bg-pink-50 dark:bg-pink-900/20 border border-pink-100 dark:border-pink-800/40 rounded-lg px-2.5 py-1.5 cursor-default'>
+									<div className='w-5 h-5 rounded-md bg-pink-100 dark:bg-pink-800/50 flex items-center justify-center'>
+										<svg className='w-3 h-3 text-pink-500' fill='none' viewBox='0 0 24 24' stroke='currentColor' strokeWidth='2'>
+											<path strokeLinecap='round' strokeLinejoin='round' d='M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z' />
+										</svg>
+									</div>
+									<span className='text-[11px] font-semibold text-pink-700 dark:text-pink-300'>{channel.avg_reactions.toLocaleString('uk-UA')}</span>
+								</div>
+							</Tooltip>
 						)}
 					</div>
 				</div>
