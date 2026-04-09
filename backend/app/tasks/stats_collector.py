@@ -68,6 +68,8 @@ async def collect_stats_once():
                     channel.avg_forwards = stats["avg_forwards"]
                 if stats.get("avg_reactions"):
                     channel.avg_reactions = stats["avg_reactions"]
+                if stats.get("channel_age_months"):
+                    channel.age = f"{stats['channel_age_months']}"
 
                 # Save daily_stats history with deduplication
                 daily_stats = stats.get("daily_stats", [])

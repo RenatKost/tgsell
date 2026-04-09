@@ -814,6 +814,8 @@ async def admin_refresh_channel_stats(
             channel.avg_forwards = stats["avg_forwards"]
         if stats.get("avg_reactions"):
             channel.avg_reactions = stats["avg_reactions"]
+        if stats.get("channel_age_months"):
+            channel.age = f"{stats['channel_age_months']}"
 
         # Save daily stats with dedup
         daily_stats = stats.get("daily_stats", [])
