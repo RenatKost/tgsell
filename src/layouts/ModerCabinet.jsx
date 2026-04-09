@@ -395,7 +395,8 @@ const ModerCabinet = () => {
 				} : c));
 			}
 		} catch (err) {
-			setRefreshResult(prev => ({ ...prev, [channelId]: { ok: false, error: err.response?.data?.detail || 'Помилка' } }));
+			const msg = err.response?.data?.detail || err.response?.data?.message || (err.response ? `HTTP ${err.response.status}` : err.message) || 'Невідома помилка';
+			setRefreshResult(prev => ({ ...prev, [channelId]: { ok: false, error: msg } }));
 		} finally {
 			setRefreshingStats(prev => ({ ...prev, [channelId]: false }));
 		}
@@ -695,7 +696,7 @@ const ModerCabinet = () => {
 										</div>
 										<div className='bg-gray-50 dark:bg-slate-700/60 p-3 rounded-xl'>
 											<p className='font-semibold text-gray-700 dark:text-gray-300'>API ID</p>
-											<p className='text-gray-600 dark:text-gray-400'>{diagnostics.api_id_set ? '✓ Встановлено' : '✗ Відсутній'}</p>
+											<p className='text-gray-600 dark:text-gray-400'>{diagnostics.telegram_api_id ? '✓ Встановлено' : '✗ Відсутній'}</p>
 										</div>
 										<div className='bg-gray-50 dark:bg-slate-700/60 p-3 rounded-xl'>
 											<p className='font-semibold text-gray-700 dark:text-gray-300'>Аналітика</p>

@@ -768,6 +768,7 @@ async def admin_refresh_channel_stats(
     db: AsyncSession = Depends(get_db),
 ):
     """Manually re-collect stats for a channel from Telegram."""
+    import traceback
     from app.services.channel_stats import collect_channel_stats
     from app.models.channel import ChannelStats, ChannelPost
 
@@ -779,6 +780,7 @@ async def admin_refresh_channel_stats(
     try:
         stats = await collect_channel_stats(channel.telegram_link)
     except Exception as e:
+        logger.error(f"refresh-stats collect error for #{channel_id}: {traceback.format_exc()}")
         raise HTTPException(status_code=502, detail=f"Telegram API error: {e}")
 
     # Update channel snapshot
@@ -864,7 +866,12 @@ async def admin_refresh_channel_stats(
                 ))
                 new_posts_count += 1
 
-    await db.commit()
+    try:
+        await db.commit()
+    except Exception as e:
+        logger.error(f"refresh-stats DB commit error for #{channel_id}: {e}")
+        await db.rollback()
+        raise HTTPException(status_code=500, detail=f"DB save error: {e}")
 
     return {
         "ok": True,
