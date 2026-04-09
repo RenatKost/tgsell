@@ -105,4 +105,6 @@ async def run_payment_checker(interval_seconds: int = 30):
             await check_payments_once()
         except Exception as e:
             logger.error(f"Payment checker error: {e}")
+            from app.services.alerts import alert_service_down
+            await alert_service_down("Payment Checker", str(e))
         await asyncio.sleep(interval_seconds)

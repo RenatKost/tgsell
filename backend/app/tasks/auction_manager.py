@@ -90,4 +90,6 @@ async def run_auction_manager(interval_seconds: int = 60):
                 await _process_auctions(db)
         except Exception as e:
             logger.error(f"Auction manager error: {e}", exc_info=True)
+            from app.services.alerts import alert_service_down
+            await alert_service_down("Auction Manager", str(e))
         await asyncio.sleep(interval_seconds)

@@ -9,23 +9,42 @@ logger = logging.getLogger(__name__)
 
 # Lazy imports — Telethon is optional
 _telethon_client = None
+_telethon_was_ok = False  # Track state for recovery alerts
+_telethon_retries = 0
+_MAX_RETRIES = 3
 
 
 async def _get_telethon_client():
-    """Get or create a Telethon client (singleton) using StringSession."""
-    global _telethon_client
+    """Get or create a Telethon client (singleton) with auto-reconnect."""
+    global _telethon_client, _telethon_was_ok, _telethon_retries
+
+    # Fast path — already connected
     if _telethon_client is not None and _telethon_client.is_connected():
-        return _telethon_client
+        try:
+            if await _telethon_client.is_user_authorized():
+                return _telethon_client
+        except Exception:
+            pass
+        logger.warning("Telethon: connected but session invalid, reconnecting…")
+        _telethon_client = None
 
     if not settings.telegram_api_id or not settings.telegram_api_hash:
         logger.warning("Telethon: TELEGRAM_API_ID or TELEGRAM_API_HASH not set — skipping")
+        return None
+
+    if not settings.telethon_session_string:
+        logger.warning("Telethon: TELETHON_SESSION_STRING not set — skipping")
+        return None
+
+    # Retry limit per cycle
+    if _telethon_retries >= _MAX_RETRIES:
         return None
 
     try:
         from telethon import TelegramClient
         from telethon.sessions import StringSession
 
-        session = StringSession(settings.telethon_session_string) if settings.telethon_session_string else StringSession()
+        session = StringSession(settings.telethon_session_string)
         client = TelegramClient(
             session,
             settings.telegram_api_id,
@@ -33,14 +52,40 @@ async def _get_telethon_client():
         )
         await client.connect()
         if not await client.is_user_authorized():
-            logger.warning("Telethon session not authorized. Set TELETHON_SESSION_STRING env var.")
+            logger.warning("Telethon session not authorized (expired?). Update TELETHON_SESSION_STRING.")
+            _telethon_retries += 1
+            from app.services.alerts import alert_service_down
+            await alert_service_down(
+                "Telethon (аналітика каналів)",
+                "Сесія не авторизована — потрібно оновити TELETHON_SESSION_STRING"
+            )
             return None
+
         logger.info("Telethon client connected and authorized ✓")
         _telethon_client = client
+        _telethon_retries = 0
+
+        # Send recovery alert if was previously down
+        if _telethon_was_ok is False:
+            from app.services.alerts import alert_service_recovered
+            await alert_service_recovered("Telethon (аналітика каналів)")
+
+        _telethon_was_ok = True
         return client
     except Exception as e:
         logger.error(f"Failed to init Telethon client: {e}")
+        _telethon_retries += 1
+        if _telethon_was_ok:
+            _telethon_was_ok = False
+            from app.services.alerts import alert_service_down
+            await alert_service_down("Telethon (аналітика каналів)", str(e))
         return None
+
+
+def reset_telethon_retries():
+    """Reset retry counter — called at start of each stats cycle."""
+    global _telethon_retries
+    _telethon_retries = 0
 
 
 async def get_channel_info_bot_api(channel_username: str) -> dict | None:

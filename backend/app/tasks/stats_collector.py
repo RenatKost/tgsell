@@ -8,13 +8,15 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import async_session
 from app.models.channel import Channel, ChannelPost, ChannelStats, ChannelStatus
-from app.services.channel_stats import collect_channel_stats
+from app.services.channel_stats import collect_channel_stats, reset_telethon_retries
 
 logger = logging.getLogger(__name__)
 
 
 async def collect_stats_once():
     """Collect fresh stats for all active channels (pending + approved)."""
+    reset_telethon_retries()  # Allow fresh reconnect attempts each cycle
+
     async with async_session() as db:
         result = await db.execute(
             select(Channel).where(
@@ -23,9 +25,16 @@ async def collect_stats_once():
         )
         channels = result.scalars().all()
 
+        total = len(channels)
+        success = 0
+        failed = 0
+        telethon_ok = True
+
         for channel in channels:
             try:
                 stats = await collect_channel_stats(channel.telegram_link)
+                if not stats.get("daily_stats"):
+                    telethon_ok = False
 
                 # Update channel with latest data
                 if stats.get("subscribers_count"):
@@ -114,12 +123,19 @@ async def collect_stats_once():
                 await db.commit()
 
                 logger.info(f"Stats collected for channel #{channel.id} ({channel.channel_name})")
+                success += 1
 
                 # Rate limit: wait between channels
                 await asyncio.sleep(3)
 
             except Exception as e:
+                failed += 1
                 logger.error(f"Stats collection failed for channel #{channel.id}: {e}")
+
+        # Send summary alert if there were problems
+        if total > 0:
+            from app.services.alerts import alert_stats_summary
+            await alert_stats_summary(total, success, failed, telethon_ok)
 
 
 async def _upsert_channel_posts(db: AsyncSession, channel_id: int, posts_data: list):
@@ -202,6 +218,8 @@ async def run_stats_collector(interval_hours: int = 24):
             await collect_stats_once()
         except Exception as e:
             logger.error(f"Stats collector error: {e}")
+            from app.services.alerts import alert_service_down
+            await alert_service_down("Stats Collector", str(e))
         await asyncio.sleep(interval_seconds)
 
 
