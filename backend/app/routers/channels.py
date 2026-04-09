@@ -175,11 +175,11 @@ async def get_channel_health(channel_id: int, db: AsyncSession = Depends(get_db)
     velocity_ratios = []
     if not views_hidden:
         for p in posts:
-        if p.views_1h and p.views and p.views > 0:
-            ratio = p.views_1h / p.views
-            velocity_ratios.append(ratio)
-            if ratio > 0.9:
-                suspicious_posts += 1
+            if p.views_1h and p.views and p.views > 0:
+                ratio = p.views_1h / p.views
+                velocity_ratios.append(ratio)
+                if ratio > 0.9:
+                    suspicious_posts += 1
 
     avg_velocity = sum(velocity_ratios) / len(velocity_ratios) if velocity_ratios else None
 
