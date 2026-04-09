@@ -48,6 +48,9 @@ class Settings(BaseSettings):
     admin_group_id: int = 0  # Telegram group chat_id for admin notifications
     alerts_bot_username: str = "tgsell_alert_bot"
 
+    # AI Analysis (Google Gemini)
+    gemini_api_key: str = ""
+
     model_config = {"env_file": ".env", "extra": "ignore"}
 
 

@@ -10,6 +10,7 @@ import ER from '../components/ChanelDetails/ER';
 import Subscribers from '../components/ChanelDetails/Subscribers';
 import Views from '../components/ChanelDetails/Views';
 import PostsList from '../components/ChanelDetails/PostsList';
+import AiAnalysis from '../components/ChanelDetails/AiAnalysis';
 
 const ChannelDetailsPage = () => {
 	const { id } = useParams();
@@ -77,6 +78,7 @@ const ChannelDetailsPage = () => {
 				<div className='w-full lg:w-[380px] flex-shrink-0 space-y-4'>
 					<DetailsCard channel={channel} onBuy={handleBuy} stats={stats} />
 					<ChannelHealth channelId={channel.id} />
+					<AiAnalysis channelId={channel.id} />
 
 					{channel.description && (
 						<div className='bg-white dark:bg-slate-800 rounded-xl border border-gray-100 dark:border-slate-700 shadow-sm p-4'>

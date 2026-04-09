@@ -101,6 +101,9 @@ export const channelsAPI = {
 	getHealth: (id) =>
 		api.get(`/channels/${id}/health`),
 
+	getAiAnalysis: (id) =>
+		api.get(`/channels/${id}/ai-analysis`),
+
 	create: (channelData) =>
 		api.post('/channels', channelData),
 

@@ -288,6 +288,78 @@ async def get_channel_health(channel_id: int, db: AsyncSession = Depends(get_db)
     )
 
 
+@router.get("/{channel_id}/ai-analysis")
+async def get_ai_analysis(channel_id: int, db: AsyncSession = Depends(get_db)):
+    """Get AI-powered deep analysis of a channel using Google Gemini."""
+    from app.services.ai_analysis import analyze_channel
+
+    # Get channel
+    result = await db.execute(select(Channel).where(Channel.id == channel_id))
+    channel = result.scalar_one_or_none()
+    if not channel:
+        raise HTTPException(status_code=404, detail="Channel not found")
+
+    # Prepare channel data dict
+    channel_data = {
+        "channel_name": channel.channel_name,
+        "category": channel.category,
+        "subscribers_count": channel.subscribers_count,
+        "avg_views": channel.avg_views,
+        "er": channel.er,
+        "price": channel.price,
+        "monthly_income": channel.monthly_income,
+        "age": channel.age,
+        "total_posts": channel.total_posts,
+        "post_frequency": channel.post_frequency,
+        "avg_forwards": channel.avg_forwards,
+        "avg_reactions": channel.avg_reactions,
+        "telegram_link": channel.telegram_link,
+        "description": channel.description,
+    }
+
+    # Get last 15 posts
+    posts_result = await db.execute(
+        select(ChannelPost)
+        .where(ChannelPost.channel_id == channel_id)
+        .order_by(ChannelPost.date.desc())
+        .limit(15)
+    )
+    posts = posts_result.scalars().all()
+    posts_data = [
+        {
+            "text": p.text,
+            "views": p.views,
+            "reactions": p.reactions,
+            "forwards": p.forwards,
+            "media_type": p.media_type,
+        }
+        for p in posts
+    ]
+
+    # Get stats history
+    stats_result = await db.execute(
+        select(ChannelStats)
+        .where(ChannelStats.channel_id == channel_id)
+        .order_by(ChannelStats.date.asc())
+    )
+    stats = stats_result.scalars().all()
+    stats_data = [
+        {
+            "date": s.date.isoformat() if s.date else None,
+            "subscribers": s.subscribers,
+            "avg_views": s.avg_views,
+            "er": s.er,
+        }
+        for s in stats
+    ]
+
+    analysis = await analyze_channel(channel_data, posts_data, stats_data)
+    if analysis is None:
+        raise HTTPException(status_code=503, detail="AI analysis unavailable")
+
+    return analysis
+
+
 @router.post("", response_model=ChannelResponse, status_code=status.HTTP_201_CREATED)
 async def create_channel(
     body: ChannelCreate,
