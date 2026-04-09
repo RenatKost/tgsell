@@ -256,6 +256,8 @@ const ModerCabinet = () => {
 	const [rejectReason, setRejectReason] = useState('');
 	const [editId, setEditId] = useState(null);
 	const [editData, setEditData] = useState({});
+	const [refreshingStats, setRefreshingStats] = useState({});
+	const [refreshResult, setRefreshResult] = useState({});
 
 	const [allDeals, setAllDeals] = useState([]);
 	const [dealStatusFilter, setDealStatusFilter] = useState('');
@@ -274,6 +276,8 @@ const ModerCabinet = () => {
 
 	const [actConfig, setActConfig] = useState(null);
 	const [actConfigDirty, setActConfigDirty] = useState(false);
+	const [diagnostics, setDiagnostics] = useState(null);
+	const [diagLoading, setDiagLoading] = useState(false);
 
 	useEffect(() => {
 		loadData();
@@ -376,6 +380,27 @@ const ModerCabinet = () => {
 		} catch (err) { alert(err.response?.data?.detail || 'Помилка збереження'); }
 	};
 
+	const handleRefreshStats = async (channelId) => {
+		setRefreshingStats(prev => ({ ...prev, [channelId]: true }));
+		setRefreshResult(prev => ({ ...prev, [channelId]: null }));
+		try {
+			const { data } = await adminAPI.refreshChannelStats(channelId);
+			setRefreshResult(prev => ({ ...prev, [channelId]: data }));
+			if (data.subscribers_count || data.avg_views) {
+				setAllChannels(prev => prev.map(c => c.id === channelId ? {
+					...c,
+					subscribers_count: data.subscribers_count || c.subscribers_count,
+					avg_views: data.avg_views || c.avg_views,
+					er: data.er || c.er,
+				} : c));
+			}
+		} catch (err) {
+			setRefreshResult(prev => ({ ...prev, [channelId]: { ok: false, error: err.response?.data?.detail || 'Помилка' } }));
+		} finally {
+			setRefreshingStats(prev => ({ ...prev, [channelId]: false }));
+		}
+	};
+
 	const handleResolve = async (dealId, resolution) => {
 		try {
 			await adminAPI.resolveDeal(dealId, { resolution });
@@ -446,6 +471,16 @@ const ModerCabinet = () => {
 			setActConfig(data);
 			setActConfigDirty(false);
 		} catch (err) { alert('Помилка збереження'); }
+	};
+
+	const handleDiagnostics = async () => {
+		setDiagLoading(true);
+		try {
+			const { data } = await adminAPI.getTelegramDiagnostics();
+			setDiagnostics(data);
+		} catch (err) {
+			setDiagnostics({ error: err.response?.data?.detail || 'Помилка діагностики' });
+		} finally { setDiagLoading(false); }
 	};
 
 	const copyToClipboard = (text) => navigator.clipboard.writeText(text);
@@ -633,7 +668,44 @@ const ModerCabinet = () => {
 
 				{section === 'channels' && (
 					<div>
-						<h1 className='text-2xl font-bold text-gray-800 dark:text-white mb-6'>Всі канали</h1>
+						<div className='flex items-center justify-between mb-6'>
+							<h1 className='text-2xl font-bold text-gray-800 dark:text-white'>Всі канали</h1>
+							<button
+								onClick={handleDiagnostics}
+								disabled={diagLoading}
+								className='bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-600 text-gray-600 dark:text-gray-300 px-4 py-2.5 rounded-xl font-semibold hover:bg-gray-50 dark:hover:bg-slate-700 duration-300 shadow-sm flex items-center gap-2 disabled:opacity-50'
+							>
+								<FontAwesomeIcon icon={faTachometerAlt} className={diagLoading ? 'animate-spin' : ''} />
+								Діагностика Telegram
+							</button>
+						</div>
+						{diagnostics && (
+							<div className={`mb-6 p-5 rounded-2xl border ${diagnostics.error ? 'bg-red-50 dark:bg-red-900/20 border-red-200 dark:border-red-800' : 'bg-white dark:bg-slate-800 border-gray-100 dark:border-slate-700'}`}>
+								{diagnostics.error ? (
+									<p className='text-red-600 dark:text-red-400 font-semibold'>{diagnostics.error}</p>
+								) : (
+									<div className='grid grid-cols-2 md:grid-cols-4 gap-3 text-sm'>
+										<div className={`p-3 rounded-xl ${diagnostics.bot_api_ok ? 'bg-green-50 dark:bg-green-900/20' : 'bg-red-50 dark:bg-red-900/20'}`}>
+											<p className='font-semibold text-gray-700 dark:text-gray-300'>Bot API</p>
+											<p className={diagnostics.bot_api_ok ? 'text-green-600' : 'text-red-600'}>{diagnostics.bot_api_ok ? '✓ Працює' : '✗ ' + (diagnostics.bot_api_error || 'Помилка')}</p>
+										</div>
+										<div className={`p-3 rounded-xl ${diagnostics.telethon_ok ? 'bg-green-50 dark:bg-green-900/20' : 'bg-red-50 dark:bg-red-900/20'}`}>
+											<p className='font-semibold text-gray-700 dark:text-gray-300'>Telethon</p>
+											<p className={diagnostics.telethon_ok ? 'text-green-600' : 'text-red-600'}>{diagnostics.telethon_ok ? '✓ Підключено' : '✗ ' + (diagnostics.telethon_error || 'Відключено')}</p>
+										</div>
+										<div className='bg-gray-50 dark:bg-slate-700/60 p-3 rounded-xl'>
+											<p className='font-semibold text-gray-700 dark:text-gray-300'>API ID</p>
+											<p className='text-gray-600 dark:text-gray-400'>{diagnostics.api_id_set ? '✓ Встановлено' : '✗ Відсутній'}</p>
+										</div>
+										<div className='bg-gray-50 dark:bg-slate-700/60 p-3 rounded-xl'>
+											<p className='font-semibold text-gray-700 dark:text-gray-300'>Аналітика</p>
+											<p className={diagnostics.analytics_available ? 'text-green-600' : 'text-yellow-600'}>{diagnostics.analytics_available ? '✓ Повна' : diagnostics.basic_stats_only ? '⚠ Тільки базова' : '✗ Недоступна'}</p>
+										</div>
+									</div>
+								)}
+								<button onClick={() => setDiagnostics(null)} className='mt-3 text-xs text-gray-400 hover:text-gray-600 dark:hover:text-gray-300'>Закрити</button>
+							</div>
+						)}
 						<FilterPills items={STATUS_FILTERS} active={statusFilter} onChange={setStatusFilter} />
 						{loading ? <Loader /> : allChannels.length === 0 ? (
 							<EmptyState icon='📋' title='Немає каналів' />
@@ -661,6 +733,14 @@ const ModerCabinet = () => {
 												<span className={`text-xs px-3 py-1 rounded-full font-semibold ${STATUS_COLORS[channel.status] || 'bg-gray-100 dark:bg-gray-700'}`}>
 													{STATUS_LABELS[channel.status] || channel.status}
 												</span>
+												<button
+													onClick={() => handleRefreshStats(channel.id)}
+													disabled={refreshingStats[channel.id]}
+													className='text-gray-400 hover:text-green-500 p-2 rounded-lg hover:bg-green-50 dark:hover:bg-green-900/20 duration-300 disabled:opacity-50'
+													title='Оновити статистику'
+												>
+													<FontAwesomeIcon icon={faSync} className={refreshingStats[channel.id] ? 'animate-spin' : ''} />
+												</button>
 												<button onClick={() => editId === channel.id ? setEditId(null) : startEdit(channel)} className='text-gray-400 hover:text-blue-500 p-2 rounded-lg hover:bg-blue-50 dark:hover:bg-blue-900/20 duration-300'>
 													<FontAwesomeIcon icon={faPen} />
 												</button>
@@ -724,6 +804,19 @@ const ModerCabinet = () => {
 												<button onClick={() => handleSaveEdit(channel.id)} className='bg-[#27ae60] text-white px-5 py-2 rounded-xl text-sm font-semibold hover:bg-[#219a52] duration-300 flex items-center gap-2 w-fit shadow-sm'>
 													<FontAwesomeIcon icon={faSave} /> Зберегти
 												</button>
+											</div>
+										)}
+										{refreshResult[channel.id] && (
+											<div className={`mt-3 text-sm p-3 rounded-xl ${refreshResult[channel.id].ok ? 'bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-400' : 'bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-400'}`}>
+												{refreshResult[channel.id].ok ? (
+													<>
+														<span className='font-semibold'>Статистику оновлено:</span>{' '}
+														{refreshResult[channel.id].new_stats_records} нових записів, {refreshResult[channel.id].new_posts} нових постів
+														{refreshResult[channel.id].telethon_data ? ' (Telethon ✓)' : ' (тільки Bot API)'}
+													</>
+												) : (
+													<><span className='font-semibold'>Помилка:</span> {refreshResult[channel.id].error || 'Невідома помилка'}</>
+												)}
 											</div>
 										)}
 									</div>
