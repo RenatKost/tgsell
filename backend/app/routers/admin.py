@@ -758,6 +758,197 @@ async def admin_delete_auction(
     await db.commit()
 
 
+# ── Channel Stats Management ──
+
+
+@router.post("/channels/{channel_id}/refresh-stats")
+async def admin_refresh_channel_stats(
+    channel_id: int,
+    admin: User = Depends(get_admin_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Manually re-collect stats for a channel from Telegram."""
+    from app.services.channel_stats import collect_channel_stats
+    from app.models.channel import ChannelStats, ChannelPost
+
+    result = await db.execute(select(Channel).where(Channel.id == channel_id))
+    channel = result.scalar_one_or_none()
+    if not channel:
+        raise HTTPException(status_code=404, detail="Channel not found")
+
+    try:
+        stats = await collect_channel_stats(channel.telegram_link)
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=f"Telegram API error: {e}")
+
+    # Update channel snapshot
+    if stats.get("subscribers_count"):
+        channel.subscribers_count = stats["subscribers_count"]
+    if stats.get("avg_views"):
+        channel.avg_views = stats["avg_views"]
+    if stats.get("er"):
+        channel.er = stats["er"]
+    if stats.get("avatar_url"):
+        channel.avatar_url = stats["avatar_url"]
+    if stats.get("channel_name"):
+        channel.channel_name = stats["channel_name"]
+    if stats.get("adv_reach_12h"):
+        channel.adv_reach_12h = stats["adv_reach_12h"]
+    if stats.get("adv_reach_24h"):
+        channel.adv_reach_24h = stats["adv_reach_24h"]
+    if stats.get("adv_reach_48h"):
+        channel.adv_reach_48h = stats["adv_reach_48h"]
+    if stats.get("total_posts"):
+        channel.total_posts = stats["total_posts"]
+    if stats.get("post_frequency") is not None:
+        channel.post_frequency = stats["post_frequency"]
+    if stats.get("last_post_date"):
+        try:
+            channel.last_post_date = datetime.fromisoformat(stats["last_post_date"])
+        except (ValueError, TypeError):
+            pass
+    if stats.get("avg_forwards"):
+        channel.avg_forwards = stats["avg_forwards"]
+    if stats.get("avg_reactions"):
+        channel.avg_reactions = stats["avg_reactions"]
+
+    # Save daily stats with dedup
+    daily_stats = stats.get("daily_stats", [])
+    new_stats_count = 0
+    if daily_stats:
+        existing = await db.execute(
+            select(ChannelStats.date).where(ChannelStats.channel_id == channel.id)
+        )
+        existing_dates = {d.strftime("%Y-%m-%d") for d in existing.scalars().all()}
+        for ds in daily_stats:
+            if ds["date"] not in existing_dates:
+                db.add(ChannelStats(
+                    channel_id=channel.id,
+                    date=datetime.strptime(ds["date"], "%Y-%m-%d"),
+                    subscribers=ds.get("subscribers") or 0,
+                    avg_views=ds.get("avg_views") or 0,
+                    avg_reach=ds.get("avg_views") or 0,
+                    er=ds.get("er") or 0.0,
+                    post_count=ds.get("post_count") or 0,
+                    avg_forwards=ds.get("avg_forwards") or 0,
+                    avg_reactions=ds.get("avg_reactions") or 0,
+                ))
+                new_stats_count += 1
+
+    # Save posts with dedup
+    posts_data = stats.get("posts", [])
+    new_posts_count = 0
+    if posts_data:
+        msg_ids = [p["telegram_msg_id"] for p in posts_data]
+        existing_posts = await db.execute(
+            select(ChannelPost.telegram_msg_id).where(
+                ChannelPost.channel_id == channel.id,
+                ChannelPost.telegram_msg_id.in_(msg_ids),
+            )
+        )
+        existing_msg_ids = set(existing_posts.scalars().all())
+        for p in posts_data:
+            if p["telegram_msg_id"] not in existing_msg_ids:
+                post_date = datetime.fromisoformat(p["date"]) if isinstance(p["date"], str) else p["date"]
+                db.add(ChannelPost(
+                    channel_id=channel.id,
+                    telegram_msg_id=p["telegram_msg_id"],
+                    date=post_date,
+                    text=p.get("text"),
+                    media_type=p.get("media_type"),
+                    link=p.get("link"),
+                    views=p["views"],
+                    forwards=p["forwards"],
+                    reactions=p["reactions"],
+                    comments=p.get("comments", 0),
+                ))
+                new_posts_count += 1
+
+    await db.commit()
+
+    return {
+        "ok": True,
+        "channel_id": channel_id,
+        "channel_name": channel.channel_name,
+        "subscribers_count": channel.subscribers_count,
+        "avg_views": channel.avg_views,
+        "er": channel.er,
+        "new_stats_records": new_stats_count,
+        "total_daily_stats": len(daily_stats),
+        "new_posts": new_posts_count,
+        "total_posts_fetched": len(posts_data),
+        "telethon_data": len(daily_stats) > 0,
+    }
+
+
+@router.get("/diagnostics/telegram")
+async def admin_telegram_diagnostics(
+    admin: User = Depends(get_admin_user),
+):
+    """Check Telegram API configuration status."""
+    from app.config import settings as cfg
+
+    diagnostics = {
+        "bot_token_stats": bool(cfg.bot_token_stats),
+        "telegram_api_id": cfg.telegram_api_id > 0,
+        "telegram_api_hash": bool(cfg.telegram_api_hash),
+        "telethon_session_string": bool(cfg.telethon_session_string),
+    }
+
+    # Test Bot API
+    bot_api_ok = False
+    bot_api_error = None
+    if cfg.bot_token_stats:
+        try:
+            import httpx
+            async with httpx.AsyncClient() as http:
+                resp = await http.get(
+                    f"https://api.telegram.org/bot{cfg.bot_token_stats}/getMe",
+                    timeout=10.0,
+                )
+                bot_api_ok = resp.status_code == 200
+                if not bot_api_ok:
+                    bot_api_error = f"HTTP {resp.status_code}"
+        except Exception as e:
+            bot_api_error = str(e)
+    else:
+        bot_api_error = "BOT_TOKEN_STATS not configured"
+
+    diagnostics["bot_api_ok"] = bot_api_ok
+    diagnostics["bot_api_error"] = bot_api_error
+
+    # Test Telethon
+    telethon_ok = False
+    telethon_error = None
+    if cfg.telegram_api_id and cfg.telegram_api_hash and cfg.telethon_session_string:
+        try:
+            from app.services.channel_stats import _get_telethon_client
+            client = await _get_telethon_client()
+            telethon_ok = client is not None and client.is_connected()
+            if not telethon_ok:
+                telethon_error = "Client not connected or not authorized"
+        except Exception as e:
+            telethon_error = str(e)
+    else:
+        missing = []
+        if not cfg.telegram_api_id:
+            missing.append("TELEGRAM_API_ID")
+        if not cfg.telegram_api_hash:
+            missing.append("TELEGRAM_API_HASH")
+        if not cfg.telethon_session_string:
+            missing.append("TELETHON_SESSION_STRING")
+        telethon_error = f"Missing env vars: {', '.join(missing)}"
+
+    diagnostics["telethon_ok"] = telethon_ok
+    diagnostics["telethon_error"] = telethon_error
+
+    # Overall status
+    diagnostics["analytics_available"] = bot_api_ok and telethon_ok
+    diagnostics["basic_stats_only"] = bot_api_ok and not telethon_ok
+
+    return diagnostics
+
+
 # ═══════════════════════════════════════════════════════════════
 #   ACTIVITY / FAKE MANAGEMENT
 # ═══════════════════════════════════════════════════════════════

@@ -78,13 +78,13 @@ async def collect_stats_once():
                             db.add(ChannelStats(
                                 channel_id=channel.id,
                                 date=datetime.strptime(ds["date"], "%Y-%m-%d"),
-                                subscribers=ds.get("subscribers", 0),
-                                avg_views=ds.get("avg_views", 0),
-                                avg_reach=ds.get("avg_views", 0),
-                                er=ds.get("er", 0.0),
-                                post_count=ds.get("post_count", 0),
-                                avg_forwards=ds.get("avg_forwards", 0),
-                                avg_reactions=ds.get("avg_reactions", 0),
+                                subscribers=ds.get("subscribers") or 0,
+                                avg_views=ds.get("avg_views") or 0,
+                                avg_reach=ds.get("avg_views") or 0,
+                                er=ds.get("er") or 0.0,
+                                post_count=ds.get("post_count") or 0,
+                                avg_forwards=ds.get("avg_forwards") or 0,
+                                avg_reactions=ds.get("avg_reactions") or 0,
                             ))
                 else:
                     # Fallback: save today's snapshot
@@ -99,10 +99,10 @@ async def collect_stats_once():
                         db.add(ChannelStats(
                             channel_id=channel.id,
                             date=datetime.utcnow(),
-                            subscribers=stats.get("subscribers_count", 0),
-                            avg_views=stats.get("avg_views", 0),
-                            avg_reach=stats.get("avg_views", 0),
-                            er=stats.get("er", 0.0),
+                            subscribers=stats.get("subscribers_count") or 0,
+                            avg_views=stats.get("avg_views") or 0,
+                            avg_reach=stats.get("avg_views") or 0,
+                            er=stats.get("er") or 0.0,
                             post_count=0,
                         ))
 

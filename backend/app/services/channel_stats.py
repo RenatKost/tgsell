@@ -17,6 +17,10 @@ async def _get_telethon_client():
     if _telethon_client is not None and _telethon_client.is_connected():
         return _telethon_client
 
+    if not settings.telegram_api_id or not settings.telegram_api_hash:
+        logger.warning("Telethon: TELEGRAM_API_ID or TELEGRAM_API_HASH not set — skipping")
+        return None
+
     try:
         from telethon import TelegramClient
         from telethon.sessions import StringSession
@@ -31,6 +35,7 @@ async def _get_telethon_client():
         if not await client.is_user_authorized():
             logger.warning("Telethon session not authorized. Set TELETHON_SESSION_STRING env var.")
             return None
+        logger.info("Telethon client connected and authorized ✓")
         _telethon_client = client
         return client
     except Exception as e:
@@ -290,19 +295,19 @@ async def collect_channel_stats(telegram_link: str) -> dict:
     result = {
         "channel_name": username,
         "subscribers_count": 0,
-        "avg_views": None,
-        "er": None,
+        "avg_views": 0,
+        "er": 0.0,
         "avatar_url": None,
-        "adv_reach_12h": None,
-        "adv_reach_24h": None,
-        "adv_reach_48h": None,
+        "adv_reach_12h": 0,
+        "adv_reach_24h": 0,
+        "adv_reach_48h": 0,
         "channel_age_months": None,
         "daily_stats": [],
-        "total_posts": None,
-        "post_frequency": None,
+        "total_posts": 0,
+        "post_frequency": 0.0,
         "last_post_date": None,
-        "avg_forwards": None,
-        "avg_reactions": None,
+        "avg_forwards": 0,
+        "avg_reactions": 0,
         "posts": [],
     }
 
@@ -312,6 +317,9 @@ async def collect_channel_stats(telegram_link: str) -> dict:
         result["channel_name"] = bot_info["name"] or username
         result["subscribers_count"] = bot_info["subscribers_count"]
         result["avatar_url"] = bot_info["photo_url"]
+        logger.info(f"[STATS] @{username} Bot API ✓ subs={bot_info['subscribers_count']}")
+    else:
+        logger.warning(f"[STATS] @{username} Bot API failed — check BOT_TOKEN_STATS")
 
     # Step 2: Telethon (deeper stats, may fail)
     telethon_stats = await get_channel_stats_telethon(username)
@@ -319,16 +327,19 @@ async def collect_channel_stats(telegram_link: str) -> dict:
         result["subscribers_count"] = telethon_stats["subscribers"]
         result["avg_views"] = telethon_stats["avg_views"]
         result["er"] = telethon_stats["er"]
-        result["adv_reach_12h"] = telethon_stats.get("adv_reach_12h")
-        result["adv_reach_24h"] = telethon_stats.get("adv_reach_24h")
-        result["adv_reach_48h"] = telethon_stats.get("adv_reach_48h")
+        result["adv_reach_12h"] = telethon_stats.get("adv_reach_12h") or 0
+        result["adv_reach_24h"] = telethon_stats.get("adv_reach_24h") or 0
+        result["adv_reach_48h"] = telethon_stats.get("adv_reach_48h") or 0
         result["channel_age_months"] = telethon_stats.get("channel_age_months")
         result["daily_stats"] = telethon_stats.get("daily_stats", [])
-        result["total_posts"] = telethon_stats.get("total_posts")
-        result["post_frequency"] = telethon_stats.get("post_frequency")
+        result["total_posts"] = telethon_stats.get("total_posts") or 0
+        result["post_frequency"] = telethon_stats.get("post_frequency") or 0.0
         result["last_post_date"] = telethon_stats.get("last_post_date")
-        result["avg_forwards"] = telethon_stats.get("avg_forwards")
-        result["avg_reactions"] = telethon_stats.get("avg_reactions")
+        result["avg_forwards"] = telethon_stats.get("avg_forwards") or 0
+        result["avg_reactions"] = telethon_stats.get("avg_reactions") or 0
         result["posts"] = telethon_stats.get("posts", [])
+        logger.info(f"[STATS] @{username} Telethon ✓ views={result['avg_views']} er={result['er']}% days={len(result['daily_stats'])} posts={len(result['posts'])}")
+    else:
+        logger.warning(f"[STATS] @{username} Telethon failed — no views/ER/posts data")
 
     return result

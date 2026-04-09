@@ -201,6 +201,13 @@ export const adminAPI = {
 	deleteAuction: (id) =>
 		api.delete(`/admin/auctions/${id}`),
 
+	// Channel stats
+	refreshChannelStats: (channelId) =>
+		api.post(`/admin/channels/${channelId}/refresh-stats`),
+
+	getTelegramDiagnostics: () =>
+		api.get('/admin/diagnostics/telegram'),
+
 	// Activity config
 	getActivityConfig: () =>
 		api.get('/admin/activity-config'),

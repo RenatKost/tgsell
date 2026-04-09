@@ -29,6 +29,16 @@ background_tasks: list[asyncio.Task] = []
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Startup / shutdown lifecycle."""
+    # Telegram config diagnostics
+    from app.config import settings as cfg
+    logger.info("── Telegram config check ──")
+    logger.info(f"  BOT_TOKEN_STATS: {'✓ set' if cfg.bot_token_stats else '✗ MISSING'}")
+    logger.info(f"  TELEGRAM_API_ID: {'✓ set' if cfg.telegram_api_id else '✗ MISSING'}")
+    logger.info(f"  TELEGRAM_API_HASH: {'✓ set' if cfg.telegram_api_hash else '✗ MISSING'}")
+    logger.info(f"  TELETHON_SESSION_STRING: {'✓ set' if cfg.telethon_session_string else '✗ MISSING — no deep analytics'}")
+    if not cfg.telethon_session_string:
+        logger.warning("Channel analytics (views, ER, posts) require TELETHON_SESSION_STRING!")
+
     logger.info("Starting background tasks…")
     loop = asyncio.get_event_loop()
     background_tasks.append(loop.create_task(run_payment_checker(interval_seconds=30)))
