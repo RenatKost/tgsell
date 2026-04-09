@@ -48,9 +48,11 @@ async def send_admin_alert(text: str, alert_key: str | None = None, throttle_min
 
 async def alert_service_down(service_name: str, error: str):
     """Alert that a critical service is down."""
+    import html
+    safe_error = html.escape(str(error)[:500])
     await send_admin_alert(
         f"🔴 <b>{service_name} — НЕ ПРАЦЮЄ</b>\n\n"
-        f"<code>{error[:500]}</code>\n\n"
+        f"<code>{safe_error}</code>\n\n"
         f"Потрібна увага адміна.",
         alert_key=f"down_{service_name}",
     )

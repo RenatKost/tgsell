@@ -365,7 +365,7 @@ async def create_channel(
         if stats.get("last_post_date"):
             from datetime import datetime as dt2
             try:
-                channel.last_post_date = dt2.fromisoformat(stats["last_post_date"])
+                channel.last_post_date = dt2.fromisoformat(stats["last_post_date"]).replace(tzinfo=None)
             except (ValueError, TypeError):
                 pass
         if stats.get("avg_forwards"):

@@ -239,7 +239,7 @@ async def get_channel_stats_telethon(channel_username: str, message_limit: int =
             if len(posts_data) < 200:
                 posts_data.append({
                     "telegram_msg_id": msg.id,
-                    "date": msg_date.isoformat(),
+                    "date": msg_date.replace(tzinfo=None).isoformat(),
                     "text": (msg.text or "")[:2000],  # Truncate long texts
                     "media_type": media_type,
                     "link": post_link,
@@ -315,7 +315,7 @@ async def get_channel_stats_telethon(channel_username: str, message_limit: int =
             "daily_stats": daily_stats,
             "total_posts": total_posts,
             "post_frequency": post_frequency,
-            "last_post_date": last_post_date.isoformat() if last_post_date else None,
+            "last_post_date": last_post_date.replace(tzinfo=None).isoformat() if last_post_date else None,
             "avg_forwards": avg_forwards,
             "avg_reactions": avg_reactions,
             "posts": posts_data,

@@ -61,7 +61,7 @@ async def collect_stats_once():
                     channel.post_frequency = stats["post_frequency"]
                 if stats.get("last_post_date"):
                     try:
-                        channel.last_post_date = datetime.fromisoformat(stats["last_post_date"])
+                        channel.last_post_date = datetime.fromisoformat(stats["last_post_date"]).replace(tzinfo=None)
                     except (ValueError, TypeError):
                         pass
                 if stats.get("avg_forwards"):
@@ -131,6 +131,10 @@ async def collect_stats_once():
             except Exception as e:
                 failed += 1
                 logger.error(f"Stats collection failed for channel #{channel.id}: {e}")
+                try:
+                    await db.rollback()
+                except Exception:
+                    pass
 
         # Send summary alert if there were problems
         if total > 0:
@@ -187,7 +191,7 @@ async def _upsert_channel_posts(db: AsyncSession, channel_id: int, posts_data: l
             new_post = ChannelPost(
                 channel_id=channel_id,
                 telegram_msg_id=msg_id,
-                date=post_date,
+                date=post_date.replace(tzinfo=None),
                 text=post.get("text"),
                 media_type=post.get("media_type"),
                 link=post.get("link"),

@@ -807,7 +807,7 @@ async def admin_refresh_channel_stats(
             channel.post_frequency = stats["post_frequency"]
         if stats.get("last_post_date"):
             try:
-                channel.last_post_date = datetime.fromisoformat(stats["last_post_date"])
+                channel.last_post_date = datetime.fromisoformat(stats["last_post_date"]).replace(tzinfo=None)
             except (ValueError, TypeError):
                 pass
         if stats.get("avg_forwards"):
@@ -853,6 +853,8 @@ async def admin_refresh_channel_stats(
             for p in posts_data:
                 if p["telegram_msg_id"] not in existing_msg_ids:
                     post_date = datetime.fromisoformat(p["date"]) if isinstance(p["date"], str) else p["date"]
+                    if hasattr(post_date, 'tzinfo') and post_date.tzinfo is not None:
+                        post_date = post_date.replace(tzinfo=None)
                     db.add(ChannelPost(
                         channel_id=channel.id,
                         telegram_msg_id=p["telegram_msg_id"],
