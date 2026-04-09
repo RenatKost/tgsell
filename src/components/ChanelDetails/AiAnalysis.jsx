@@ -142,40 +142,58 @@ const AiAnalysis = ({ channelId, channel }) => {
 						<div>
 							<p className='text-[10px] text-gray-400 font-semibold uppercase tracking-wider mb-2'>AI КОНТЕНТ АНАЛІЗ</p>
 
-							{/* Sentiment */}
-							{data.summary && (
-								<div className='mb-3'>
-									<p className='text-[10px] text-gray-500 mb-1.5'>Сентимент-розподіл</p>
-									<div className='flex items-center gap-2 flex-wrap'>
-										<span className='flex items-center gap-1 text-[10px]'>
-											<span className='w-2 h-2 rounded-full bg-emerald-500 inline-block' />
-											<span className='text-gray-300'>Позитивний</span>
-										</span>
-										<span className='flex items-center gap-1 text-[10px]'>
-											<span className='w-2 h-2 rounded-full bg-gray-400 inline-block' />
-											<span className='text-gray-300'>Нейтральний</span>
-										</span>
-										<span className='flex items-center gap-1 text-[10px]'>
-											<span className='w-2 h-2 rounded-full bg-red-500 inline-block' />
-											<span className='text-gray-300'>Негативний</span>
-										</span>
-									</div>
+							{/* Sentiment with bars */}
+							<div className='mb-3'>
+								<p className='text-[10px] text-gray-500 mb-1.5'>Сентимент-розподіл</p>
+								<div className='space-y-1.5'>
+									{[
+										{ label: 'Позитивний', pct: data.sentiment_positive ?? 0, color: 'bg-emerald-500', dot: 'bg-emerald-500' },
+										{ label: 'Нейтральний', pct: data.sentiment_neutral ?? 0, color: 'bg-gray-400', dot: 'bg-gray-400' },
+										{ label: 'Негативний', pct: data.sentiment_negative ?? 0, color: 'bg-red-500', dot: 'bg-red-500' },
+									].map((s) => (
+										<div key={s.label} className='flex items-center gap-2'>
+											<span className={`w-2 h-2 rounded-full ${s.dot} flex-shrink-0`} />
+											<span className='text-[10px] text-gray-400 w-20 flex-shrink-0'>{s.label}</span>
+											<div className='flex-1 h-1.5 rounded-full bg-gray-700/30'>
+												<div className={`h-full rounded-full ${s.color}`} style={{ width: `${s.pct}%` }} />
+											</div>
+											<span className='text-[10px] text-gray-300 font-medium w-8 text-right'>{s.pct}%</span>
+										</div>
+									))}
 								</div>
-							)}
+							</div>
 
-							{/* Content analysis text */}
-							{data.content_analysis && (
-								<div className='mb-3'>
-									<p className='text-[10px] text-gray-500 mb-1'>Ключові теми</p>
-									<p className='text-[11px] text-gray-300 leading-relaxed'>{data.content_analysis}</p>
-								</div>
-							)}
-
-							{/* Audience quality */}
+							{/* Audience quality / Relevance */}
 							{data.audience_quality && (
-								<div>
+								<div className='mb-3'>
 									<p className='text-[10px] text-gray-500 mb-1'>Релевантність ніші</p>
 									<p className='text-[11px] text-gray-300 leading-relaxed'>{data.audience_quality}</p>
+								</div>
+							)}
+
+							{/* Keyword topics with bars */}
+							{(data.content_topics?.length > 0 || data.content_analysis) && (
+								<div>
+									<p className='text-[10px] text-gray-500 mb-1.5'>Ключові теми</p>
+									<div className='space-y-1'>
+										{(data.content_topics || data.content_analysis
+											.split(/[,;.•\n]+/)
+											.map(t => t.trim())
+											.filter(t => t.length > 2 && t.length < 40)
+											.slice(0, 5)
+										).slice(0, 5).map((topic, i) => {
+											const pct = Math.max(10, 60 - i * 10);
+											return (
+												<div key={i} className='flex items-center gap-2'>
+													<span className='text-[10px] text-gray-300 w-24 truncate flex-shrink-0 uppercase font-medium'>{topic}</span>
+													<div className='flex-1 h-1.5 rounded-full bg-gray-700/30'>
+														<div className='h-full rounded-full bg-orange-500' style={{ width: `${pct}%` }} />
+													</div>
+													<span className='text-[10px] text-gray-400 w-8 text-right'>{pct}%</span>
+												</div>
+											);
+										})}
+									</div>
 								</div>
 							)}
 						</div>

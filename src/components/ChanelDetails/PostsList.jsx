@@ -30,114 +30,71 @@ const TelegramPost = ({ post }) => {
 	const longText = post.text && post.text.length > 200;
 
 	return (
-		<div className='relative pl-10 pb-6 group'>
-			{/* Timeline connector */}
-			<div className='absolute left-[15px] top-0 bottom-0 w-px bg-gray-200 dark:bg-card-border group-last:bg-gradient-to-b group-last:from-gray-200 group-last:to-transparent dark:group-last:from-card-border dark:group-last:to-transparent' />
-
-			{/* Timeline dot */}
-			<div className='absolute left-[10px] top-1.5 w-[11px] h-[11px] rounded-full border-2 border-accent bg-white dark:bg-card z-10' />
-
-			{/* Message bubble */}
-			<div className='bg-white dark:bg-card rounded-xl border border-gray-100 dark:border-card-border shadow-sm overflow-hidden hover:shadow-md transition-shadow duration-200'>
-				{/* Text body */}
-				<div className='px-3.5 pt-3 pb-2'>
-					{post.text ? (
-						<>
-							<p className={`text-[13px] text-gray-700 dark:text-gray-200 leading-relaxed whitespace-pre-wrap ${!expanded && longText ? 'line-clamp-4' : ''}`}>
-								{post.text}
-							</p>
-							{longText && (
-								<button
-									onClick={() => setExpanded(!expanded)}
-									className='text-accent text-[11px] font-medium mt-1 hover:underline'
-								>
-									{expanded ? 'Згорнути' : 'Читати далі...'}
-								</button>
-							)}
-						</>
-					) : (
-						<p className='text-[13px] text-gray-400 dark:text-gray-500 italic'>Медіа-контент</p>
+		<div className='bg-white dark:bg-card-inner rounded-xl border border-gray-100 dark:border-card-border overflow-hidden hover:border-accent/30 transition-all'>
+			{/* Header: date + media + link */}
+			<div className='flex items-center justify-between px-3.5 py-2 border-b border-gray-50 dark:border-card-border/50'>
+				<span className='text-[10px] text-gray-400 font-medium'>{formatDate(post.date)}</span>
+				<div className='flex items-center gap-2'>
+					{post.media_type && (
+						<span className='text-[9px] font-medium px-1.5 py-0.5 rounded bg-gray-50 dark:bg-card-hover text-gray-400'>
+							{mediaIcons[post.media_type] || '📎'} {post.media_type}
+						</span>
+					)}
+					{post.link && (
+						<a href={`https://${post.link}`} target='_blank' rel='noopener noreferrer'
+							className='text-[10px] text-accent hover:underline font-medium'>↗ цього</a>
 					)}
 				</div>
+			</div>
 
-				{/* Footer: date + stats + media badge */}
-				<div className='flex items-center justify-between px-3.5 pb-2.5 pt-1'>
-					<div className='flex items-center gap-3'>
-						{/* Views */}
-						<span className='flex items-center gap-1 text-[11px] text-gray-400'>
-							<svg className='w-3.5 h-3.5' fill='none' viewBox='0 0 24 24' stroke='currentColor' strokeWidth='1.5'>
-								<path strokeLinecap='round' strokeLinejoin='round' d='M2.036 12.322a1.012 1.012 0 010-.639C3.423 7.51 7.36 4.5 12 4.5c4.638 0 8.573 3.007 9.963 7.178.07.207.07.431 0 .639C20.577 16.49 16.64 19.5 12 19.5c-4.638 0-8.573-3.007-9.963-7.178z' />
-								<path strokeLinecap='round' strokeLinejoin='round' d='M15 12a3 3 0 11-6 0 3 3 0 016 0z' />
-							</svg>
-							<span className='font-medium'>{formatNum(post.views)}</span>
-						</span>
-
-						{/* Reactions */}
-						{post.reactions > 0 && (
-							<span className='flex items-center gap-0.5 text-[11px] text-gray-400'>
-								<span className='text-[10px]'>❤️</span>
-								<span className='font-medium'>{formatNum(post.reactions)}</span>
-							</span>
+			{/* Text body */}
+			<div className='px-3.5 py-2.5'>
+				{post.text ? (
+					<>
+						<p className={`text-[12px] text-gray-700 dark:text-gray-200 leading-relaxed whitespace-pre-wrap ${!expanded && longText ? 'line-clamp-4' : ''}`}>
+							{post.text}
+						</p>
+						{longText && (
+							<button
+								onClick={() => setExpanded(!expanded)}
+								className='text-accent text-[11px] font-medium mt-1 hover:underline'
+							>
+								{expanded ? 'Згорнути' : 'Читати далі...'}
+							</button>
 						)}
-
-						{/* Forwards */}
-						{post.forwards > 0 && (
-							<span className='flex items-center gap-0.5 text-[11px] text-gray-400'>
-								<svg className='w-3 h-3' fill='none' viewBox='0 0 24 24' stroke='currentColor' strokeWidth='2'>
-									<path strokeLinecap='round' strokeLinejoin='round' d='M13 7l5 5m0 0l-5 5m5-5H6' />
-								</svg>
-								<span className='font-medium'>{formatNum(post.forwards)}</span>
-							</span>
-						)}
-
-						{/* Comments */}
-						{post.comments > 0 && (
-							<span className='flex items-center gap-0.5 text-[11px] text-gray-400'>
-								<span className='text-[10px]'>💬</span>
-								<span className='font-medium'>{formatNum(post.comments)}</span>
-							</span>
-						)}
-					</div>
-
-					<div className='flex items-center gap-2'>
-						{post.media_type && (
-							<span className='text-[9px] font-medium px-1.5 py-0.5 rounded bg-gray-50 dark:bg-card-inner text-gray-400'>
-								{mediaIcons[post.media_type] || '📎'} {post.media_type}
-							</span>
-						)}
-						<span className='text-[10px] text-gray-400 font-medium'>{formatDate(post.date)}</span>
-						{post.link && (
-							<a href={`https://${post.link}`} target='_blank' rel='noopener noreferrer'
-								className='text-[10px] text-accent hover:underline font-medium'>↗</a>
-						)}
-					</div>
-				</div>
-
-				{/* View dynamics bar */}
-				{(post.views_1h != null || post.views_12h != null || post.views_24h != null || post.views_48h != null) && (
-					<div className='flex items-center gap-1.5 px-3.5 pb-2.5'>
-						{post.views_1h != null && (
-							<span className='bg-emerald-50 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-400 px-1.5 py-0.5 rounded text-[9px] font-medium'>
-								1h: {formatNum(post.views_1h)}
-							</span>
-						)}
-						{post.views_12h != null && (
-							<span className='bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 px-1.5 py-0.5 rounded text-[9px] font-medium'>
-								12h: {formatNum(post.views_12h)}
-							</span>
-						)}
-						{post.views_24h != null && (
-							<span className='bg-purple-50 dark:bg-purple-900/30 text-purple-600 dark:text-purple-400 px-1.5 py-0.5 rounded text-[9px] font-medium'>
-								24h: {formatNum(post.views_24h)}
-							</span>
-						)}
-						{post.views_48h != null && (
-							<span className='bg-orange-50 dark:bg-orange-900/30 text-orange-600 dark:text-orange-400 px-1.5 py-0.5 rounded text-[9px] font-medium'>
-								48h: {formatNum(post.views_48h)}
-							</span>
-						)}
-					</div>
+					</>
+				) : (
+					<p className='text-[12px] text-gray-400 dark:text-gray-500 italic'>Медіа-контент</p>
 				)}
+			</div>
+
+			{/* Stats footer */}
+			<div className='flex items-center justify-between px-3.5 py-2 border-t border-gray-50 dark:border-card-border/50'>
+				<div className='flex items-center gap-3'>
+					<span className='flex items-center gap-1 text-[11px] text-gray-400'>
+						<svg className='w-3.5 h-3.5' fill='none' viewBox='0 0 24 24' stroke='currentColor' strokeWidth='1.5'>
+							<path strokeLinecap='round' strokeLinejoin='round' d='M2.036 12.322a1.012 1.012 0 010-.639C3.423 7.51 7.36 4.5 12 4.5c4.638 0 8.573 3.007 9.963 7.178.07.207.07.431 0 .639C20.577 16.49 16.64 19.5 12 19.5c-4.638 0-8.573-3.007-9.963-7.178z' />
+							<path strokeLinecap='round' strokeLinejoin='round' d='M15 12a3 3 0 11-6 0 3 3 0 016 0z' />
+						</svg>
+						<span className='font-medium'>{formatNum(post.views)}</span>
+					</span>
+					{post.reactions > 0 && (
+						<span className='flex items-center gap-0.5 text-[11px] text-gray-400'>
+							❤️ <span className='font-medium'>{formatNum(post.reactions)}</span>
+						</span>
+					)}
+					{post.forwards > 0 && (
+						<span className='flex items-center gap-0.5 text-[11px] text-gray-400'>
+							↗ <span className='font-medium'>{formatNum(post.forwards)}</span>
+						</span>
+					)}
+					{post.comments > 0 && (
+						<span className='flex items-center gap-0.5 text-[11px] text-gray-400'>
+							💬 <span className='font-medium'>{formatNum(post.comments)}</span>
+						</span>
+					)}
+				</div>
+				<span className='text-[10px] text-gray-500 italic'>Pending analysis...</span>
 			</div>
 		</div>
 	);
@@ -239,8 +196,8 @@ const PostsList = ({ channelId }) => {
 				)}
 			</div>
 
-			{/* Timeline posts */}
-			<div className='ml-1'>
+			{/* 2-column grid of post cards */}
+			<div className='grid md:grid-cols-2 gap-3'>
 				{visible.map((post) => (
 					<TelegramPost key={post.id} post={post} />
 				))}

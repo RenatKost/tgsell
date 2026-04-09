@@ -83,6 +83,10 @@ async def analyze_channel(channel_data: dict, posts_data: list[dict], stats_data
   "audience_quality": "Детальна оцінка аудиторії: жива/мертва, залученість, боти, демографія (2-3 речення)",
   "growth_trend": "Аналіз динаміки: ріст/стагнація/падіння підписників та переглядів з цифрами",
   "content_analysis": "Оцінка контенту: тематика, унікальність, якість, регулярність (2-3 речення)",
+  "content_topics": ["Тема1", "Тема2", "Тема3", "Тема4", "Тема5"],
+  "sentiment_positive": 63,
+  "sentiment_neutral": 30,
+  "sentiment_negative": 7,
   "monetization": [
     {{
       "method": "Назва способу",
@@ -120,6 +124,8 @@ async def analyze_channel(channel_data: dict, posts_data: list[dict], stats_data
 - "verdict" — одне з: "buy", "hold", "avoid"
 - "score" — число від 1 до 100
 - "income_min" та "income_max" — числа в USDT
+- "content_topics" — рівно 5 ключових тем/слів контенту каналу
+- "sentiment_positive", "sentiment_neutral", "sentiment_negative" — відсотки сентименту постів (сума = 100)
 - Рівно 5 способів монетизації
 - Мова відповіді — українська
 - Тільки валідний JSON"""

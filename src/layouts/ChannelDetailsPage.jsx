@@ -99,8 +99,9 @@ const ChannelDetailsPage = () => {
 					<div className='bg-white dark:bg-card rounded-xl border border-gray-100 dark:border-card-border shadow-sm p-4'>
 						<h4 className='font-semibold text-gray-900 dark:text-white text-xs uppercase tracking-wider mb-2'>Коментар власника</h4>
 						<p className='text-gray-600 dark:text-gray-300 text-xs leading-relaxed bg-blue-50 dark:bg-card-inner rounded-lg p-3'>
-							</p>
-						</div>
+							{channel.description}
+						</p>
+					</div>
 					)}
 
 					{resources.length > 0 && (
