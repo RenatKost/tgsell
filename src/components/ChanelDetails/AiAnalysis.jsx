@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { channelsAPI } from '../../services/api';
 
 const verdictConfig = {
@@ -66,7 +66,7 @@ const MonetizationCard = ({ item, index }) => {
 
 const AiAnalysis = ({ channelId }) => {
 	const [data, setData] = useState(null);
-	const [loading, setLoading] = useState(false);
+	const [loading, setLoading] = useState(true);
 	const [error, setError] = useState(null);
 	const [expanded, setExpanded] = useState(false);
 
@@ -83,31 +83,7 @@ const AiAnalysis = ({ channelId }) => {
 		}
 	};
 
-	// Don't auto-run — let user trigger it
-	if (!data && !loading && !error) {
-		return (
-			<div className='bg-gradient-to-br from-indigo-50 to-purple-50 dark:from-indigo-900/20 dark:to-purple-900/20 rounded-xl border border-indigo-100 dark:border-indigo-800/40 p-4'>
-				<div className='flex items-center gap-3 mb-3'>
-					<div className='w-8 h-8 rounded-lg bg-indigo-100 dark:bg-indigo-800/50 flex items-center justify-center'>
-						<span className='text-sm'>🤖</span>
-					</div>
-					<div>
-						<p className='text-sm font-semibold text-gray-900 dark:text-white'>AI-аналітика</p>
-						<p className='text-[10px] text-gray-500 dark:text-gray-400'>Глибокий аналіз від нейромережі</p>
-					</div>
-				</div>
-				<p className='text-xs text-gray-500 dark:text-gray-400 mb-3 leading-relaxed'>
-					Нейромережа проаналізує контент, аудиторію, способи монетизації та ризики каналу.
-				</p>
-				<button
-					onClick={runAnalysis}
-					className='w-full py-2 rounded-lg text-xs font-semibold bg-indigo-500 hover:bg-indigo-600 text-white transition-all shadow-sm'
-				>
-					✨ Запустити AI-аналіз
-				</button>
-			</div>
-		);
-	}
+	useEffect(() => { runAnalysis(); }, [channelId]);
 
 	if (loading) {
 		return (

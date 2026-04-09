@@ -74,11 +74,9 @@ const ChannelDetailsPage = () => {
 			</div>
 
 			<div className='flex flex-col lg:flex-row items-start gap-5'>
-				{/* Left column */}
+				{/* Left column — card + owner info */}
 				<div className='w-full lg:w-[380px] flex-shrink-0 space-y-4'>
 					<DetailsCard channel={channel} onBuy={handleBuy} stats={stats} />
-					<ChannelHealth channelId={channel.id} />
-					<AiAnalysis channelId={channel.id} />
 
 					{channel.description && (
 						<div className='bg-white dark:bg-slate-800 rounded-xl border border-gray-100 dark:border-slate-700 shadow-sm p-4'>
@@ -123,7 +121,13 @@ const ChannelDetailsPage = () => {
 				</div>
 			</div>
 
-			{/* Posts section — full width below */}
+			{/* Row 2 — Health + AI Analysis side by side */}
+			<div className='mt-5 grid md:grid-cols-2 gap-5'>
+				<ChannelHealth channelId={channel.id} />
+				<AiAnalysis channelId={channel.id} />
+			</div>
+
+			{/* Row 3 — Posts full width */}
 			<div className='mt-5'>
 				<PostsList channelId={channel.id} />
 			</div>
