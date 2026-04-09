@@ -317,12 +317,12 @@ async def get_ai_analysis(channel_id: int, db: AsyncSession = Depends(get_db)):
         "description": channel.description,
     }
 
-    # Get last 15 posts
+    # Get all posts for deep analysis
     posts_result = await db.execute(
         select(ChannelPost)
         .where(ChannelPost.channel_id == channel_id)
         .order_by(ChannelPost.date.desc())
-        .limit(15)
+        .limit(50)
     )
     posts = posts_result.scalars().all()
     posts_data = [
@@ -356,6 +356,8 @@ async def get_ai_analysis(channel_id: int, db: AsyncSession = Depends(get_db)):
     analysis = await analyze_channel(channel_data, posts_data, stats_data)
     if analysis is None:
         raise HTTPException(status_code=503, detail="AI analysis unavailable")
+    if "error" in analysis:
+        raise HTTPException(status_code=503, detail=analysis.get("detail", "AI analysis error"))
 
     return analysis
 

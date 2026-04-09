@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { channelsAPI } from '../../services/api';
 
 const verdictConfig = {
@@ -7,24 +7,59 @@ const verdictConfig = {
 	avoid: { label: 'Уникати', color: 'text-red-600 dark:text-red-400', bg: 'bg-red-50 dark:bg-red-900/20', border: 'border-red-200 dark:border-red-800', icon: '🔴' },
 };
 
+const methodIcons = ['💰', '📢', '🤝', '🎯', '🛒'];
+
 const ScoreRing = ({ score }) => {
-	const circumference = 2 * Math.PI * 20;
+	const circumference = 2 * Math.PI * 22;
 	const offset = circumference - (score / 100) * circumference;
 	const color = score >= 70 ? '#10B981' : score >= 40 ? '#F59E0B' : '#EF4444';
 
 	return (
-		<div className='relative w-14 h-14 flex-shrink-0'>
-			<svg className='w-14 h-14 -rotate-90' viewBox='0 0 48 48'>
-				<circle cx='24' cy='24' r='20' stroke='currentColor' strokeWidth='3' fill='none'
+		<div className='relative w-16 h-16 flex-shrink-0'>
+			<svg className='w-16 h-16 -rotate-90' viewBox='0 0 52 52'>
+				<circle cx='26' cy='26' r='22' stroke='currentColor' strokeWidth='3' fill='none'
 					className='text-gray-100 dark:text-slate-700' />
-				<circle cx='24' cy='24' r='20' strokeWidth='3' fill='none'
+				<circle cx='26' cy='26' r='22' strokeWidth='3' fill='none'
 					stroke={color} strokeLinecap='round'
 					strokeDasharray={circumference} strokeDashoffset={offset}
 					style={{ transition: 'stroke-dashoffset 1s ease-out' }} />
 			</svg>
-			<div className='absolute inset-0 flex items-center justify-center'>
-				<span className='text-xs font-bold' style={{ color }}>{score}</span>
+			<div className='absolute inset-0 flex flex-col items-center justify-center'>
+				<span className='text-sm font-bold leading-none' style={{ color }}>{score}</span>
+				<span className='text-[8px] text-gray-400'>/ 100</span>
 			</div>
+		</div>
+	);
+};
+
+const MonetizationCard = ({ item, index }) => {
+	const [open, setOpen] = useState(false);
+	return (
+		<div className='bg-gray-50 dark:bg-slate-700/40 rounded-lg border border-gray-100 dark:border-slate-600/50 overflow-hidden'>
+			<button
+				onClick={() => setOpen(!open)}
+				className='w-full px-3 py-2.5 flex items-center gap-2.5 text-left hover:bg-gray-100 dark:hover:bg-slate-700/60 transition-colors'
+			>
+				<span className='text-base flex-shrink-0'>{methodIcons[index] || '💵'}</span>
+				<div className='flex-1 min-w-0'>
+					<p className='text-xs font-semibold text-gray-800 dark:text-gray-200 truncate'>{item.method}</p>
+					<p className='text-[10px] text-gray-500 dark:text-gray-400 truncate'>{item.description}</p>
+				</div>
+				<div className='text-right flex-shrink-0'>
+					<p className='text-xs font-bold text-emerald-600 dark:text-emerald-400'>
+						${item.income_min}–${item.income_max}
+					</p>
+					<p className='text-[9px] text-gray-400'>USDT/міс</p>
+				</div>
+				<span className='text-gray-400 text-[10px] flex-shrink-0'>{open ? '▴' : '▾'}</span>
+			</button>
+			{open && (
+				<div className='px-3 pb-2.5 pt-0'>
+					<p className='text-[11px] text-gray-600 dark:text-gray-300 leading-relaxed bg-white dark:bg-slate-800/50 rounded p-2'>
+						{item.reasoning}
+					</p>
+				</div>
+			)}
 		</div>
 	);
 };
@@ -110,17 +145,16 @@ const AiAnalysis = ({ channelId }) => {
 
 	return (
 		<div className='bg-white dark:bg-slate-800 rounded-xl border border-gray-100 dark:border-slate-700 shadow-sm overflow-hidden'>
-			{/* Header with score */}
+			{/* Header with score + verdict */}
 			<div className='bg-gradient-to-r from-indigo-50 to-purple-50 dark:from-indigo-900/20 dark:to-purple-900/20 px-4 py-3 border-b border-indigo-100 dark:border-indigo-800/30'>
 				<div className='flex items-center justify-between'>
 					<div className='flex items-center gap-3'>
 						<ScoreRing score={data.score || 50} />
 						<div>
 							<p className='text-sm font-bold text-gray-900 dark:text-white'>AI-аналітика</p>
-							<p className='text-[10px] text-gray-500 dark:text-gray-400'>Powered by Gemini</p>
+							<p className='text-[10px] text-gray-500 dark:text-gray-400'>Powered by Llama 3.3 70B</p>
 						</div>
 					</div>
-					{/* Verdict badge */}
 					<div className={`${verdict.bg} ${verdict.border} border rounded-lg px-3 py-1.5 text-center`}>
 						<p className='text-[10px] text-gray-500 dark:text-gray-400'>Вердикт</p>
 						<p className={`text-xs font-bold ${verdict.color}`}>{verdict.icon} {verdict.label}</p>
@@ -142,26 +176,48 @@ const AiAnalysis = ({ channelId }) => {
 					</p>
 				)}
 
-				{/* Price estimate */}
-				{data.fair_price_estimate && (
-					<div className='bg-gray-50 dark:bg-slate-700/50 rounded-lg p-3'>
-						<p className='text-[10px] text-gray-400 font-semibold uppercase tracking-wider mb-1'>💰 Оцінка вартості</p>
-						<p className='text-xs text-gray-700 dark:text-gray-300 leading-relaxed'>{data.fair_price_estimate}</p>
+				{/* Total income potential */}
+				{(data.total_potential_income_min || data.total_potential_income_max) && (
+					<div className='bg-emerald-50 dark:bg-emerald-900/20 rounded-lg p-3 border border-emerald-100 dark:border-emerald-800/40'>
+						<p className='text-[10px] text-emerald-600 dark:text-emerald-400 font-semibold uppercase tracking-wider mb-1'>💰 Потенційний дохід</p>
+						<div className='flex items-baseline gap-1.5'>
+							<span className='text-lg font-bold text-emerald-600 dark:text-emerald-400'>
+								${data.total_potential_income_min || '?'}–${data.total_potential_income_max || '?'}
+							</span>
+							<span className='text-[11px] text-emerald-500/70'>USDT / місяць</span>
+						</div>
+						{data.roi_months && (
+							<p className='text-[10px] text-emerald-600/70 dark:text-emerald-400/70 mt-1'>
+								⏱ Окупність: {data.roi_months}
+							</p>
+						)}
 					</div>
 				)}
 
-				{/* Monetization */}
+				{/* 5 Monetization methods */}
 				{data.monetization?.length > 0 && (
 					<div>
-						<p className='text-[10px] text-gray-400 font-semibold uppercase tracking-wider mb-1.5'>💵 Способи монетизації</p>
-						<div className='space-y-1'>
+						<p className='text-[10px] text-gray-400 font-semibold uppercase tracking-wider mb-2'>
+							💵 Способи монетизації ({data.monetization.length})
+						</p>
+						<div className='space-y-1.5'>
 							{data.monetization.map((item, i) => (
-								<div key={i} className='flex items-start gap-2 text-xs text-gray-600 dark:text-gray-300'>
-									<span className='text-emerald-500 mt-0.5 flex-shrink-0'>●</span>
-									<span className='leading-relaxed'>{item}</span>
-								</div>
+								typeof item === 'object'
+									? <MonetizationCard key={i} item={item} index={i} />
+									: <div key={i} className='flex items-start gap-2 text-xs text-gray-600 dark:text-gray-300'>
+										<span className='text-emerald-500 mt-0.5 flex-shrink-0'>●</span>
+										<span className='leading-relaxed'>{item}</span>
+									</div>
 							))}
 						</div>
+					</div>
+				)}
+
+				{/* Price estimate */}
+				{data.fair_price_estimate && (
+					<div className='bg-gray-50 dark:bg-slate-700/50 rounded-lg p-3'>
+						<p className='text-[10px] text-gray-400 font-semibold uppercase tracking-wider mb-1'>🏷️ Оцінка вартості</p>
+						<p className='text-xs text-gray-700 dark:text-gray-300 leading-relaxed'>{data.fair_price_estimate}</p>
 					</div>
 				)}
 
@@ -175,7 +231,6 @@ const AiAnalysis = ({ channelId }) => {
 					</button>
 				) : (
 					<>
-						{/* Audience quality */}
 						{data.audience_quality && (
 							<div>
 								<p className='text-[10px] text-gray-400 font-semibold uppercase tracking-wider mb-1'>👥 Якість аудиторії</p>
@@ -183,7 +238,6 @@ const AiAnalysis = ({ channelId }) => {
 							</div>
 						)}
 
-						{/* Growth trend */}
 						{data.growth_trend && (
 							<div>
 								<p className='text-[10px] text-gray-400 font-semibold uppercase tracking-wider mb-1'>📈 Тренд росту</p>
@@ -191,7 +245,6 @@ const AiAnalysis = ({ channelId }) => {
 							</div>
 						)}
 
-						{/* Content analysis */}
 						{data.content_analysis && (
 							<div>
 								<p className='text-[10px] text-gray-400 font-semibold uppercase tracking-wider mb-1'>📝 Аналіз контенту</p>
@@ -199,7 +252,6 @@ const AiAnalysis = ({ channelId }) => {
 							</div>
 						)}
 
-						{/* Opportunities */}
 						{data.opportunities?.length > 0 && (
 							<div>
 								<p className='text-[10px] text-gray-400 font-semibold uppercase tracking-wider mb-1.5'>🚀 Можливості</p>
@@ -214,7 +266,6 @@ const AiAnalysis = ({ channelId }) => {
 							</div>
 						)}
 
-						{/* Risks */}
 						{data.risks?.length > 0 && (
 							<div>
 								<p className='text-[10px] text-gray-400 font-semibold uppercase tracking-wider mb-1.5'>⚠️ Ризики</p>
