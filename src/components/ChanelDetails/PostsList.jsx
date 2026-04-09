@@ -143,11 +143,13 @@ const TelegramPost = ({ post }) => {
 	);
 };
 
+const POSTS_PER_PAGE = 10;
+
 const PostsList = ({ channelId }) => {
 	const [posts, setPosts] = useState([]);
 	const [total, setTotal] = useState(0);
 	const [loading, setLoading] = useState(true);
-	const [visibleCount, setVisibleCount] = useState(3);
+	const [page, setPage] = useState(1);
 	const limit = 50;
 
 	useEffect(() => {
@@ -168,7 +170,7 @@ const PostsList = ({ channelId }) => {
 
 	if (loading) {
 		return (
-			<div className='mt-2'>
+			<div className='bg-white dark:bg-card rounded-xl border border-gray-100 dark:border-card-border shadow-sm p-4'>
 				<p className='text-[10px] text-gray-400 font-semibold uppercase tracking-wider mb-3'>Публікації каналу</p>
 				<div className='flex justify-center py-6'>
 					<div className='animate-spin rounded-full h-5 w-5 border-2 border-gray-200 dark:border-card-border border-t-accent' />
@@ -179,25 +181,62 @@ const PostsList = ({ channelId }) => {
 
 	if (!posts.length) {
 		return (
-			<div className='mt-2'>
+			<div className='bg-white dark:bg-card rounded-xl border border-gray-100 dark:border-card-border shadow-sm p-4'>
 				<p className='text-[10px] text-gray-400 font-semibold uppercase tracking-wider mb-1'>Публікації каналу</p>
 				<p className='text-gray-300 dark:text-gray-600 text-center py-6 text-xs'>Дані поки відсутні</p>
 			</div>
 		);
 	}
 
-	const visible = posts.slice(0, visibleCount);
-	const hasMore = visibleCount < posts.length;
+	const totalPages = Math.ceil(posts.length / POSTS_PER_PAGE);
+	const startIdx = (page - 1) * POSTS_PER_PAGE;
+	const visible = posts.slice(startIdx, startIdx + POSTS_PER_PAGE);
+
+	// Build page numbers array: 1 ... 3 4 5 ... 10
+	const getPages = () => {
+		const pages = [];
+		for (let i = 1; i <= totalPages; i++) {
+			if (i === 1 || i === totalPages || (i >= page - 1 && i <= page + 1)) {
+				pages.push(i);
+			} else if (pages[pages.length - 1] !== '...') {
+				pages.push('...');
+			}
+		}
+		return pages;
+	};
 
 	return (
-		<div>
+		<div className='bg-white dark:bg-card rounded-xl border border-gray-100 dark:border-card-border shadow-sm p-4'>
 			<div className='flex items-center justify-between mb-4'>
 				<div>
 					<p className='text-[10px] text-gray-400 font-semibold uppercase tracking-wider'>Публікації каналу</p>
 					<p className='font-bold text-sm text-gray-900 dark:text-white'>
-						{total > 50 ? `50 з ${total}` : total} останніх публікацій
+						{total} публікацій
 					</p>
 				</div>
+
+				{/* Pagination */}
+				{totalPages > 1 && (
+					<div className='flex items-center gap-1'>
+						{getPages().map((p, idx) =>
+							p === '...' ? (
+								<span key={`ellipsis-${idx}`} className='px-1.5 text-gray-500 text-xs'>…</span>
+							) : (
+								<button
+									key={p}
+									onClick={() => setPage(p)}
+									className={`w-7 h-7 rounded-lg text-xs font-medium transition-all ${
+										page === p
+											? 'bg-accent text-white'
+											: 'bg-gray-50 dark:bg-card-inner text-gray-400 hover:bg-gray-100 dark:hover:bg-card-hover'
+									}`}
+								>
+									{p}
+								</button>
+							)
+						)}
+					</div>
+				)}
 			</div>
 
 			{/* Timeline posts */}
@@ -207,28 +246,39 @@ const PostsList = ({ channelId }) => {
 				))}
 			</div>
 
-			{/* Show more / collapse */}
-			{hasMore && (
-				<div className='flex justify-center mt-2'>
+			{/* Bottom pagination */}
+			{totalPages > 1 && (
+				<div className='flex items-center justify-center gap-1 mt-4 pt-3 border-t border-gray-100 dark:border-card-border'>
 					<button
-						onClick={() => setVisibleCount(prev => Math.min(prev + 5, posts.length))}
-						className='inline-flex items-center gap-1.5 px-5 py-2 rounded-lg text-[12px] font-semibold text-accent bg-accent/10 hover:bg-accent/20 transition-all'
+						onClick={() => setPage(p => Math.max(1, p - 1))}
+						disabled={page === 1}
+						className='w-7 h-7 rounded-lg text-xs text-gray-400 hover:bg-gray-100 dark:hover:bg-card-hover disabled:opacity-30 transition-all'
 					>
-						<svg className='w-3.5 h-3.5' fill='none' viewBox='0 0 24 24' stroke='currentColor' strokeWidth='2'>
-							<path strokeLinecap='round' strokeLinejoin='round' d='M19 9l-7 7-7-7' />
-						</svg>
-						Показати ще ({posts.length - visibleCount})
+						‹
 					</button>
-				</div>
-			)}
-
-			{visibleCount > 3 && (
-				<div className='flex justify-center mt-2'>
+					{getPages().map((p, idx) =>
+						p === '...' ? (
+							<span key={`ellipsis-b-${idx}`} className='px-1.5 text-gray-500 text-xs'>…</span>
+						) : (
+							<button
+								key={p}
+								onClick={() => setPage(p)}
+								className={`w-7 h-7 rounded-lg text-xs font-medium transition-all ${
+									page === p
+										? 'bg-accent text-white'
+										: 'bg-gray-50 dark:bg-card-inner text-gray-400 hover:bg-gray-100 dark:hover:bg-card-hover'
+								}`}
+							>
+								{p}
+							</button>
+						)
+					)}
 					<button
-						onClick={() => setVisibleCount(3)}
-						className='text-[11px] text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors'
+						onClick={() => setPage(p => Math.min(totalPages, p + 1))}
+						disabled={page === totalPages}
+						className='w-7 h-7 rounded-lg text-xs text-gray-400 hover:bg-gray-100 dark:hover:bg-card-hover disabled:opacity-30 transition-all'
 					>
-						Згорнути
+						›
 					</button>
 				</div>
 			)}

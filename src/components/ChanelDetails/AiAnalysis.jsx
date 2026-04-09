@@ -9,66 +9,27 @@ const verdictConfig = {
 
 const methodIcons = ['💰', '📢', '🤝', '🎯', '🛒'];
 
-const ScoreRing = ({ score }) => {
-	const circumference = 2 * Math.PI * 22;
-	const offset = circumference - (score / 100) * circumference;
-	const color = score >= 70 ? '#10B981' : score >= 40 ? '#F59E0B' : '#EF4444';
-
+const ReachBar = ({ value, label, color, maxVal }) => {
+	const pct = maxVal > 0 ? Math.min(100, (value / maxVal) * 100) : 0;
 	return (
-		<div className='relative w-16 h-16 flex-shrink-0'>
-			<svg className='w-16 h-16 -rotate-90' viewBox='0 0 52 52'>
-				<circle cx='26' cy='26' r='22' stroke='currentColor' strokeWidth='3' fill='none'
-					className='text-gray-100 dark:text-card-inner' />
-				<circle cx='26' cy='26' r='22' strokeWidth='3' fill='none'
-					stroke={color} strokeLinecap='round'
-					strokeDasharray={circumference} strokeDashoffset={offset}
-					style={{ transition: 'stroke-dashoffset 1s ease-out' }} />
-			</svg>
-			<div className='absolute inset-0 flex flex-col items-center justify-center'>
-				<span className='text-sm font-bold leading-none' style={{ color }}>{score}</span>
-				<span className='text-[8px] text-gray-400'>/ 100</span>
+		<div className='flex items-center justify-between gap-3'>
+			<div className='flex-1'>
+				<div className='flex items-center justify-between mb-0.5'>
+					<span className='text-[11px] text-gray-400'>{label}</span>
+					<span className={`text-[11px] font-bold ${color}`}>{value?.toLocaleString('uk-UA')}</span>
+				</div>
+				<div className='w-full h-1.5 rounded-full bg-gray-700/30'>
+					<div className={`h-full rounded-full transition-all duration-700`} style={{ width: `${pct}%`, backgroundColor: color === 'text-pink-400' ? '#EC4899' : color === 'text-emerald-400' ? '#10B981' : '#F97316' }} />
+				</div>
 			</div>
 		</div>
 	);
 };
 
-const MonetizationCard = ({ item, index }) => {
-	const [open, setOpen] = useState(false);
-	return (
-		<div className='bg-gray-50 dark:bg-card-inner rounded-lg border border-gray-100 dark:border-card-border overflow-hidden'>
-			<button
-				onClick={() => setOpen(!open)}
-				className='w-full px-3 py-2.5 flex items-center gap-2.5 text-left hover:bg-gray-100 dark:hover:bg-card-hover transition-colors'
-			>
-				<span className='text-base flex-shrink-0'>{methodIcons[index] || '💵'}</span>
-				<div className='flex-1 min-w-0'>
-					<p className='text-xs font-semibold text-gray-800 dark:text-gray-200 truncate'>{item.method}</p>
-					<p className='text-[10px] text-gray-500 dark:text-gray-400 truncate'>{item.description}</p>
-				</div>
-				<div className='text-right flex-shrink-0'>
-					<p className='text-xs font-bold text-emerald-600 dark:text-emerald-400'>
-						${item.income_min}–${item.income_max}
-					</p>
-					<p className='text-[9px] text-gray-400'>USDT/міс</p>
-				</div>
-				<span className='text-gray-400 text-[10px] flex-shrink-0'>{open ? '▴' : '▾'}</span>
-			</button>
-			{open && (
-				<div className='px-3 pb-2.5 pt-0'>
-					<p className='text-[11px] text-gray-600 dark:text-gray-300 leading-relaxed bg-white dark:bg-page rounded p-2'>
-						{item.reasoning}
-					</p>
-				</div>
-			)}
-		</div>
-	);
-};
-
-const AiAnalysis = ({ channelId }) => {
+const AiAnalysis = ({ channelId, channel }) => {
 	const [data, setData] = useState(null);
 	const [loading, setLoading] = useState(true);
 	const [error, setError] = useState(null);
-	const [expanded, setExpanded] = useState(false);
 
 	const runAnalysis = async () => {
 		setLoading(true);
@@ -85,10 +46,16 @@ const AiAnalysis = ({ channelId }) => {
 
 	useEffect(() => { runAnalysis(); }, [channelId]);
 
+	// AdvertisingReach data from channel
+	const reach12h = channel?.adv_reach_12h;
+	const reach24h = channel?.adv_reach_24h;
+	const reach48h = channel?.adv_reach_48h;
+	const maxReach = Math.max(reach12h || 0, reach24h || 0, reach48h || 0, 1);
+
 	if (loading) {
 		return (
-			<div className='bg-gradient-to-br from-indigo-50 to-purple-50 dark:from-card dark:to-card rounded-xl border border-indigo-100 dark:border-card-border p-4'>
-				<div className='flex items-center gap-3'>
+			<div className='bg-white dark:bg-card rounded-xl border border-gray-100 dark:border-card-border shadow-sm p-4'>
+				<div className='flex items-center gap-3 mb-4'>
 					<div className='w-8 h-8 rounded-lg bg-indigo-100 dark:bg-card-inner flex items-center justify-center animate-pulse'>
 						<span className='text-sm'>🤖</span>
 					</div>
@@ -97,10 +64,14 @@ const AiAnalysis = ({ channelId }) => {
 						<p className='text-[10px] text-gray-500'>AI обробляє дані каналу</p>
 					</div>
 				</div>
-				<div className='mt-4 space-y-2'>
-					<div className='h-3 bg-indigo-100 dark:bg-card-inner rounded animate-pulse w-full' />
-					<div className='h-3 bg-indigo-100 dark:bg-card-inner rounded animate-pulse w-3/4' />
-					<div className='h-3 bg-indigo-100 dark:bg-card-inner rounded animate-pulse w-5/6' />
+				<div className='grid grid-cols-2 gap-3'>
+					{[1,2,3,4].map(i => (
+						<div key={i} className='bg-gray-50 dark:bg-card-inner rounded-lg p-3 animate-pulse'>
+							<div className='h-3 bg-gray-200 dark:bg-card-hover rounded w-20 mb-2' />
+							<div className='h-2 bg-gray-200 dark:bg-card-hover rounded w-full mb-1' />
+							<div className='h-2 bg-gray-200 dark:bg-card-hover rounded w-3/4' />
+						</div>
+					))}
 				</div>
 			</div>
 		);
@@ -108,11 +79,22 @@ const AiAnalysis = ({ channelId }) => {
 
 	if (error) {
 		return (
-			<div className='bg-red-50 dark:bg-red-900/20 rounded-xl border border-red-100 dark:border-red-800/40 p-4'>
-				<p className='text-xs text-red-600 dark:text-red-400 mb-2'>⚠️ {error}</p>
-				<button onClick={runAnalysis} className='text-[11px] text-red-500 hover:underline font-medium'>
-					Спробувати ще раз
-				</button>
+			<div className='bg-white dark:bg-card rounded-xl border border-gray-100 dark:border-card-border shadow-sm p-4'>
+				{/* Still show AdvReach even if AI fails */}
+				{(reach12h || reach24h || reach48h) && (
+					<div className='mb-4'>
+						<p className='text-[10px] text-gray-400 font-semibold uppercase tracking-wider mb-2'>Перегляди реклами (за 12, 24, 48 год)</p>
+						<div className='space-y-2'>
+							{reach12h != null && <ReachBar value={reach12h} label='за 12 годин' color='text-pink-400' maxVal={maxReach} />}
+							{reach24h != null && <ReachBar value={reach24h} label='за 24 годин' color='text-emerald-400' maxVal={maxReach} />}
+							{reach48h != null && <ReachBar value={reach48h} label='за 48 годин' color='text-orange-400' maxVal={maxReach} />}
+						</div>
+					</div>
+				)}
+				<div className='bg-red-50 dark:bg-red-900/20 rounded-lg border border-red-100 dark:border-red-800/40 p-3'>
+					<p className='text-xs text-red-600 dark:text-red-400 mb-2'>⚠️ {error}</p>
+					<button onClick={runAnalysis} className='text-[11px] text-red-500 hover:underline font-medium'>Спробувати ще раз</button>
+				</div>
 			</div>
 		);
 	}
@@ -121,148 +103,156 @@ const AiAnalysis = ({ channelId }) => {
 
 	return (
 		<div className='bg-white dark:bg-card rounded-xl border border-gray-100 dark:border-card-border shadow-sm overflow-hidden'>
-			{/* Header with score + verdict */}
-			<div className='bg-gradient-to-r from-indigo-50 to-purple-50 dark:from-card-inner dark:to-card-inner px-4 py-3 border-b border-indigo-100 dark:border-card-border'>
+			{/* Header */}
+			<div className='px-4 py-3 border-b border-gray-100 dark:border-card-border'>
 				<div className='flex items-center justify-between'>
-					<div className='flex items-center gap-3'>
-						<ScoreRing score={data.score || 50} />
-						<div>
-							<p className='text-sm font-bold text-gray-900 dark:text-white'>AI-аналітика</p>
-							<p className='text-[10px] text-gray-500 dark:text-gray-400'>Powered by Llama 3.3 70B</p>
-						</div>
+					<div className='flex items-center gap-2'>
+						<span className='text-base'>🤖</span>
+						<p className='text-sm font-bold text-gray-900 dark:text-white'>AI АНАЛІЗ І МОНЕТИЗАЦІЯ</p>
 					</div>
-					<div className={`${verdict.bg} ${verdict.border} border rounded-lg px-3 py-1.5 text-center`}>
-						<p className='text-[10px] text-gray-500 dark:text-gray-400'>Вердикт</p>
-						<p className={`text-xs font-bold ${verdict.color}`}>{verdict.icon} {verdict.label}</p>
+					<div className={`${verdict.bg} ${verdict.border} border rounded-lg px-2.5 py-1 text-center`}>
+						<p className={`text-[11px] font-bold ${verdict.color}`}>{verdict.icon} {verdict.label}</p>
 					</div>
 				</div>
 			</div>
 
-			<div className='p-4 space-y-3'>
-				{/* Summary */}
-				<div>
-					<p className='text-[10px] text-gray-400 font-semibold uppercase tracking-wider mb-1'>Висновок</p>
-					<p className='text-xs text-gray-700 dark:text-gray-300 leading-relaxed'>{data.summary}</p>
-				</div>
+			{/* 2-column grid matching screenshot */}
+			<div className='p-4'>
+				<div className='grid grid-cols-2 gap-4'>
 
-				{/* Verdict reason */}
-				{data.verdict_reason && (
-					<p className={`text-[11px] ${verdict.color} ${verdict.bg} rounded-lg px-3 py-2`}>
-						{data.verdict_reason}
-					</p>
-				)}
-
-				{/* Total income potential */}
-				{(data.total_potential_income_min || data.total_potential_income_max) && (
-					<div className='bg-emerald-50 dark:bg-emerald-900/20 rounded-lg p-3 border border-emerald-100 dark:border-emerald-800/40'>
-						<p className='text-[10px] text-emerald-600 dark:text-emerald-400 font-semibold uppercase tracking-wider mb-1'>💰 Потенційний дохід</p>
-						<div className='flex items-baseline gap-1.5'>
-							<span className='text-lg font-bold text-emerald-600 dark:text-emerald-400'>
-								${data.total_potential_income_min || '?'}–${data.total_potential_income_max || '?'}
-							</span>
-							<span className='text-[11px] text-emerald-500/70'>USDT / місяць</span>
-						</div>
-						{data.roi_months && (
-							<p className='text-[10px] text-emerald-600/70 dark:text-emerald-400/70 mt-1'>
-								⏱ Окупність: {data.roi_months}
+					{/* ═══ LEFT COLUMN ═══ */}
+					<div className='space-y-4'>
+						{/* Advertising Reach */}
+						<div>
+							<p className='text-[10px] text-gray-400 font-semibold uppercase tracking-wider mb-2'>
+								Перегляди реклами (за 12, 24, 48 год)
 							</p>
-						)}
-					</div>
-				)}
+							{(reach12h || reach24h || reach48h) ? (
+								<div className='space-y-2'>
+									{reach12h != null && <ReachBar value={reach12h} label='за 12 годин' color='text-pink-400' maxVal={maxReach} />}
+									{reach24h != null && <ReachBar value={reach24h} label='за 24 годин' color='text-emerald-400' maxVal={maxReach} />}
+									{reach48h != null && <ReachBar value={reach48h} label='за 48 годин' color='text-orange-400' maxVal={maxReach} />}
+								</div>
+							) : (
+								<p className='text-gray-500 text-xs'>Дані відсутні</p>
+							)}
+						</div>
 
-				{/* 5 Monetization methods */}
-				{data.monetization?.length > 0 && (
-					<div>
-						<p className='text-[10px] text-gray-400 font-semibold uppercase tracking-wider mb-2'>
-							💵 Способи монетизації ({data.monetization.length})
-						</p>
-						<div className='space-y-1.5'>
-							{data.monetization.map((item, i) => (
-								typeof item === 'object'
-									? <MonetizationCard key={i} item={item} index={i} />
-									: <div key={i} className='flex items-start gap-2 text-xs text-gray-600 dark:text-gray-300'>
-										<span className='text-emerald-500 mt-0.5 flex-shrink-0'>●</span>
-										<span className='leading-relaxed'>{item}</span>
+						{/* Content Analysis */}
+						<div>
+							<p className='text-[10px] text-gray-400 font-semibold uppercase tracking-wider mb-2'>AI КОНТЕНТ АНАЛІЗ</p>
+
+							{/* Sentiment */}
+							{data.summary && (
+								<div className='mb-3'>
+									<p className='text-[10px] text-gray-500 mb-1.5'>Сентимент-розподіл</p>
+									<div className='flex items-center gap-2 flex-wrap'>
+										<span className='flex items-center gap-1 text-[10px]'>
+											<span className='w-2 h-2 rounded-full bg-emerald-500 inline-block' />
+											<span className='text-gray-300'>Позитивний</span>
+										</span>
+										<span className='flex items-center gap-1 text-[10px]'>
+											<span className='w-2 h-2 rounded-full bg-gray-400 inline-block' />
+											<span className='text-gray-300'>Нейтральний</span>
+										</span>
+										<span className='flex items-center gap-1 text-[10px]'>
+											<span className='w-2 h-2 rounded-full bg-red-500 inline-block' />
+											<span className='text-gray-300'>Негативний</span>
+										</span>
 									</div>
-							))}
+								</div>
+							)}
+
+							{/* Content analysis text */}
+							{data.content_analysis && (
+								<div className='mb-3'>
+									<p className='text-[10px] text-gray-500 mb-1'>Ключові теми</p>
+									<p className='text-[11px] text-gray-300 leading-relaxed'>{data.content_analysis}</p>
+								</div>
+							)}
+
+							{/* Audience quality */}
+							{data.audience_quality && (
+								<div>
+									<p className='text-[10px] text-gray-500 mb-1'>Релевантність ніші</p>
+									<p className='text-[11px] text-gray-300 leading-relaxed'>{data.audience_quality}</p>
+								</div>
+							)}
 						</div>
 					</div>
-				)}
 
-				{/* Price estimate */}
-				{data.fair_price_estimate && (
-				<div className='bg-gray-50 dark:bg-card-inner rounded-lg p-3'>
-						<p className='text-[10px] text-gray-400 font-semibold uppercase tracking-wider mb-1'>🏷️ Оцінка вартості</p>
-						<p className='text-xs text-gray-700 dark:text-gray-300 leading-relaxed'>{data.fair_price_estimate}</p>
-					</div>
-				)}
+					{/* ═══ RIGHT COLUMN ═══ */}
+					<div className='space-y-4'>
+						{/* Monetization Assessment */}
+						<div>
+							<p className='text-[10px] text-gray-400 font-semibold uppercase tracking-wider mb-2'>МОНЕТИЗАЦІЙНА ОЦІНКА</p>
+							{data.monetization?.length > 0 ? (
+								<div className='space-y-1.5'>
+									{data.monetization.map((item, i) => {
+										if (typeof item !== 'object') return null;
+										return (
+											<div key={i} className='flex items-center justify-between py-1'>
+												<div className='flex items-center gap-2 min-w-0'>
+													<span className='text-sm flex-shrink-0'>{methodIcons[i] || '💵'}</span>
+													<span className='text-[11px] text-gray-300 truncate'>{item.method}</span>
+												</div>
+												<div className='flex items-center gap-2 flex-shrink-0'>
+													<div className='w-12 h-1.5 rounded-full bg-gray-700/30 overflow-hidden'>
+														<div className='h-full rounded-full bg-accent' style={{ width: `${Math.min(100, ((item.income_max || 0) / (data.total_potential_income_max || 1)) * 100)}%` }} />
+													</div>
+													<span className='text-[11px] font-bold text-emerald-400 whitespace-nowrap'>
+														{item.income_max?.toLocaleString('uk-UA')} USDT/міс
+													</span>
+												</div>
+											</div>
+										);
+									})}
+								</div>
+							) : (
+								<p className='text-gray-500 text-xs'>Pending Data...</p>
+							)}
+						</div>
 
-				{/* Expandable details */}
-				{!expanded ? (
-					<button
-						onClick={() => setExpanded(true)}
-						className='w-full py-1.5 text-center text-[11px] text-indigo-500 hover:text-indigo-600 font-medium transition-colors'
-					>
-						Детальніше ▾
-					</button>
-				) : (
-					<>
-						{data.audience_quality && (
-							<div>
-								<p className='text-[10px] text-gray-400 font-semibold uppercase tracking-wider mb-1'>👥 Якість аудиторії</p>
-								<p className='text-xs text-gray-600 dark:text-gray-300 leading-relaxed'>{data.audience_quality}</p>
-							</div>
-						)}
+						{/* Potential ROI */}
+						<div>
+							<p className='text-[10px] text-gray-400 font-semibold uppercase tracking-wider mb-2'>ПОТЕНЦІЙНИЙ ROI</p>
+							{data.fair_price_estimate && (
+								<p className='text-[11px] text-gray-300 leading-relaxed mb-1'>
+									Справедлива ціна каналу: <span className='font-semibold text-white'>{data.fair_price_estimate}</span>
+								</p>
+							)}
+							{data.roi_months && (
+								<p className='text-[11px] text-gray-300'>
+									Очікувана окупність: <span className='font-semibold text-emerald-400'>{data.roi_months}</span>
+								</p>
+							)}
+							{(data.total_potential_income_min || data.total_potential_income_max) && (
+								<div className='mt-2 bg-emerald-900/20 rounded-lg p-2.5 border border-emerald-800/40'>
+									<div className='flex items-baseline gap-1.5'>
+										<span className='text-sm font-bold text-emerald-400'>
+											від ${data.total_potential_income_min || '?'} до ${data.total_potential_income_max || '?'}
+										</span>
+										<span className='text-[10px] text-emerald-500/70'>USDT / місяць</span>
+									</div>
+								</div>
+							)}
+						</div>
 
+						{/* Growth trend */}
 						{data.growth_trend && (
 							<div>
 								<p className='text-[10px] text-gray-400 font-semibold uppercase tracking-wider mb-1'>📈 Тренд росту</p>
-								<p className='text-xs text-gray-600 dark:text-gray-300 leading-relaxed'>{data.growth_trend}</p>
+								<p className='text-[11px] text-gray-300 leading-relaxed'>{data.growth_trend}</p>
 							</div>
 						)}
+					</div>
+				</div>
 
-						{data.content_analysis && (
-							<div>
-								<p className='text-[10px] text-gray-400 font-semibold uppercase tracking-wider mb-1'>📝 Аналіз контенту</p>
-								<p className='text-xs text-gray-600 dark:text-gray-300 leading-relaxed'>{data.content_analysis}</p>
-							</div>
-						)}
-
-						{data.opportunities?.length > 0 && (
-							<div>
-								<p className='text-[10px] text-gray-400 font-semibold uppercase tracking-wider mb-1.5'>🚀 Можливості</p>
-								<div className='space-y-1'>
-									{data.opportunities.map((item, i) => (
-										<div key={i} className='flex items-start gap-2 text-xs text-gray-600 dark:text-gray-300'>
-											<span className='text-blue-500 mt-0.5 flex-shrink-0'>●</span>
-											<span className='leading-relaxed'>{item}</span>
-										</div>
-									))}
-								</div>
-							</div>
-						)}
-
-						{data.risks?.length > 0 && (
-							<div>
-								<p className='text-[10px] text-gray-400 font-semibold uppercase tracking-wider mb-1.5'>⚠️ Ризики</p>
-								<div className='space-y-1'>
-									{data.risks.map((item, i) => (
-										<div key={i} className='flex items-start gap-2 text-xs text-gray-600 dark:text-gray-300'>
-											<span className='text-red-500 mt-0.5 flex-shrink-0'>●</span>
-											<span className='leading-relaxed'>{item}</span>
-										</div>
-									))}
-								</div>
-							</div>
-						)}
-
-						<button
-							onClick={() => setExpanded(false)}
-							className='w-full py-1.5 text-center text-[11px] text-gray-400 hover:text-gray-600 font-medium transition-colors'
-						>
-							Згорнути ▴
-						</button>
-					</>
+				{/* Verdict reason - full width */}
+				{data.verdict_reason && (
+					<div className={`mt-3 text-[11px] ${verdict.color} ${verdict.bg} rounded-lg px-3 py-2`}>
+						{data.verdict_reason}
+					</div>
 				)}
 			</div>
 

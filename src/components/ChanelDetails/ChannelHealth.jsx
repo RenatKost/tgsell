@@ -1,6 +1,3 @@
-import { useEffect, useState } from 'react';
-import { channelsAPI } from '../../services/api';
-
 const SCORE_CONFIG = {
 	healthy: { bg: 'bg-emerald-500', ring: 'ring-emerald-200 dark:ring-emerald-900', text: 'text-emerald-600 dark:text-emerald-400', bgLight: 'bg-emerald-50 dark:bg-emerald-900/20' },
 	suspicious: { bg: 'bg-amber-500', ring: 'ring-amber-200 dark:ring-amber-900', text: 'text-amber-600 dark:text-amber-400', bgLight: 'bg-amber-50 dark:bg-amber-900/20' },
@@ -13,23 +10,7 @@ const getScoreStyle = (score) => {
 	return SCORE_CONFIG.dead;
 };
 
-const ChannelHealth = ({ channelId }) => {
-	const [health, setHealth] = useState(null);
-	const [loading, setLoading] = useState(true);
-
-	useEffect(() => {
-		const fetch = async () => {
-			try {
-				const { data } = await channelsAPI.getHealth(channelId);
-				setHealth(data);
-			} catch {
-				setHealth(null);
-			} finally {
-				setLoading(false);
-			}
-		};
-		fetch();
-	}, [channelId]);
+const ChannelHealth = ({ health, loading }) => {
 
 	if (loading) {
 		return (

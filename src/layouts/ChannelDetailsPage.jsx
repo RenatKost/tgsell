@@ -4,7 +4,7 @@ import { channelsAPI, dealsAPI } from '../services/api';
 import { useAuth } from '../context/AppContext';
 import DetailsCard from '../components/Cards/DetailsCard';
 import ChannelHealth from '../components/ChanelDetails/ChannelHealth';
-import AdvertisingReach from '../components/ChanelDetails/AdvertisingReach';
+import AIRiskScore from '../components/ChanelDetails/AIRiskScore';
 import PostsPerDay from '../components/ChanelDetails/Coverage';
 import ER from '../components/ChanelDetails/ER';
 import Subscribers from '../components/ChanelDetails/Subscribers';
@@ -18,6 +18,8 @@ const ChannelDetailsPage = () => {
 	const { isAuthenticated } = useAuth();
 	const [channel, setChannel] = useState(null);
 	const [stats, setStats] = useState([]);
+	const [health, setHealth] = useState(null);
+	const [healthLoading, setHealthLoading] = useState(true);
 	const [loading, setLoading] = useState(true);
 
 	useEffect(() => {
@@ -38,6 +40,21 @@ const ChannelDetailsPage = () => {
 		};
 		fetchData();
 	}, [id, navigate]);
+
+	useEffect(() => {
+		if (!channel) return;
+		const fetchHealth = async () => {
+			try {
+				const { data } = await channelsAPI.getHealth(channel.id);
+				setHealth(data);
+			} catch {
+				setHealth(null);
+			} finally {
+				setHealthLoading(false);
+			}
+		};
+		fetchHealth();
+	}, [channel]);
 
 	const handleBuy = async () => {
 		if (!isAuthenticated) {
@@ -73,9 +90,9 @@ const ChannelDetailsPage = () => {
 				<span className='text-gray-600 dark:text-gray-300 font-medium'>{channel.channel_name || 'Канал'}</span>
 			</div>
 
-			<div className='flex flex-col lg:flex-row items-start gap-5'>
-				{/* Left column — card + owner info */}
-				<div className='w-full lg:w-[380px] flex-shrink-0 space-y-4'>
+			{/* Row 1: DetailsCard + Subscribers + Views — 3 columns */}
+			<div className='grid grid-cols-1 lg:grid-cols-[380px_1fr_1fr] gap-4 items-start'>
+				<div className='space-y-4'>
 					<DetailsCard channel={channel} onBuy={handleBuy} stats={stats} />
 
 					{channel.description && (
@@ -106,28 +123,25 @@ const ChannelDetailsPage = () => {
 					)}
 				</div>
 
-				{/* Right column — charts */}
-				<div className='w-full space-y-4'>
-					<div className='grid md:grid-cols-2 gap-4'>
-						<Subscribers stats={stats} current={channel.subscribers_count} />
-						<Views stats={stats} current={channel.avg_views} viewsHidden={channel.views_hidden} />
-					</div>
-					<div className='grid md:grid-cols-3 gap-4'>
-						<ER stats={stats} current={channel.er} />
-						<PostsPerDay stats={stats} />
-						<AdvertisingReach channel={channel} />
-					</div>
-				</div>
+				<Subscribers stats={stats} current={channel.subscribers_count} />
+				<Views stats={stats} current={channel.avg_views} viewsHidden={channel.views_hidden} />
 			</div>
 
-			{/* Row 2 — Health + AI Analysis side by side */}
-			<div className='mt-5 grid md:grid-cols-2 gap-5'>
-				<ChannelHealth channelId={channel.id} />
-				<AiAnalysis channelId={channel.id} />
+			{/* Row 2: ER + PostsPerDay + AI Risk Assessment — 3 columns */}
+			<div className='mt-4 grid md:grid-cols-3 gap-4'>
+				<ER stats={stats} current={channel.er} />
+				<PostsPerDay stats={stats} />
+				<AIRiskScore health={health} loading={healthLoading} />
 			</div>
 
-			{/* Row 3 — Posts full width */}
-			<div className='mt-5'>
+			{/* Row 3: Health (left) + AI Analysis with AdvReach (right) */}
+			<div className='mt-4 grid md:grid-cols-2 gap-4'>
+				<ChannelHealth health={health} loading={healthLoading} />
+				<AiAnalysis channelId={channel.id} channel={channel} />
+			</div>
+
+			{/* Row 4: Posts full width */}
+			<div className='mt-4'>
 				<PostsList channelId={channel.id} />
 			</div>
 		</section>
