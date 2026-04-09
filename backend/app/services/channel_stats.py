@@ -325,7 +325,7 @@ async def get_channel_stats_telethon(channel_username: str, message_limit: int =
         return None
 
 
-async def collect_channel_stats(telegram_link: str) -> dict:
+async def collect_channel_stats(telegram_link: str, message_limit: int = 5000) -> dict:
     """Collect stats using hybrid approach: Bot API + Telethon.
 
     Returns combined info dict.
@@ -367,7 +367,7 @@ async def collect_channel_stats(telegram_link: str) -> dict:
         logger.warning(f"[STATS] @{username} Bot API failed — check BOT_TOKEN_STATS")
 
     # Step 2: Telethon (deeper stats, may fail)
-    telethon_stats = await get_channel_stats_telethon(username)
+    telethon_stats = await get_channel_stats_telethon(username, message_limit=message_limit)
     if telethon_stats:
         result["subscribers_count"] = telethon_stats["subscribers"]
         result["avg_views"] = telethon_stats["avg_views"]

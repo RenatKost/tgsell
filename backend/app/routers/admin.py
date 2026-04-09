@@ -778,100 +778,102 @@ async def admin_refresh_channel_stats(
         raise HTTPException(status_code=404, detail="Channel not found")
 
     try:
-        stats = await collect_channel_stats(channel.telegram_link)
+        stats = await collect_channel_stats(channel.telegram_link, message_limit=500)
     except Exception as e:
         logger.error(f"refresh-stats collect error for #{channel_id}: {traceback.format_exc()}")
         raise HTTPException(status_code=502, detail=f"Telegram API error: {e}")
 
-    # Update channel snapshot
-    if stats.get("subscribers_count"):
-        channel.subscribers_count = stats["subscribers_count"]
-    if stats.get("avg_views"):
-        channel.avg_views = stats["avg_views"]
-    if stats.get("er"):
-        channel.er = stats["er"]
-    if stats.get("avatar_url"):
-        channel.avatar_url = stats["avatar_url"]
-    if stats.get("channel_name"):
-        channel.channel_name = stats["channel_name"]
-    if stats.get("adv_reach_12h"):
-        channel.adv_reach_12h = stats["adv_reach_12h"]
-    if stats.get("adv_reach_24h"):
-        channel.adv_reach_24h = stats["adv_reach_24h"]
-    if stats.get("adv_reach_48h"):
-        channel.adv_reach_48h = stats["adv_reach_48h"]
-    if stats.get("total_posts"):
-        channel.total_posts = stats["total_posts"]
-    if stats.get("post_frequency") is not None:
-        channel.post_frequency = stats["post_frequency"]
-    if stats.get("last_post_date"):
-        try:
-            channel.last_post_date = datetime.fromisoformat(stats["last_post_date"])
-        except (ValueError, TypeError):
-            pass
-    if stats.get("avg_forwards"):
-        channel.avg_forwards = stats["avg_forwards"]
-    if stats.get("avg_reactions"):
-        channel.avg_reactions = stats["avg_reactions"]
-
-    # Save daily stats with dedup
-    daily_stats = stats.get("daily_stats", [])
-    new_stats_count = 0
-    if daily_stats:
-        existing = await db.execute(
-            select(ChannelStats.date).where(ChannelStats.channel_id == channel.id)
-        )
-        existing_dates = {d.strftime("%Y-%m-%d") for d in existing.scalars().all()}
-        for ds in daily_stats:
-            if ds["date"] not in existing_dates:
-                db.add(ChannelStats(
-                    channel_id=channel.id,
-                    date=datetime.strptime(ds["date"], "%Y-%m-%d"),
-                    subscribers=ds.get("subscribers") or 0,
-                    avg_views=ds.get("avg_views") or 0,
-                    avg_reach=ds.get("avg_views") or 0,
-                    er=ds.get("er") or 0.0,
-                    post_count=ds.get("post_count") or 0,
-                    avg_forwards=ds.get("avg_forwards") or 0,
-                    avg_reactions=ds.get("avg_reactions") or 0,
-                ))
-                new_stats_count += 1
-
-    # Save posts with dedup
-    posts_data = stats.get("posts", [])
-    new_posts_count = 0
-    if posts_data:
-        msg_ids = [p["telegram_msg_id"] for p in posts_data]
-        existing_posts = await db.execute(
-            select(ChannelPost.telegram_msg_id).where(
-                ChannelPost.channel_id == channel.id,
-                ChannelPost.telegram_msg_id.in_(msg_ids),
-            )
-        )
-        existing_msg_ids = set(existing_posts.scalars().all())
-        for p in posts_data:
-            if p["telegram_msg_id"] not in existing_msg_ids:
-                post_date = datetime.fromisoformat(p["date"]) if isinstance(p["date"], str) else p["date"]
-                db.add(ChannelPost(
-                    channel_id=channel.id,
-                    telegram_msg_id=p["telegram_msg_id"],
-                    date=post_date,
-                    text=p.get("text"),
-                    media_type=p.get("media_type"),
-                    link=p.get("link"),
-                    views=p["views"],
-                    forwards=p["forwards"],
-                    reactions=p["reactions"],
-                    comments=p.get("comments", 0),
-                ))
-                new_posts_count += 1
-
     try:
+        # Update channel snapshot
+        if stats.get("subscribers_count"):
+            channel.subscribers_count = stats["subscribers_count"]
+        if stats.get("avg_views"):
+            channel.avg_views = stats["avg_views"]
+        if stats.get("er"):
+            channel.er = stats["er"]
+        if stats.get("avatar_url"):
+            channel.avatar_url = stats["avatar_url"]
+        if stats.get("channel_name"):
+            channel.channel_name = stats["channel_name"]
+        if stats.get("adv_reach_12h"):
+            channel.adv_reach_12h = stats["adv_reach_12h"]
+        if stats.get("adv_reach_24h"):
+            channel.adv_reach_24h = stats["adv_reach_24h"]
+        if stats.get("adv_reach_48h"):
+            channel.adv_reach_48h = stats["adv_reach_48h"]
+        if stats.get("total_posts"):
+            channel.total_posts = stats["total_posts"]
+        if stats.get("post_frequency") is not None:
+            channel.post_frequency = stats["post_frequency"]
+        if stats.get("last_post_date"):
+            try:
+                channel.last_post_date = datetime.fromisoformat(stats["last_post_date"])
+            except (ValueError, TypeError):
+                pass
+        if stats.get("avg_forwards"):
+            channel.avg_forwards = stats["avg_forwards"]
+        if stats.get("avg_reactions"):
+            channel.avg_reactions = stats["avg_reactions"]
+
+        # Save daily stats with dedup
+        daily_stats = stats.get("daily_stats", [])
+        new_stats_count = 0
+        if daily_stats:
+            existing = await db.execute(
+                select(ChannelStats.date).where(ChannelStats.channel_id == channel.id)
+            )
+            existing_dates = {d.strftime("%Y-%m-%d") for d in existing.scalars().all()}
+            for ds in daily_stats:
+                if ds["date"] not in existing_dates:
+                    db.add(ChannelStats(
+                        channel_id=channel.id,
+                        date=datetime.strptime(ds["date"], "%Y-%m-%d"),
+                        subscribers=ds.get("subscribers") or 0,
+                        avg_views=ds.get("avg_views") or 0,
+                        avg_reach=ds.get("avg_views") or 0,
+                        er=ds.get("er") or 0.0,
+                        post_count=ds.get("post_count") or 0,
+                        avg_forwards=ds.get("avg_forwards") or 0,
+                        avg_reactions=ds.get("avg_reactions") or 0,
+                    ))
+                    new_stats_count += 1
+
+        # Save posts with dedup
+        posts_data = stats.get("posts", [])
+        new_posts_count = 0
+        if posts_data:
+            msg_ids = [p["telegram_msg_id"] for p in posts_data]
+            existing_posts = await db.execute(
+                select(ChannelPost.telegram_msg_id).where(
+                    ChannelPost.channel_id == channel.id,
+                    ChannelPost.telegram_msg_id.in_(msg_ids),
+                )
+            )
+            existing_msg_ids = set(existing_posts.scalars().all())
+            for p in posts_data:
+                if p["telegram_msg_id"] not in existing_msg_ids:
+                    post_date = datetime.fromisoformat(p["date"]) if isinstance(p["date"], str) else p["date"]
+                    db.add(ChannelPost(
+                        channel_id=channel.id,
+                        telegram_msg_id=p["telegram_msg_id"],
+                        date=post_date,
+                        text=p.get("text"),
+                        media_type=p.get("media_type"),
+                        link=p.get("link"),
+                        views=p["views"],
+                        forwards=p["forwards"],
+                        reactions=p["reactions"],
+                        comments=p.get("comments", 0),
+                    ))
+                    new_posts_count += 1
+
         await db.commit()
+    except HTTPException:
+        raise
     except Exception as e:
-        logger.error(f"refresh-stats DB commit error for #{channel_id}: {e}")
+        logger.error(f"refresh-stats save error for #{channel_id}: {traceback.format_exc()}")
         await db.rollback()
-        raise HTTPException(status_code=500, detail=f"DB save error: {e}")
+        raise HTTPException(status_code=500, detail=f"Save error: {e}")
 
     return {
         "ok": True,
