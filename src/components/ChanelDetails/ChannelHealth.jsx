@@ -33,12 +33,12 @@ const ChannelHealth = ({ channelId }) => {
 
 	if (loading) {
 		return (
-			<div className='bg-white dark:bg-slate-800 rounded-xl border border-gray-100 dark:border-slate-700 shadow-sm p-4'>
+			<div className='bg-white dark:bg-card rounded-xl border border-gray-100 dark:border-card-border shadow-sm p-4'>
 				<div className='flex items-center gap-3'>
-					<div className='w-14 h-14 rounded-full bg-gray-100 dark:bg-slate-700 animate-pulse' />
+					<div className='w-14 h-14 rounded-full bg-gray-100 dark:bg-card-inner animate-pulse' />
 					<div className='space-y-2 flex-1'>
-						<div className='h-4 bg-gray-100 dark:bg-slate-700 rounded animate-pulse w-32' />
-						<div className='h-3 bg-gray-100 dark:bg-slate-700 rounded animate-pulse w-48' />
+						<div className='h-4 bg-gray-100 dark:bg-card-inner rounded animate-pulse w-32' />
+						<div className='h-3 bg-gray-100 dark:bg-card-inner rounded animate-pulse w-48' />
 					</div>
 				</div>
 			</div>
@@ -52,7 +52,7 @@ const ChannelHealth = ({ channelId }) => {
 	const strokeDashoffset = circumference - (health.health_score / 100) * circumference;
 
 	return (
-		<div className='bg-white dark:bg-slate-800 rounded-xl border border-gray-100 dark:border-slate-700 shadow-sm p-4'>
+		<div className='bg-white dark:bg-card rounded-xl border border-gray-100 dark:border-card-border shadow-sm p-4'>
 			<h4 className='font-semibold text-sm text-gray-900 dark:text-white mb-3 flex items-center gap-2'>
 				<span>🔍</span> Аналіз живучості каналу
 			</h4>
@@ -62,7 +62,7 @@ const ChannelHealth = ({ channelId }) => {
 				<div className='relative w-16 h-16 flex-shrink-0'>
 					<svg className='w-16 h-16 -rotate-90' viewBox='0 0 64 64'>
 						<circle cx='32' cy='32' r='28' stroke='currentColor' strokeWidth='4' fill='none'
-							className='text-gray-100 dark:text-slate-700' />
+							className='text-gray-100 dark:text-card-inner' />
 						<circle cx='32' cy='32' r='28' strokeWidth='4' fill='none'
 							className={style.text}
 							stroke='currentColor'
@@ -87,7 +87,7 @@ const ChannelHealth = ({ channelId }) => {
 			{/* Metrics grid */}
 			<div className='grid grid-cols-2 gap-2 mb-3'>
 				{/* View velocity */}
-				<div className='bg-gray-50 dark:bg-slate-700/60 rounded-xl p-3'>
+				<div className='bg-gray-50 dark:bg-card-inner rounded-xl p-3'>
 					<p className='text-gray-400 dark:text-gray-500 text-xs mb-1'>Швидкість переглядів</p>
 					<p className={`font-bold text-sm ${
 						health.view_velocity_label === 'Накрутка' ? 'text-red-500' :
@@ -102,7 +102,7 @@ const ChannelHealth = ({ channelId }) => {
 				</div>
 
 				{/* Activity */}
-				<div className='bg-gray-50 dark:bg-slate-700/60 rounded-xl p-3'>
+				<div className='bg-gray-50 dark:bg-card-inner rounded-xl p-3'>
 					<p className='text-gray-400 dark:text-gray-500 text-xs mb-1'>Активність</p>
 					<p className={`font-bold text-sm ${
 						health.activity_label === 'Мертвий канал' ? 'text-red-500' :
@@ -118,7 +118,7 @@ const ChannelHealth = ({ channelId }) => {
 				</div>
 
 				{/* ER */}
-				<div className='bg-gray-50 dark:bg-slate-700/60 rounded-xl p-3'>
+				<div className='bg-gray-50 dark:bg-card-inner rounded-xl p-3'>
 					<p className='text-gray-400 dark:text-gray-500 text-xs mb-1'>ER</p>
 					<p className={`font-bold text-sm ${
 						health.er_label === 'Дуже низький' ? 'text-red-500' :
@@ -133,7 +133,7 @@ const ChannelHealth = ({ channelId }) => {
 				</div>
 
 				{/* Suspicious posts */}
-				<div className='bg-gray-50 dark:bg-slate-700/60 rounded-xl p-3'>
+				<div className='bg-gray-50 dark:bg-card-inner rounded-xl p-3'>
 					<p className='text-gray-400 dark:text-gray-500 text-xs mb-1'>Підозрілі пости</p>
 					<p className={`font-bold text-sm ${
 						health.suspicious_posts > 0 ? 'text-red-500' : 'text-emerald-600 dark:text-emerald-400'

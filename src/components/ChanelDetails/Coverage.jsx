@@ -48,7 +48,7 @@ const PostsPerDay = ({ stats = [] }) => {
 						tooltip: { enabled: false },
 					},
 					yaxis: { min: yMin, max: yMax, labels: { show: false } },
-					grid: { show: true, borderColor: '#f3f4f6', strokeDashArray: 4, xaxis: { lines: { show: false } }, padding: { bottom: 0 } },
+					grid: { show: true, borderColor: '#243447', strokeDashArray: 4, xaxis: { lines: { show: false } }, padding: { bottom: 0 } },
 					legend: { show: false },
 					tooltip: { x: { show: true }, y: { formatter: v => `${v} пост${v === 1 ? '' : v < 5 ? 'и' : 'ів'}` } },
 					colors: ['#F97316'],
@@ -59,7 +59,7 @@ const PostsPerDay = ({ stats = [] }) => {
 		: null;
 
 	return (
-		<div className='bg-white dark:bg-slate-800 rounded-xl border border-gray-100 dark:border-slate-700 shadow-sm px-4 pt-4 w-full'>
+		<div className='bg-white dark:bg-card rounded-xl border border-gray-100 dark:border-card-border shadow-sm px-4 pt-4 w-full'>
 			<div className='flex items-center justify-between mb-1'>
 				<div>
 					<p className='text-gray-400 text-xs'>Публікації на день</p>
@@ -69,10 +69,10 @@ const PostsPerDay = ({ stats = [] }) => {
 					{TF.map((t, i) => (
 						<button key={i} onClick={() => setTf(i)}
 							className={`px-1.5 py-0.5 rounded text-[10px] font-semibold transition-all ${
-								tf === i ? 'bg-[#F97316] text-white' : 'bg-gray-50 dark:bg-slate-700/60 text-gray-400 hover:bg-gray-100'
+							tf === i ? 'bg-[#F97316] text-white' : 'bg-gray-50 dark:bg-card-inner text-gray-400 hover:bg-gray-100 dark:hover:bg-card-hover'
 							}`}>{t.label}</button>
 					))}
-					<button onClick={() => setModal(true)} className='ml-0.5 w-6 h-6 rounded bg-gray-50 dark:bg-slate-700/60 hover:bg-gray-100 flex items-center justify-center text-gray-400 hover:text-gray-600 transition-all' title='Розгорнути'>
+					<button onClick={() => setModal(true)} className='ml-0.5 w-6 h-6 rounded bg-gray-50 dark:bg-card-inner hover:bg-gray-100 dark:hover:bg-card-hover flex items-center justify-center text-gray-400 hover:text-gray-600 transition-all' title='Розгорнути'>
 						<svg width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='currentColor' strokeWidth='2' strokeLinecap='round' strokeLinejoin='round'><path d='M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7'/></svg>
 					</button>
 				</div>

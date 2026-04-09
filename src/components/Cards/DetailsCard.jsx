@@ -10,11 +10,11 @@ const Tooltip = ({ children, text, desc }) => {
 			{children}
 			{show && (
 				<div className='absolute bottom-full left-1/2 -translate-x-1/2 mb-2 z-50 pointer-events-none'>
-					<div className='bg-gray-900 dark:bg-slate-700 text-white rounded-lg px-3 py-2 shadow-xl border border-gray-700 dark:border-slate-600 min-w-[160px] max-w-[220px]'>
+					<div className='bg-gray-900 dark:bg-card text-white rounded-lg px-3 py-2 shadow-xl border border-gray-700 dark:border-card-border min-w-[160px] max-w-[220px]'>
 						<p className='text-[11px] font-semibold mb-0.5 whitespace-nowrap'>{text}</p>
 						{desc && <p className='text-[10px] text-gray-300 dark:text-gray-400 leading-snug'>{desc}</p>}
 					</div>
-					<div className='absolute top-full left-1/2 -translate-x-1/2 w-0 h-0 border-x-[5px] border-x-transparent border-t-[5px] border-t-gray-900 dark:border-t-slate-700' />
+					<div className='absolute top-full left-1/2 -translate-x-1/2 w-0 h-0 border-x-[5px] border-x-transparent border-t-[5px] border-t-gray-900 dark:border-t-card' />
 				</div>
 			)}
 		</div>
@@ -69,14 +69,14 @@ const DetailsCard = ({ channel, onBuy, stats = [] }) => {
 	}
 
 	return (
-		<div className='bg-white dark:bg-slate-800 rounded-xl border border-gray-100 dark:border-slate-700 shadow-sm'>
+		<div className='bg-white dark:bg-card rounded-xl border border-gray-100 dark:border-card-border shadow-sm'>
 			{/* Channel header */}
 			<div className='p-4'>
 				<div className='flex items-center gap-3'>
 					{channel.avatar_url ? (
 						<img className='w-10 h-10 rounded-lg object-cover flex-shrink-0' src={channel.avatar_url} alt={channel.channel_name} />
 					) : (
-						<div className='w-10 h-10 rounded-lg bg-gradient-to-br from-[#3498db] to-[#2573a7] flex items-center justify-center text-white text-sm font-bold flex-shrink-0'>
+						<div className='w-10 h-10 rounded-lg bg-gradient-to-br from-accent to-emerald-700 flex items-center justify-center text-white text-sm font-bold flex-shrink-0'>
 							{channel.channel_name?.[0] || '?'}
 						</div>
 					)}
@@ -94,7 +94,7 @@ const DetailsCard = ({ channel, onBuy, stats = [] }) => {
 					<button
 						onClick={() => isAuthenticated ? toggleFavorite(channel.id) : alert('Увійдіть щоб додати в обране')}
 						className={`flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center transition-all text-sm ${
-							isFav ? 'bg-red-50 dark:bg-red-900/30 text-red-500' : 'bg-gray-50 dark:bg-slate-700 text-gray-300 dark:text-gray-500 hover:text-red-400'
+							isFav ? 'bg-red-50 dark:bg-red-900/30 text-red-500' : 'bg-gray-50 dark:bg-card-inner text-gray-300 dark:text-gray-500 hover:text-red-400'
 						}`}
 					>
 						<FontAwesomeIcon icon={faHeart} className='text-xs' />
@@ -107,13 +107,13 @@ const DetailsCard = ({ channel, onBuy, stats = [] }) => {
 							href={channel.telegram_link}
 							target='_blank'
 							rel='noopener noreferrer'
-							className='inline-flex items-center gap-1 text-[#3498db] bg-blue-50 dark:bg-blue-900/30 hover:bg-blue-100 dark:hover:bg-blue-900/50 text-[11px] font-semibold px-2.5 py-1.5 rounded-lg transition-all'
+							className='inline-flex items-center gap-1 text-accent bg-accent/10 hover:bg-accent/20 text-[11px] font-semibold px-2.5 py-1.5 rounded-lg transition-all'
 						>
 							↗ Переглянути канал
 						</a>
 					)}
 					{channel.category && (
-						<span className='bg-gray-50 dark:bg-slate-700 text-gray-500 dark:text-gray-400 text-[11px] font-medium px-2.5 py-1.5 rounded-lg'>
+						<span className='bg-gray-50 dark:bg-card-inner text-gray-500 dark:text-gray-400 text-[11px] font-medium px-2.5 py-1.5 rounded-lg'>
 							{channel.category}
 						</span>
 					)}
@@ -124,21 +124,21 @@ const DetailsCard = ({ channel, onBuy, stats = [] }) => {
 			<div className='px-4 pb-3'>
 				<p className='text-[10px] text-gray-400 font-semibold uppercase tracking-wider mb-2'>Ключові метрики</p>
 				<div className='grid grid-cols-2 gap-2'>
-					<div className='border-l-2 border-cyan-400 bg-gray-50 dark:bg-slate-700/50 rounded-r-lg pl-3 pr-2 py-2'>
+					<div className='border-l-2 border-cyan-400 bg-gray-50 dark:bg-card-inner rounded-r-lg pl-3 pr-2 py-2'>
 						<p className='text-gray-400 text-[10px]'>Переглядів</p>
 						<p className='font-bold text-sm text-gray-800 dark:text-gray-100'>
 							{channel.views_hidden ? <span className='text-amber-500 text-xs font-medium'>🔒 Приховані</span> : (channel.avg_views?.toLocaleString('uk-UA') || '—')}
 						</p>
 					</div>
-					<div className='border-l-2 border-emerald-400 bg-gray-50 dark:bg-slate-700/50 rounded-r-lg pl-3 pr-2 py-2'>
+					<div className='border-l-2 border-emerald-400 bg-gray-50 dark:bg-card-inner rounded-r-lg pl-3 pr-2 py-2'>
 						<p className='text-gray-400 text-[10px]'>ER</p>
 						<p className='font-bold text-sm text-gray-800 dark:text-gray-100'>{channel.er != null ? `${channel.er.toFixed(1)}%` : '—'}</p>
 					</div>
-					<div className='border-l-2 border-orange-400 bg-gray-50 dark:bg-slate-700/50 rounded-r-lg pl-3 pr-2 py-2'>
+					<div className='border-l-2 border-orange-400 bg-gray-50 dark:bg-card-inner rounded-r-lg pl-3 pr-2 py-2'>
 						<p className='text-gray-400 text-[10px]'>Вік каналу</p>
 						<p className='font-bold text-sm text-gray-800 dark:text-gray-100'>{formatAge(channel.age)}</p>
 					</div>
-					<div className='border-l-2 border-violet-400 bg-gray-50 dark:bg-slate-700/50 rounded-r-lg pl-3 pr-2 py-2'>
+					<div className='border-l-2 border-violet-400 bg-gray-50 dark:bg-card-inner rounded-r-lg pl-3 pr-2 py-2'>
 						<p className='text-gray-400 text-[10px]'>Прибуток / міс.</p>
 						<p className='font-bold text-sm text-gray-800 dark:text-gray-100'>
 							{channel.monthly_income ? `${channel.monthly_income.toLocaleString('uk-UA')} USDT` : '—'}
@@ -178,8 +178,8 @@ const DetailsCard = ({ channel, onBuy, stats = [] }) => {
 						)}
 						{channel.last_post_date && (
 							<Tooltip text='Останній пост' desc='Скільки часу минуло з останньої публікації'>
-								<div className='flex items-center gap-1.5 bg-gray-100 dark:bg-slate-700 border border-gray-200 dark:border-slate-600 rounded-lg px-2.5 py-1.5 cursor-default'>
-									<div className='w-5 h-5 rounded-md bg-gray-200 dark:bg-slate-600 flex items-center justify-center'>
+						<div className='flex items-center gap-1.5 bg-gray-100 dark:bg-card-inner border border-gray-200 dark:border-card-border rounded-lg px-2.5 py-1.5 cursor-default'>
+							<div className='w-5 h-5 rounded-md bg-gray-200 dark:bg-card-hover flex items-center justify-center'>
 										<svg className='w-3 h-3 text-gray-500' fill='none' viewBox='0 0 24 24' stroke='currentColor' strokeWidth='2'>
 											<path strokeLinecap='round' strokeLinejoin='round' d='M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z' />
 										</svg>
@@ -238,7 +238,7 @@ const DetailsCard = ({ channel, onBuy, stats = [] }) => {
 			)}
 
 			{/* Price + Buy */}
-			<div className='border-t border-gray-100 dark:border-slate-700 px-4 py-3'>
+			<div className='border-t border-gray-100 dark:border-card-border px-4 py-3'>
 				<div className='flex items-center justify-between mb-3'>
 					<div>
 						<p className='text-gray-400 text-[10px]'>Ціна</p>
@@ -255,7 +255,7 @@ const DetailsCard = ({ channel, onBuy, stats = [] }) => {
 				</div>
 				<button
 					onClick={onBuy}
-					className='w-full font-bold bg-[#27ae60] text-white py-2.5 rounded-lg shadow-lg shadow-green-100/50 dark:shadow-none hover:bg-green-600 transition-all text-sm'
+					className='w-full font-bold bg-accent text-white py-2.5 rounded-lg shadow-lg shadow-accent/20 hover:bg-emerald-600 transition-all text-sm'
 				>
 					Купити канал
 				</button>

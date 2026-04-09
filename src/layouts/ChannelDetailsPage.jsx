@@ -55,7 +55,7 @@ const ChannelDetailsPage = () => {
 	if (loading) {
 		return (
 			<div className='mt-28 flex justify-center'>
-				<div className='animate-spin rounded-full h-8 w-8 border-2 border-gray-200 border-t-[#3498db]' />
+				<div className='animate-spin rounded-full h-8 w-8 border-2 border-gray-200 dark:border-card-border border-t-accent' />
 			</div>
 		);
 	}
@@ -68,7 +68,7 @@ const ChannelDetailsPage = () => {
 		<section className='pt-28 pb-8'>
 			{/* Breadcrumb */}
 			<div className='flex items-center gap-1.5 text-xs mb-5 px-0.5'>
-				<NavLink to='/catalog' className='text-gray-400 dark:text-gray-500 hover:text-[#3498db] transition-colors'>Каталог</NavLink>
+				<NavLink to='/catalog' className='text-gray-400 dark:text-gray-500 hover:text-accent transition-colors'>Каталог</NavLink>
 				<span className='text-gray-300 dark:text-gray-600'>/</span>
 				<span className='text-gray-600 dark:text-gray-300 font-medium'>{channel.channel_name || 'Канал'}</span>
 			</div>
@@ -79,25 +79,24 @@ const ChannelDetailsPage = () => {
 					<DetailsCard channel={channel} onBuy={handleBuy} stats={stats} />
 
 					{channel.description && (
-						<div className='bg-white dark:bg-slate-800 rounded-xl border border-gray-100 dark:border-slate-700 shadow-sm p-4'>
-							<h4 className='font-semibold text-gray-900 dark:text-white text-xs uppercase tracking-wider mb-2'>Коментар власника</h4>
-							<p className='text-gray-600 dark:text-gray-300 text-xs leading-relaxed bg-blue-50 dark:bg-blue-900/20 rounded-lg p-3'>
-								{channel.description}
+					<div className='bg-white dark:bg-card rounded-xl border border-gray-100 dark:border-card-border shadow-sm p-4'>
+						<h4 className='font-semibold text-gray-900 dark:text-white text-xs uppercase tracking-wider mb-2'>Коментар власника</h4>
+						<p className='text-gray-600 dark:text-gray-300 text-xs leading-relaxed bg-blue-50 dark:bg-card-inner rounded-lg p-3'>
 							</p>
 						</div>
 					)}
 
 					{resources.length > 0 && (
-						<div className='bg-white dark:bg-slate-800 rounded-xl border border-gray-100 dark:border-slate-700 shadow-sm p-4'>
-							<h4 className='font-semibold text-gray-900 dark:text-white text-xs uppercase tracking-wider mb-2'>Додаткові ресурси</h4>
-							<div className='flex flex-wrap gap-1.5'>
-								{resources.map((url, idx) => (
-									<a
-										key={idx}
-										href={url}
-										target='_blank'
-										rel='noopener noreferrer'
-										className='inline-flex items-center gap-1 bg-gray-50 dark:bg-slate-700 hover:bg-[#3498db] hover:text-white text-gray-600 dark:text-gray-300 font-medium text-[11px] px-3 py-2 rounded-lg border border-gray-200 dark:border-slate-600 hover:border-[#3498db] transition-all'
+					<div className='bg-white dark:bg-card rounded-xl border border-gray-100 dark:border-card-border shadow-sm p-4'>
+						<h4 className='font-semibold text-gray-900 dark:text-white text-xs uppercase tracking-wider mb-2'>Додаткові ресурси</h4>
+						<div className='flex flex-wrap gap-1.5'>
+							{resources.map((url, idx) => (
+								<a
+									key={idx}
+									href={url}
+									target='_blank'
+									rel='noopener noreferrer'
+									className='inline-flex items-center gap-1 bg-gray-50 dark:bg-card-inner hover:bg-accent hover:text-white text-gray-600 dark:text-gray-300 font-medium text-[11px] px-3 py-2 rounded-lg border border-gray-200 dark:border-card-border hover:border-accent transition-all'
 									>
 										<span>🔗</span> Ресурс {idx + 1}
 									</a>

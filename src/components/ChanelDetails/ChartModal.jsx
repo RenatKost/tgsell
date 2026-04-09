@@ -76,7 +76,7 @@ const ChartModal = ({ open, onClose, stats = [], title, color, dataKey, tooltipF
 			max: yMax,
 			labels: { show: true, style: { colors: '#6b7280', fontSize: '12px' }, formatter: v => isPercent ? `${v.toFixed(1)}%` : v.toLocaleString('uk-UA') },
 		},
-		grid: { show: true, borderColor: '#f3f4f6', strokeDashArray: 3, xaxis: { lines: { show: true } } },
+		grid: { show: true, borderColor: '#243447', strokeDashArray: 3, xaxis: { lines: { show: true } } },
 		legend: { show: false },
 		tooltip: {
 			y: { formatter: tooltipFmt || (v => v?.toLocaleString('uk-UA')) },
@@ -93,9 +93,9 @@ const ChartModal = ({ open, onClose, stats = [], title, color, dataKey, tooltipF
 
 	return (
 		<div className='fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm' onClick={onClose}>
-			<div className='bg-white dark:bg-slate-800 rounded-2xl shadow-2xl w-[95vw] max-w-5xl max-h-[92vh] overflow-auto animate-fadeIn' onClick={e => e.stopPropagation()}>
+			<div className='bg-white dark:bg-card rounded-2xl shadow-2xl w-[95vw] max-w-5xl max-h-[92vh] overflow-auto animate-fadeIn' onClick={e => e.stopPropagation()}>
 				{/* Header */}
-				<div className='flex items-center justify-between px-6 py-4 border-b border-gray-100'>
+				<div className='flex items-center justify-between px-6 py-4 border-b border-gray-100 dark:border-card-border'>
 					<div>
 						<p className='text-gray-400 text-xs'>{title}</p>
 						<p className='font-bold text-2xl text-gray-900 dark:text-white'>{fmt(last)}</p>
@@ -105,35 +105,35 @@ const ChartModal = ({ open, onClose, stats = [], title, color, dataKey, tooltipF
 							{TF.map((t, i) => (
 								<button key={i} onClick={() => setTf(i)}
 									className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
-										tf === i ? 'text-white' : 'bg-gray-50 dark:bg-slate-700/60 text-gray-400 hover:bg-gray-100'
+											tf === i ? 'text-white' : 'bg-gray-50 dark:bg-card-inner text-gray-400 hover:bg-gray-100 dark:hover:bg-card-hover'
 									}`}
 									style={tf === i ? { backgroundColor: color } : {}}
 								>{t.label}</button>
 							))}
 						</div>
-						<button onClick={onClose} className='w-9 h-9 rounded-xl bg-gray-50 dark:bg-slate-700/60 hover:bg-gray-100 flex items-center justify-center text-gray-400 hover:text-gray-600 transition-all text-lg'>✕</button>
+						<button onClick={onClose} className='w-9 h-9 rounded-xl bg-gray-50 dark:bg-card-inner hover:bg-gray-100 dark:hover:bg-card-hover flex items-center justify-center text-gray-400 hover:text-gray-600 transition-all text-lg'>✕</button>
 					</div>
 				</div>
 
 				{/* Summary stats */}
 				<div className='grid grid-cols-2 sm:grid-cols-5 gap-3 px-6 py-4'>
-					<div className='bg-gray-50 dark:bg-slate-700/60 rounded-xl p-3 text-center'>
+					<div className='bg-gray-50 dark:bg-card-inner rounded-xl p-3 text-center'>
 						<p className='text-gray-400 text-xs mb-0.5'>Поточне</p>
-						<p className='font-bold text-gray-800 text-sm'>{fmt(last)}</p>
+						<p className='font-bold text-gray-800 dark:text-gray-100 text-sm'>{fmt(last)}</p>
 					</div>
-					<div className='bg-gray-50 dark:bg-slate-700/60 rounded-xl p-3 text-center'>
+					<div className='bg-gray-50 dark:bg-card-inner rounded-xl p-3 text-center'>
 						<p className='text-gray-400 text-xs mb-0.5'>Середнє</p>
-						<p className='font-bold text-gray-800 text-sm'>{fmt(isPercent ? +avg.toFixed(2) : Math.round(avg))}</p>
+						<p className='font-bold text-gray-800 dark:text-gray-100 text-sm'>{fmt(isPercent ? +avg.toFixed(2) : Math.round(avg))}</p>
 					</div>
-					<div className='bg-gray-50 dark:bg-slate-700/60 rounded-xl p-3 text-center'>
+					<div className='bg-gray-50 dark:bg-card-inner rounded-xl p-3 text-center'>
 						<p className='text-gray-400 text-xs mb-0.5'>Мінімум</p>
-						<p className='font-bold text-gray-800 text-sm'>{fmt(min)}</p>
+						<p className='font-bold text-gray-800 dark:text-gray-100 text-sm'>{fmt(min)}</p>
 					</div>
-					<div className='bg-gray-50 dark:bg-slate-700/60 rounded-xl p-3 text-center'>
+					<div className='bg-gray-50 dark:bg-card-inner rounded-xl p-3 text-center'>
 						<p className='text-gray-400 text-xs mb-0.5'>Максимум</p>
-						<p className='font-bold text-gray-800 text-sm'>{fmt(max)}</p>
+						<p className='font-bold text-gray-800 dark:text-gray-100 text-sm'>{fmt(max)}</p>
 					</div>
-					<div className='bg-gray-50 dark:bg-slate-700/60 rounded-xl p-3 text-center'>
+					<div className='bg-gray-50 dark:bg-card-inner rounded-xl p-3 text-center'>
 						<p className='text-gray-400 text-xs mb-0.5'>Зміна</p>
 						<p className={`font-bold text-sm ${diff >= 0 ? 'text-emerald-600' : 'text-red-500'}`}>
 							{diff >= 0 ? '↑' : '↓'} {fmt(isPercent ? +Math.abs(diff).toFixed(2) : Math.abs(Math.round(diff)))} ({diff >= 0 ? '+' : ''}{pct}%)

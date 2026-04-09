@@ -18,7 +18,7 @@ const ScoreRing = ({ score }) => {
 		<div className='relative w-16 h-16 flex-shrink-0'>
 			<svg className='w-16 h-16 -rotate-90' viewBox='0 0 52 52'>
 				<circle cx='26' cy='26' r='22' stroke='currentColor' strokeWidth='3' fill='none'
-					className='text-gray-100 dark:text-slate-700' />
+					className='text-gray-100 dark:text-card-inner' />
 				<circle cx='26' cy='26' r='22' strokeWidth='3' fill='none'
 					stroke={color} strokeLinecap='round'
 					strokeDasharray={circumference} strokeDashoffset={offset}
@@ -35,10 +35,10 @@ const ScoreRing = ({ score }) => {
 const MonetizationCard = ({ item, index }) => {
 	const [open, setOpen] = useState(false);
 	return (
-		<div className='bg-gray-50 dark:bg-slate-700/40 rounded-lg border border-gray-100 dark:border-slate-600/50 overflow-hidden'>
+		<div className='bg-gray-50 dark:bg-card-inner rounded-lg border border-gray-100 dark:border-card-border overflow-hidden'>
 			<button
 				onClick={() => setOpen(!open)}
-				className='w-full px-3 py-2.5 flex items-center gap-2.5 text-left hover:bg-gray-100 dark:hover:bg-slate-700/60 transition-colors'
+				className='w-full px-3 py-2.5 flex items-center gap-2.5 text-left hover:bg-gray-100 dark:hover:bg-card-hover transition-colors'
 			>
 				<span className='text-base flex-shrink-0'>{methodIcons[index] || '💵'}</span>
 				<div className='flex-1 min-w-0'>
@@ -55,7 +55,7 @@ const MonetizationCard = ({ item, index }) => {
 			</button>
 			{open && (
 				<div className='px-3 pb-2.5 pt-0'>
-					<p className='text-[11px] text-gray-600 dark:text-gray-300 leading-relaxed bg-white dark:bg-slate-800/50 rounded p-2'>
+					<p className='text-[11px] text-gray-600 dark:text-gray-300 leading-relaxed bg-white dark:bg-page rounded p-2'>
 						{item.reasoning}
 					</p>
 				</div>
@@ -87,9 +87,9 @@ const AiAnalysis = ({ channelId }) => {
 
 	if (loading) {
 		return (
-			<div className='bg-gradient-to-br from-indigo-50 to-purple-50 dark:from-indigo-900/20 dark:to-purple-900/20 rounded-xl border border-indigo-100 dark:border-indigo-800/40 p-4'>
+			<div className='bg-gradient-to-br from-indigo-50 to-purple-50 dark:from-card dark:to-card rounded-xl border border-indigo-100 dark:border-card-border p-4'>
 				<div className='flex items-center gap-3'>
-					<div className='w-8 h-8 rounded-lg bg-indigo-100 dark:bg-indigo-800/50 flex items-center justify-center animate-pulse'>
+					<div className='w-8 h-8 rounded-lg bg-indigo-100 dark:bg-card-inner flex items-center justify-center animate-pulse'>
 						<span className='text-sm'>🤖</span>
 					</div>
 					<div>
@@ -98,9 +98,9 @@ const AiAnalysis = ({ channelId }) => {
 					</div>
 				</div>
 				<div className='mt-4 space-y-2'>
-					<div className='h-3 bg-indigo-100 dark:bg-indigo-800/30 rounded animate-pulse w-full' />
-					<div className='h-3 bg-indigo-100 dark:bg-indigo-800/30 rounded animate-pulse w-3/4' />
-					<div className='h-3 bg-indigo-100 dark:bg-indigo-800/30 rounded animate-pulse w-5/6' />
+					<div className='h-3 bg-indigo-100 dark:bg-card-inner rounded animate-pulse w-full' />
+					<div className='h-3 bg-indigo-100 dark:bg-card-inner rounded animate-pulse w-3/4' />
+					<div className='h-3 bg-indigo-100 dark:bg-card-inner rounded animate-pulse w-5/6' />
 				</div>
 			</div>
 		);
@@ -120,9 +120,9 @@ const AiAnalysis = ({ channelId }) => {
 	const verdict = verdictConfig[data.verdict] || verdictConfig.hold;
 
 	return (
-		<div className='bg-white dark:bg-slate-800 rounded-xl border border-gray-100 dark:border-slate-700 shadow-sm overflow-hidden'>
+		<div className='bg-white dark:bg-card rounded-xl border border-gray-100 dark:border-card-border shadow-sm overflow-hidden'>
 			{/* Header with score + verdict */}
-			<div className='bg-gradient-to-r from-indigo-50 to-purple-50 dark:from-indigo-900/20 dark:to-purple-900/20 px-4 py-3 border-b border-indigo-100 dark:border-indigo-800/30'>
+			<div className='bg-gradient-to-r from-indigo-50 to-purple-50 dark:from-card-inner dark:to-card-inner px-4 py-3 border-b border-indigo-100 dark:border-card-border'>
 				<div className='flex items-center justify-between'>
 					<div className='flex items-center gap-3'>
 						<ScoreRing score={data.score || 50} />
@@ -191,7 +191,7 @@ const AiAnalysis = ({ channelId }) => {
 
 				{/* Price estimate */}
 				{data.fair_price_estimate && (
-					<div className='bg-gray-50 dark:bg-slate-700/50 rounded-lg p-3'>
+				<div className='bg-gray-50 dark:bg-card-inner rounded-lg p-3'>
 						<p className='text-[10px] text-gray-400 font-semibold uppercase tracking-wider mb-1'>🏷️ Оцінка вартості</p>
 						<p className='text-xs text-gray-700 dark:text-gray-300 leading-relaxed'>{data.fair_price_estimate}</p>
 					</div>
@@ -267,7 +267,7 @@ const AiAnalysis = ({ channelId }) => {
 			</div>
 
 			{/* Disclaimer */}
-			<div className='border-t border-gray-100 dark:border-slate-700 px-4 py-2'>
+			<div className='border-t border-gray-100 dark:border-card-border px-4 py-2'>
 				<p className='text-[9px] text-gray-400 dark:text-gray-500 text-center'>
 					AI-аналіз має інформаційний характер і не є фінансовою порадою
 				</p>
