@@ -59,11 +59,11 @@ const Views = ({ stats = [], current }) => {
 	const formatted = (current || dataPoints[dataPoints.length - 1])?.toLocaleString('uk-UA') || '—';
 
 	return (
-		<div className='bg-white dark:bg-slate-800 rounded-2xl border border-gray-100 dark:border-slate-700 shadow-sm px-5 pt-5 w-full'>
+		<div className='bg-white dark:bg-slate-800 rounded-xl border border-gray-100 dark:border-slate-700 shadow-sm px-4 pt-4 w-full'>
 			<div className='flex items-center justify-between mb-1'>
 				<div>
 					<p className='text-gray-400 text-xs'>Добовий перегляд</p>
-					<p className='font-bold text-xl text-gray-900 dark:text-white'>{formatted}</p>
+					<p className='font-bold text-lg text-gray-900 dark:text-white'>{formatted}</p>
 				</div>
 				<div className='flex items-center gap-1'>
 					{TF.map((t, i) => (
@@ -78,7 +78,7 @@ const Views = ({ stats = [], current }) => {
 				</div>
 			</div>
 			{chartData ? (
-				<ReactApexChart options={chartData.options} series={chartData.series} type='area' height={200} width='100%' />
+				<ReactApexChart options={chartData.options} series={chartData.series} type='area' height={150} width='100%' />
 			) : (
 				<p className='text-gray-400 text-center py-10'>Немає даних для графіку</p>
 			)}

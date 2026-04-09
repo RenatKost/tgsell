@@ -33,9 +33,9 @@ const ChannelHealth = ({ channelId }) => {
 
 	if (loading) {
 		return (
-			<div className='bg-white dark:bg-slate-800 rounded-2xl border border-gray-100 dark:border-slate-700 shadow-sm p-6'>
+			<div className='bg-white dark:bg-slate-800 rounded-xl border border-gray-100 dark:border-slate-700 shadow-sm p-4'>
 				<div className='flex items-center gap-3'>
-					<div className='w-16 h-16 rounded-full bg-gray-100 dark:bg-slate-700 animate-pulse' />
+					<div className='w-14 h-14 rounded-full bg-gray-100 dark:bg-slate-700 animate-pulse' />
 					<div className='space-y-2 flex-1'>
 						<div className='h-4 bg-gray-100 dark:bg-slate-700 rounded animate-pulse w-32' />
 						<div className='h-3 bg-gray-100 dark:bg-slate-700 rounded animate-pulse w-48' />
@@ -52,15 +52,15 @@ const ChannelHealth = ({ channelId }) => {
 	const strokeDashoffset = circumference - (health.health_score / 100) * circumference;
 
 	return (
-		<div className='bg-white dark:bg-slate-800 rounded-2xl border border-gray-100 dark:border-slate-700 shadow-sm p-6'>
-			<h4 className='font-bold text-gray-900 dark:text-white mb-4 flex items-center gap-2'>
+		<div className='bg-white dark:bg-slate-800 rounded-xl border border-gray-100 dark:border-slate-700 shadow-sm p-4'>
+			<h4 className='font-semibold text-sm text-gray-900 dark:text-white mb-3 flex items-center gap-2'>
 				<span>🔍</span> Аналіз живучості каналу
 			</h4>
 
 			{/* Score circle + label */}
-			<div className='flex items-center gap-5 mb-5'>
-				<div className='relative w-20 h-20 flex-shrink-0'>
-					<svg className='w-20 h-20 -rotate-90' viewBox='0 0 64 64'>
+			<div className='flex items-center gap-4 mb-4'>
+				<div className='relative w-16 h-16 flex-shrink-0'>
+					<svg className='w-16 h-16 -rotate-90' viewBox='0 0 64 64'>
 						<circle cx='32' cy='32' r='28' stroke='currentColor' strokeWidth='4' fill='none'
 							className='text-gray-100 dark:text-slate-700' />
 						<circle cx='32' cy='32' r='28' strokeWidth='4' fill='none'
@@ -73,19 +73,19 @@ const ChannelHealth = ({ channelId }) => {
 						/>
 					</svg>
 					<div className='absolute inset-0 flex items-center justify-center'>
-						<span className={`text-lg font-bold ${style.text}`}>{health.health_score}</span>
+						<span className={`text-sm font-bold ${style.text}`}>{health.health_score}</span>
 					</div>
 				</div>
 				<div>
-					<p className={`text-lg font-bold ${style.text}`}>{health.health_label}</p>
-					<p className='text-gray-400 dark:text-gray-500 text-sm'>
+					<p className={`text-sm font-bold ${style.text}`}>{health.health_label}</p>
+					<p className='text-gray-400 dark:text-gray-500 text-xs'>
 						Проаналізовано {health.posts_analyzed} постів
 					</p>
 				</div>
 			</div>
 
 			{/* Metrics grid */}
-			<div className='grid grid-cols-2 gap-3 mb-4'>
+			<div className='grid grid-cols-2 gap-2 mb-3'>
 				{/* View velocity */}
 				<div className='bg-gray-50 dark:bg-slate-700/60 rounded-xl p-3'>
 					<p className='text-gray-400 dark:text-gray-500 text-xs mb-1'>Швидкість переглядів</p>

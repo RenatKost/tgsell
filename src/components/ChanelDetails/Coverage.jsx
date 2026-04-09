@@ -59,11 +59,11 @@ const PostsPerDay = ({ stats = [] }) => {
 		: null;
 
 	return (
-		<div className='bg-white dark:bg-slate-800 rounded-2xl border border-gray-100 dark:border-slate-700 shadow-sm px-5 pt-5 w-full'>
+		<div className='bg-white dark:bg-slate-800 rounded-xl border border-gray-100 dark:border-slate-700 shadow-sm px-4 pt-4 w-full'>
 			<div className='flex items-center justify-between mb-1'>
 				<div>
 					<p className='text-gray-400 text-xs'>Публікації на день</p>
-					<p className='font-bold text-xl text-gray-900 dark:text-white'>~{avg}/день</p>
+					<p className='font-bold text-lg text-gray-900 dark:text-white'>~{avg}/день</p>
 				</div>
 				<div className='flex items-center gap-1'>
 					{TF.map((t, i) => (
@@ -78,7 +78,7 @@ const PostsPerDay = ({ stats = [] }) => {
 				</div>
 			</div>
 			{chartData ? (
-				<ReactApexChart options={chartData.options} series={chartData.series} type='area' height={180} width='100%' />
+				<ReactApexChart options={chartData.options} series={chartData.series} type='area' height={150} width='100%' />
 			) : (
 				<p className='text-gray-400 text-center py-10'>Немає даних</p>
 			)}
