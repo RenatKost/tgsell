@@ -12,6 +12,7 @@ const CatalogCard = ({ channel }) => {
 
 	// Health badge calculation (client-side from existing data)
 	const getHealthBadge = () => {
+		if (channel.views_hidden) return null; // Can't assess without views
 		const subs = channel.subscribers_count || 0;
 		const views = channel.avg_views || 0;
 		if (!subs || !views) return null;
@@ -93,7 +94,9 @@ const CatalogCard = ({ channel }) => {
 				<div className='grid grid-cols-2 gap-3'>
 					<div className='bg-gray-50 dark:bg-slate-700/60 rounded-xl p-3'>
 						<p className='text-gray-400 dark:text-gray-500 text-xs mb-0.5'>Переглядів</p>
-						<p className='font-bold text-gray-800 dark:text-gray-100 text-sm'>{channel.avg_views?.toLocaleString('uk-UA') || '—'}</p>
+						<p className='font-bold text-gray-800 dark:text-gray-100 text-sm'>
+							{channel.views_hidden ? <span className='text-amber-500 text-xs'>🔒 Прихов.</span> : (channel.avg_views?.toLocaleString('uk-UA') || '—')}
+						</p>
 					</div>
 					<div className='bg-gray-50 dark:bg-slate-700/60 rounded-xl p-3'>
 						<p className='text-gray-400 dark:text-gray-500 text-xs mb-0.5'>ER</p>
@@ -124,7 +127,7 @@ const CatalogCard = ({ channel }) => {
 
 			{/* Analytics */}
 			{(() => {
-				const cpm = channel.avg_views && channel.price ? Math.round(channel.price / channel.avg_views * 1000) : null;
+				const cpm = channel.avg_views && channel.price && !channel.views_hidden ? Math.round(channel.price / channel.avg_views * 1000) : null;
 				const pricePerSub = channel.subscribers_count && channel.price ? (channel.price / channel.subscribers_count).toFixed(2) : null;
 				const payback = channel.monthly_income && channel.price ? (channel.price / channel.monthly_income).toFixed(1) : null;
 				if (!cpm && !pricePerSub && !payback) return null;

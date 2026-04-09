@@ -47,7 +47,7 @@ const DetailsCard = ({ channel, onBuy, stats = [] }) => {
 		return date.toLocaleDateString('uk-UA', { day: 'numeric', month: 'short' });
 	};
 
-	const cpm = channel.avg_views && channel.price
+	const cpm = channel.avg_views && channel.price && !channel.views_hidden
 		? Math.round(channel.price / channel.avg_views * 1000)
 		: null;
 	const pricePerSub = channel.subscribers_count && channel.price
@@ -126,7 +126,9 @@ const DetailsCard = ({ channel, onBuy, stats = [] }) => {
 				<div className='grid grid-cols-2 gap-2'>
 					<div className='border-l-2 border-cyan-400 bg-gray-50 dark:bg-slate-700/50 rounded-r-lg pl-3 pr-2 py-2'>
 						<p className='text-gray-400 text-[10px]'>Переглядів</p>
-						<p className='font-bold text-sm text-gray-800 dark:text-gray-100'>{channel.avg_views?.toLocaleString('uk-UA') || '—'}</p>
+						<p className='font-bold text-sm text-gray-800 dark:text-gray-100'>
+							{channel.views_hidden ? <span className='text-amber-500 text-xs font-medium'>🔒 Приховані</span> : (channel.avg_views?.toLocaleString('uk-UA') || '—')}
+						</p>
 					</div>
 					<div className='border-l-2 border-emerald-400 bg-gray-50 dark:bg-slate-700/50 rounded-r-lg pl-3 pr-2 py-2'>
 						<p className='text-gray-400 text-[10px]'>ER</p>

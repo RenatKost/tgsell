@@ -41,6 +41,8 @@ async def collect_stats_once():
                     channel.subscribers_count = stats["subscribers_count"]
                 if stats.get("avg_views"):
                     channel.avg_views = stats["avg_views"]
+                if stats.get("views_hidden") is not None:
+                    channel.views_hidden = stats["views_hidden"]
                 if stats.get("er"):
                     channel.er = stats["er"]
                 if stats.get("avatar_url"):

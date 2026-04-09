@@ -622,7 +622,7 @@ const ModerCabinet = () => {
 											</div>
 											<div className='bg-gray-50 dark:bg-slate-700/60 p-3 rounded-xl'>
 												<FontAwesomeIcon icon={faEye} className='text-gray-400 mr-1' />
-												<span className='font-semibold text-gray-800 dark:text-gray-200'>{channel.avg_views?.toLocaleString('uk-UA') || '—'}</span>
+												<span className='font-semibold text-gray-800 dark:text-gray-200'>{channel.views_hidden ? '🔒' : (channel.avg_views?.toLocaleString('uk-UA') || '—')}</span>
 												<p className='text-gray-400 text-xs mt-0.5'>переглядів</p>
 											</div>
 											<div className='bg-gray-50 dark:bg-slate-700/60 p-3 rounded-xl'>
@@ -758,7 +758,7 @@ const ModerCabinet = () => {
 											</div>
 											<div className='bg-gray-50 dark:bg-slate-700/60 p-2.5 rounded-xl'>
 												<FontAwesomeIcon icon={faEye} className='text-gray-400 mr-1' />
-												<span className='font-semibold text-gray-800 dark:text-gray-200'>{channel.avg_views?.toLocaleString('uk-UA') || '—'}</span>
+												<span className='font-semibold text-gray-800 dark:text-gray-200'>{channel.views_hidden ? '🔒' : (channel.avg_views?.toLocaleString('uk-UA') || '—')}</span>
 												<p className='text-gray-400 text-xs'>переглядів</p>
 											</div>
 											<div className='bg-gray-50 dark:bg-slate-700/60 p-2.5 rounded-xl'>

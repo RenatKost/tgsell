@@ -2,7 +2,7 @@ import enum
 from datetime import datetime
 
 from sqlalchemy import (
-    BigInteger, DateTime, Enum, Float, ForeignKey,
+    BigInteger, Boolean, DateTime, Enum, Float, ForeignKey,
     Integer, String, Text, UniqueConstraint, func,
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship
@@ -51,6 +51,7 @@ class Channel(Base):
     last_post_date: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     avg_forwards: Mapped[int | None] = mapped_column(Integer, nullable=True)
     avg_reactions: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    views_hidden: Mapped[bool] = mapped_column(Boolean, server_default="false", default=False)
 
     # Listing type & auction params
     listing_type: Mapped[str] = mapped_column(

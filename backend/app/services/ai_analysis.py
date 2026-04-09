@@ -19,11 +19,12 @@ async def analyze_channel(channel_data: dict, posts_data: list[dict], stats_data
         return None
 
     # ── Build rich context ──
+    views_hidden = channel_data.get('views_hidden', False)
     channel_info = (
         f"Назва: {channel_data.get('channel_name', '?')}\n"
         f"Категорія: {channel_data.get('category', '?')}\n"
         f"Підписників: {channel_data.get('subscribers_count', 0):,}\n"
-        f"Середні перегляди: {channel_data.get('avg_views', 0):,}\n"
+        f"Середні перегляди: {'⚠️ ВИМКНЕНІ АДМІНОМ (лічильник переглядів прихований)' if views_hidden else f'{channel_data.get(\"avg_views\", 0):,}'}\n"
         f"ER (engagement rate): {channel_data.get('er', 0):.2f}%\n"
         f"Ціна продажу: {channel_data.get('price', 0):,} USDT\n"
         f"Поточний прибуток/міс: {channel_data.get('monthly_income', 0) or 0:,} USDT\n"

@@ -84,7 +84,9 @@ const CabinetCard = ({ channel, onDelete }) => {
 			<div className='grid grid-cols-2 sm:grid-cols-4 gap-px bg-gray-100 dark:bg-slate-700 border-t border-gray-100 dark:border-slate-700'>
 				<div className='bg-white dark:bg-slate-800 p-3 text-center'>
 					<p className='text-xs text-gray-400 dark:text-gray-500 mb-0.5'>Переглядів</p>
-					<p className='font-semibold text-gray-800 dark:text-gray-100 text-sm'>{channel.avg_views?.toLocaleString('uk-UA') || '—'}</p>
+					<p className='font-semibold text-gray-800 dark:text-gray-100 text-sm'>
+						{channel.views_hidden ? <span className='text-amber-500 text-xs'>🔒</span> : (channel.avg_views?.toLocaleString('uk-UA') || '—')}
+					</p>
 				</div>
 				<div className='bg-white dark:bg-slate-800 p-3 text-center'>
 					<p className='text-xs text-gray-400 dark:text-gray-500 mb-0.5'>ER</p>

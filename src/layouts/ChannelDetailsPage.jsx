@@ -111,7 +111,7 @@ const ChannelDetailsPage = () => {
 				<div className='w-full space-y-4'>
 					<div className='grid md:grid-cols-2 gap-4'>
 						<Subscribers stats={stats} current={channel.subscribers_count} />
-						<Views stats={stats} current={channel.avg_views} />
+						<Views stats={stats} current={channel.avg_views} viewsHidden={channel.views_hidden} />
 					</div>
 					<div className='grid md:grid-cols-3 gap-4'>
 						<ER stats={stats} current={channel.er} />

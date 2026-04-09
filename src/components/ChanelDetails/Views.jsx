@@ -9,9 +9,26 @@ const TF = [
 	{ label: '7д', days: 7 },
 ];
 
-const Views = ({ stats = [], current }) => {
+const Views = ({ stats = [], current, viewsHidden }) => {
 	const [tf, setTf] = useState(0);
 	const [modal, setModal] = useState(false);
+
+	if (viewsHidden) {
+		return (
+			<div className='bg-white dark:bg-slate-800 rounded-xl border border-gray-100 dark:border-slate-700 shadow-sm px-4 pt-4 pb-4 w-full'>
+				<p className='text-gray-400 text-xs mb-1'>Добовий перегляд</p>
+				<div className='flex items-center gap-2 mb-3'>
+					<span className='text-lg'>🔒</span>
+					<p className='font-bold text-sm text-gray-500 dark:text-gray-400'>Приховані адміном</p>
+				</div>
+				<div className='bg-amber-50 dark:bg-amber-900/20 rounded-lg p-3 border border-amber-100 dark:border-amber-800/30'>
+					<p className='text-[11px] text-amber-700 dark:text-amber-400 leading-relaxed'>
+						ℹ️ Власник каналу вимкнув лічильник переглядів. Це не означає що канал мертвий — просмотри просто не відображаються публічно.
+					</p>
+				</div>
+			</div>
+		);
+	}
 
 	const now = Date.now();
 	const filtered = TF[tf].days === 0 ? stats : stats.filter(s => {

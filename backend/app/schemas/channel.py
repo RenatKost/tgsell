@@ -53,6 +53,7 @@ class ChannelResponse(BaseModel):
     last_post_date: datetime | None = None
     avg_forwards: int | None = None
     avg_reactions: int | None = None
+    views_hidden: bool = False
     listing_type: str = "sale"
     auction_start_price: float | None = None
     auction_bid_step: float | None = None

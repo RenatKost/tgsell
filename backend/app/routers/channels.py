@@ -154,6 +154,7 @@ async def get_channel_health(channel_id: int, db: AsyncSession = Depends(get_db)
     subs = channel.subscribers_count or 0
     avg_views = channel.avg_views or 0
     er = channel.er or 0.0
+    views_hidden = channel.views_hidden
 
     # Get posts with view dynamics
     result = await db.execute(
@@ -172,7 +173,8 @@ async def get_channel_health(channel_id: int, db: AsyncSession = Depends(get_db)
     # ── 1. View velocity analysis (bot detection) ──
     # If 90%+ views come in the first hour → likely bot views
     velocity_ratios = []
-    for p in posts:
+    if not views_hidden:
+        for p in posts:
         if p.views_1h and p.views and p.views > 0:
             ratio = p.views_1h / p.views
             velocity_ratios.append(ratio)
@@ -194,10 +196,14 @@ async def get_channel_health(channel_id: int, db: AsyncSession = Depends(get_db)
             view_velocity_label = "Нормально"
             score += 10
     else:
-        view_velocity_label = "Немає даних"
+        view_velocity_label = "Приховані" if views_hidden else "Немає даних"
 
     # ── 2. Subscriber-to-views ratio ──
-    if subs > 0 and avg_views > 0:
+    if views_hidden:
+        views_to_subs = None
+        activity_label = "Перегляди приховані"
+        flags.append("ℹ️ Лічильник переглядів вимкнено адміном каналу")
+    elif subs > 0 and avg_views > 0:
         views_to_subs = avg_views / subs * 100
         if views_to_subs < 1:
             activity_label = "Мертвий канал"
@@ -238,7 +244,7 @@ async def get_channel_health(channel_id: int, db: AsyncSession = Depends(get_db)
         er_label = "Немає даних"
 
     # ── 4. Posts with zero/very low views ──
-    if posts_analyzed > 0:
+    if posts_analyzed > 0 and not views_hidden:
         dead_posts = sum(1 for p in posts if p.views < 10)
         dead_ratio = dead_posts / posts_analyzed
         if dead_ratio > 0.5:
@@ -246,7 +252,7 @@ async def get_channel_health(channel_id: int, db: AsyncSession = Depends(get_db)
             flags.append(f"👻 {int(dead_ratio*100)}% постів з менше 10 переглядами")
 
     # ── 5. View consistency check ──
-    if posts_analyzed >= 5:
+    if posts_analyzed >= 5 and not views_hidden:
         view_list = [p.views for p in posts if p.views > 0]
         if view_list:
             avg_v = sum(view_list) / len(view_list)
@@ -315,6 +321,7 @@ async def get_ai_analysis(channel_id: int, db: AsyncSession = Depends(get_db)):
         "avg_reactions": channel.avg_reactions,
         "telegram_link": channel.telegram_link,
         "description": channel.description,
+        "views_hidden": channel.views_hidden,
     }
 
     # Get last 20 posts for AI analysis

@@ -277,6 +277,7 @@ async def get_channel_stats_telethon(channel_username: str, message_limit: int =
                 daily_reactions[day_key].append(msg_reactions)
 
         avg_views = sum(views_list) // len(views_list) if views_list else 0
+        views_hidden = len(views_list) == 0 and len(messages) > 0
         er = round((avg_views / subscribers * 100), 2) if subscribers > 0 else 0.0
         avg_forwards = sum(forwards_list) // len(forwards_list) if forwards_list else 0
         avg_reactions = sum(reactions_list) // len(reactions_list) if reactions_list else 0
@@ -306,6 +307,7 @@ async def get_channel_stats_telethon(channel_username: str, message_limit: int =
         return {
             "subscribers": subscribers,
             "avg_views": avg_views,
+            "views_hidden": views_hidden,
             "er": er,
             "avg_reach": avg_views,
             "adv_reach_12h": sum(reach_12h) // len(reach_12h) if reach_12h else 0,
@@ -383,7 +385,8 @@ async def collect_channel_stats(telegram_link: str, message_limit: int = 5000) -
         result["avg_forwards"] = telethon_stats.get("avg_forwards") or 0
         result["avg_reactions"] = telethon_stats.get("avg_reactions") or 0
         result["posts"] = telethon_stats.get("posts", [])
-        logger.info(f"[STATS] @{username} Telethon ✓ views={result['avg_views']} er={result['er']}% days={len(result['daily_stats'])} posts={len(result['posts'])}")
+        result["views_hidden"] = telethon_stats.get("views_hidden", False)
+        logger.info(f"[STATS] @{username} Telethon ✓ views={result['avg_views']} er={result['er']}% days={len(result['daily_stats'])} posts={len(result['posts'])} views_hidden={result['views_hidden']}")
     else:
         logger.warning(f"[STATS] @{username} Telethon failed — no views/ER/posts data")
 
