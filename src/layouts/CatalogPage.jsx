@@ -76,6 +76,12 @@ const CatalogPage = () => {
 	const [verifiedData, setVerifiedData] = useState(false);
 	const [aiRecommended, setAiRecommended] = useState(false);
 	const [priceRange, setPriceRange] = useState([0, PRICE_MAX]);
+	// Debounced price — updates 1s after user stops dragging
+	const [debouncedPrice, setDebouncedPrice] = useState([0, PRICE_MAX]);
+	useEffect(() => {
+		const t = setTimeout(() => setDebouncedPrice(priceRange), 1000);
+		return () => clearTimeout(t);
+	}, [priceRange]);
 
 	const fetchChannels = useCallback(async () => {
 		setLoading(true);
@@ -92,8 +98,8 @@ const CatalogPage = () => {
 			if (er20) params.er_min = 20;
 			if (verifiedData) params.verified_data = true;
 			if (aiRecommended) params.ai_recommended = true;
-			if (priceRange[0] > 0) params.min_price = priceRange[0];
-			if (priceRange[1] < PRICE_MAX) params.max_price = priceRange[1];
+			if (debouncedPrice[0] > 0) params.min_price = debouncedPrice[0];
+			if (debouncedPrice[1] < PRICE_MAX) params.max_price = debouncedPrice[1];
 
 			const { data } = await channelsAPI.getAll(params);
 			setChannels(data.items || data);
@@ -104,7 +110,7 @@ const CatalogPage = () => {
 		} finally {
 			setLoading(false);
 		}
-	}, [search, category, sortBy, page, roi6, roi12, er20, verifiedData, aiRecommended, priceRange]);
+	}, [search, category, sortBy, page, roi6, roi12, er20, verifiedData, aiRecommended, debouncedPrice]);
 
 	useEffect(() => {
 		fetchChannels();
