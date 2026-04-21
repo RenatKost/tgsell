@@ -339,7 +339,7 @@ const AuctionPage = () => {
 			</div>
 
 			{/* Activity Ticker */}
-			<ActivityTicker />
+			<ActivityTicker stats={stats} />
 
 			{/* ── Dashboard cards ── */}
 			<div className='grid grid-cols-2 xl:grid-cols-4 gap-3 mb-5'>
