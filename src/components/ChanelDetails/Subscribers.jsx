@@ -59,7 +59,7 @@ const Subscribers = ({ stats = [], current }) => {
 	const formatted = (current || dataPoints[dataPoints.length - 1])?.toLocaleString('uk-UA') || '—';
 
 	return (
-		<div className='bg-white dark:bg-card rounded-xl border border-gray-100 dark:border-card-border shadow-sm dark:shadow-neon px-4 pt-4 w-full'>
+		<div className='bg-white dark:bg-card rounded-xl border border-gray-100 dark:border-card-border shadow-sm dark:shadow-neon px-4 pt-4 pb-4 w-full'>
 			<div className='flex items-center justify-between mb-1'>
 				<div>
 					<p className='text-gray-400 text-xs'>Підписники</p>

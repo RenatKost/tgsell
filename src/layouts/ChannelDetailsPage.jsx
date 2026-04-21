@@ -91,14 +91,14 @@ const ChannelDetailsPage = () => {
 			</div>
 
 			{/* Row 1: DetailsCard + Subscribers + Views — 3 columns */}
-			<div className='grid grid-cols-1 lg:grid-cols-[380px_1fr_1fr] gap-4 items-start'>
-				<div className='space-y-4'>
+			<div className='grid grid-cols-1 lg:grid-cols-[380px_1fr_1fr] gap-4 items-stretch'>
+				<div className='flex flex-col gap-4'>
 					<DetailsCard channel={channel} onBuy={handleBuy} stats={stats} />
 
 					{channel.description && (
 					<div className='bg-white dark:bg-card rounded-xl border border-gray-100 dark:border-card-border shadow-sm dark:shadow-neon p-4'>
 						<h4 className='font-semibold text-gray-900 dark:text-white text-xs uppercase tracking-wider mb-2'>Коментар власника</h4>
-						<p className='text-gray-600 dark:text-gray-300 text-xs leading-relaxed bg-blue-50 dark:bg-card-inner rounded-lg p-3'>
+						<p className='text-gray-600 dark:text-gray-300 text-xs leading-relaxed bg-blue-50 dark:bg-card-inner rounded-lg p-3 break-words overflow-hidden'>
 							{channel.description}
 						</p>
 					</div>
