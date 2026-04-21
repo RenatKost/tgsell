@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+﻿import { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { activityAPI } from '../../services/api';
 
@@ -39,7 +39,7 @@ glowStyle: '0 0 10px rgba(0,255,136,0.3)',
 badgeClass: 'bg-accent/10 text-accent',
 dotClass: 'bg-accent',
 Icon: IconDeal,
-label: 'Угода',
+label: 'РЈРіРѕРґР°',
 },
 auction_bid: {
 borderClass: 'border-l-orange-400',
@@ -47,7 +47,7 @@ glowStyle: '0 0 10px rgba(251,146,60,0.35)',
 badgeClass: 'bg-orange-500/10 text-orange-400',
 dotClass: 'bg-orange-400',
 Icon: IconBid,
-label: 'Ставка',
+label: 'РЎС‚Р°РІРєР°',
 },
 new_channel: {
 borderClass: 'border-l-cyan-400',
@@ -55,7 +55,7 @@ glowStyle: '0 0 10px rgba(34,211,238,0.25)',
 badgeClass: 'bg-cyan-400/10 text-cyan-400',
 dotClass: 'bg-cyan-400',
 Icon: IconChannel,
-label: 'Канал',
+label: 'РљР°РЅР°Р»',
 },
 new_user: {
 borderClass: 'border-l-violet-400',
@@ -63,21 +63,24 @@ glowStyle: '0 0 10px rgba(167,139,250,0.25)',
 badgeClass: 'bg-violet-400/10 text-violet-400',
 dotClass: 'bg-violet-400',
 Icon: IconUser,
-label: 'Юзер',
+label: 'Р®Р·РµСЂ',
 },
 };
 
-// Stable key for deduplication -- based on content, not array index
-const stableKey = (e) => `${e.created_at}__${(e.text || '').slice(0, 30)}`;
+// Stable key -- text only (NOT timestamp) because fake events recalculate
+// created_at on every poll (relative to current `now`), so timestamp always drifts.
+const stableKey = (e) => (e.text || '').trim().slice(0, 60);
 
 const timeAgo = (isoStr) => {
-const diff = Date.now() - new Date(isoStr).getTime();
-const mins = Math.floor(diff / 60000);
-if (mins < 1) return 'щойно';
-if (mins < 60) return `${mins} хв`;
-const h = Math.floor(mins / 60);
-if (h < 24) return `${h} год`;
-return `${Math.floor(h / 24)} д`;
+	const diff = Date.now() - new Date(isoStr).getTime();
+	if (diff < 0) return 'С‰РѕР№РЅРѕ';
+	const mins = Math.floor(diff / 60000);
+	if (mins < 1) return 'С‰РѕР№РЅРѕ';
+	if (mins < 60) return `${mins}С…РІ`;
+	const h = Math.floor(mins / 60);
+	const rem = mins % 60;
+	if (h < 24) return rem > 0 ? `${h}Рі ${rem}С…РІ` : `${h}Рі`;
+	return `${Math.floor(h / 24)}Рґ`;
 };
 
 const cleanText = (text) => (text || '').replace(/^.\s/, '');
@@ -131,15 +134,15 @@ return acc;
 }, {});
 
 const sideStats = stats ? [
-{ key: 's1', label: 'Аукціони', value: stats.active_auctions  ?? 0, borderClass: 'border-l-orange-400', valueClass: 'text-orange-400', barClass: 'bg-orange-400' },
-{ key: 's2', label: 'Ставок',   value: stats.bids_today        ?? 0, borderClass: 'border-l-amber-400',  valueClass: 'text-amber-400',  barClass: 'bg-amber-400'  },
-{ key: 's3', label: 'Угод/тиж', value: stats.deals_this_week   ?? 0, borderClass: 'border-l-accent',     valueClass: 'text-accent',     barClass: 'bg-accent'     },
-{ key: 's4', label: 'Онлайн',   value: stats.online_investors  ?? 0, borderClass: 'border-l-cyan-400',   valueClass: 'text-cyan-400',   barClass: 'bg-cyan-400'   },
+{ key: 's1', label: 'РђСѓРєС†С–РѕРЅРё', value: stats.active_auctions  ?? 0, borderClass: 'border-l-orange-400', valueClass: 'text-orange-400', barClass: 'bg-orange-400' },
+{ key: 's2', label: 'РЎС‚Р°РІРѕРє',   value: stats.bids_today        ?? 0, borderClass: 'border-l-amber-400',  valueClass: 'text-amber-400',  barClass: 'bg-amber-400'  },
+{ key: 's3', label: 'РЈРіРѕРґ/С‚РёР¶', value: stats.deals_this_week   ?? 0, borderClass: 'border-l-accent',     valueClass: 'text-accent',     barClass: 'bg-accent'     },
+{ key: 's4', label: 'РћРЅР»Р°Р№РЅ',   value: stats.online_investors  ?? 0, borderClass: 'border-l-cyan-400',   valueClass: 'text-cyan-400',   barClass: 'bg-cyan-400'   },
 ] : [
-{ key: 'deal_completed', label: 'Угоди',  value: feedCounts.deal_completed || 0, borderClass: 'border-l-accent',     valueClass: 'text-accent',     barClass: 'bg-accent'     },
-{ key: 'auction_bid',    label: 'Ставки', value: feedCounts.auction_bid    || 0, borderClass: 'border-l-orange-400', valueClass: 'text-orange-400', barClass: 'bg-orange-400' },
-{ key: 'new_channel',    label: 'Канали', value: feedCounts.new_channel    || 0, borderClass: 'border-l-cyan-400',   valueClass: 'text-cyan-400',   barClass: 'bg-cyan-400'   },
-{ key: 'new_user',       label: 'Юзери',  value: feedCounts.new_user       || 0, borderClass: 'border-l-violet-400', valueClass: 'text-violet-400', barClass: 'bg-violet-400' },
+{ key: 'deal_completed', label: 'РЈРіРѕРґРё',  value: feedCounts.deal_completed || 0, borderClass: 'border-l-accent',     valueClass: 'text-accent',     barClass: 'bg-accent'     },
+{ key: 'auction_bid',    label: 'РЎС‚Р°РІРєРё', value: feedCounts.auction_bid    || 0, borderClass: 'border-l-orange-400', valueClass: 'text-orange-400', barClass: 'bg-orange-400' },
+{ key: 'new_channel',    label: 'РљР°РЅР°Р»Рё', value: feedCounts.new_channel    || 0, borderClass: 'border-l-cyan-400',   valueClass: 'text-cyan-400',   barClass: 'bg-cyan-400'   },
+{ key: 'new_user',       label: 'Р®Р·РµСЂРё',  value: feedCounts.new_user       || 0, borderClass: 'border-l-violet-400', valueClass: 'text-violet-400', barClass: 'bg-violet-400' },
 ];
 
 const maxSide = Math.max(...sideStats.map(s => s.value), 1);
@@ -170,10 +173,10 @@ transition={{ repeat: Infinity, duration: 1.4 }}
 />
 <span className='text-[10px] font-black text-accent tracking-widest uppercase'>Live</span>
 </div>
-<span className='text-sm font-semibold text-gray-800 dark:text-white'>Активність платформи</span>
+<span className='text-sm font-semibold text-gray-800 dark:text-white'>РђРєС‚РёРІРЅС–СЃС‚СЊ РїР»Р°С‚С„РѕСЂРјРё</span>
 </div>
-<span className='text-xs text-gray-400'>{events.length} подій</span>
-</div>
+        </div>
+
 
 {/* Body */}
 <div className='flex divide-x divide-gray-100 dark:divide-card-border'>
@@ -221,7 +224,7 @@ New
 {/* Stats panel */}
 <div className='w-32 flex-shrink-0 px-2.5 py-2 flex flex-col gap-1.5'>
 <p className='text-[9px] font-bold uppercase tracking-wider text-gray-400 mb-0.5'>
-{stats ? 'Зараз' : 'За фідом'}
+{stats ? 'Р—Р°СЂР°Р·' : 'Р—Р° С„С–РґРѕРј'}
 </p>
 {sideStats.map(({ key, label, value, borderClass, valueClass, barClass }) => {
 const pct = Math.round((value / maxSide) * 100);
