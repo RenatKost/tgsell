@@ -1148,8 +1148,9 @@ async def reauth_confirm(
     try:
         await client.sign_in(data["phone"], code, phone_code_hash=data["phone_code_hash"])
     except Exception as e:
-        err = str(e)
-        if "SessionPasswordNeeded" in err:
+        from telethon.errors import SessionPasswordNeededError, PhoneCodeInvalidError, PhoneCodeExpiredError
+
+        if isinstance(e, SessionPasswordNeededError):
             if not password:
                 return {"ok": False, "need_2fa": True, "message": "2FA password required. Resend with 'password' field."}
             try:
@@ -1158,8 +1159,8 @@ async def reauth_confirm(
                 _reauth_sessions.pop(admin.id, None)
                 await client.disconnect()
                 raise HTTPException(status_code=400, detail=f"2FA failed: {e2}")
-        elif "PhoneCode" in err:
-            raise HTTPException(status_code=400, detail="Wrong code. Try again.")
+        elif isinstance(e, (PhoneCodeInvalidError, PhoneCodeExpiredError)):
+            raise HTTPException(status_code=400, detail="Wrong or expired code. Try again.")
         else:
             _reauth_sessions.pop(admin.id, None)
             await client.disconnect()
