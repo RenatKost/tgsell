@@ -5,67 +5,84 @@ import AuctionCard from '../components/Cards/AuctionCard';
 import BidModal from '../components/Auction/BidModal';
 import ActivityTicker from '../components/Auction/ActivityTicker';
 
-/* ─── Mini chart helpers ───────────────────────────────────────── */
+/* ─── Count-up hook ────────────────────────────────────────────── */
+const useCountUp = (target, duration = 900) => {
+	const [val, setVal] = useState(0);
+	useEffect(() => {
+		if (typeof target !== 'number' || isNaN(target)) return;
+		let startTime = null;
+		const step = (ts) => {
+			if (!startTime) startTime = ts;
+			const p = Math.min((ts - startTime) / duration, 1);
+			const eased = 1 - Math.pow(1 - p, 3); // ease-out-cubic
+			setVal(Math.round(eased * target));
+			if (p < 1) requestAnimationFrame(step);
+		};
+		requestAnimationFrame(step);
+	}, [target, duration]);
+	return val;
+};
 
-/** Generates a deterministic sparkline that ends at `seed` */
-const genSparkline = (seed = 10, n = 12) => {
+/* ─── Mini chart helpers ───────────────────────────────────────── */
+const genSparkline = (seed = 10, n = 14) => {
 	const pts = [];
-	let v = seed * 0.55;
+	let v = seed * 0.5;
 	for (let i = 0; i < n - 1; i++) {
-		v += (seed - v) * 0.22 + Math.sin(seed * 0.7 + i * 1.9) * seed * 0.18;
+		v += (seed - v) * 0.2 + Math.sin(seed * 0.9 + i * 2.1) * seed * 0.2;
 		pts.push(Math.max(0, Math.round(v)));
 	}
 	pts.push(seed);
 	return pts;
 };
 
-const Sparkline = ({ data = [], color = '#00FF88', width = 88, height = 34 }) => {
-	if (data.length < 2) return <div style={{ width, height }} />;
+// W=96 H=44 sparkline — identical size used in cards 1 & 4
+const Sparkline = ({ data = [], color = '#00FF88' }) => {
+	const W = 96, H = 44;
+	if (data.length < 2) return <div style={{ width: W, height: H }} />;
 	const min = Math.min(...data);
 	const max = Math.max(...data);
 	const range = max - min || 1;
 	const pts = data.map((v, i) => {
-		const x = (i / (data.length - 1)) * width;
-		const y = height - 4 - ((v - min) / range) * (height - 10);
+		const x = (i / (data.length - 1)) * W;
+		const y = H - 6 - ((v - min) / range) * (H - 14);
 		return `${x.toFixed(1)},${y.toFixed(1)}`;
 	}).join(' ');
 	const first = pts.split(' ')[0].split(',');
-	const last = pts.split(' ').at(-1).split(',');
-	const fillPts = `${first[0]},${height} ${pts} ${last[0]},${height}`;
-	const gid = `sg-${color.replace('#', '')}-${width}`;
+	const last  = pts.split(' ').at(-1).split(',');
+	const fill  = `${first[0]},${H} ${pts} ${last[0]},${H}`;
+	const gid   = `spk-${color.replace('#', '')}`;
 	return (
-		<svg width={width} height={height} viewBox={`0 0 ${width} ${height}`} preserveAspectRatio='none'>
+		<svg width={W} height={H} viewBox={`0 0 ${W} ${H}`} preserveAspectRatio='none'>
 			<defs>
 				<linearGradient id={gid} x1='0' y1='0' x2='0' y2='1'>
-					<stop offset='0%' stopColor={color} stopOpacity='0.3' />
+					<stop offset='0%'   stopColor={color} stopOpacity='0.28' />
 					<stop offset='100%' stopColor={color} stopOpacity='0' />
 				</linearGradient>
 			</defs>
-			<polygon points={fillPts} fill={`url(#${gid})`} />
-			<polyline points={pts} fill='none' stroke={color} strokeWidth='1.8' strokeLinecap='round' strokeLinejoin='round' />
+			<polygon points={fill} fill={`url(#${gid})`} />
+			<polyline points={pts} fill='none' stroke={color} strokeWidth='2' strokeLinecap='round' strokeLinejoin='round' />
 		</svg>
 	);
 };
 
-const BarSparkline = ({ data = [], color = '#F97316', width = 108, height = 38 }) => {
-	if (!data.length) return <div style={{ width, height }} />;
-	const max = Math.max(...data, 1);
-	const step = width / data.length;
-	const barW = step * 0.55;
+// W=96 H=44 bar chart — card 2
+const BarChart = ({ data = [], color = '#F97316' }) => {
+	const W = 96, H = 44;
+	if (!data.length) return <div style={{ width: W, height: H }} />;
+	const max  = Math.max(...data, 1);
+	const step = W / data.length;
+	const barW = step * 0.52;
 	return (
-		<svg width={width} height={height} viewBox={`0 0 ${width} ${height}`}>
+		<svg width={W} height={H} viewBox={`0 0 ${W} ${H}`}>
 			{data.map((v, i) => {
-				const bh = Math.max(3, (v / max) * (height - 4));
+				const bh = Math.max(3, (v / max) * (H - 6));
 				return (
-					<rect
-						key={i}
+					<rect key={i}
 						x={i * step + (step - barW) / 2}
-						y={height - bh}
-						width={barW}
-						height={bh}
-						rx='2'
+						y={H - bh}
+						width={barW} height={bh} rx='2'
 						fill={color}
-						opacity={0.35 + (i / data.length) * 0.65}
+						opacity={0.3 + (i / (data.length - 1)) * 0.7}
 					/>
 				);
 			})}
@@ -73,19 +90,32 @@ const BarSparkline = ({ data = [], color = '#F97316', width = 108, height = 38 }
 	);
 };
 
-const MiniDonut = ({ pct = 0.72, size = 54 }) => {
-	const r = 19, cx = size / 2, cy = size / 2;
+// 3-segment donut: USDT 55% · BNB 25% · TON 20% — W=H=72
+const MiniDonut = ({ size = 72 }) => {
+	const r = 25, cx = size / 2, cy = size / 2;
 	const circ = 2 * Math.PI * r;
-	const dash = circ * pct;
+	const segments = [
+		{ color: '#00FF88', pct: 0.55 }, // USDT
+		{ color: '#F59E0B', pct: 0.25 }, // BNB
+		{ color: '#0098EA', pct: 0.20 }, // TON
+	];
+	let cumPct = 0;
 	return (
 		<svg width={size} height={size} viewBox={`0 0 ${size} ${size}`}>
-			<circle cx={cx} cy={cy} r={r} fill='none' stroke='#1A3A2A' strokeWidth='7' />
-			<circle cx={cx} cy={cy} r={r} fill='none' stroke='#F59E0B' strokeWidth='7'
-				strokeDasharray={`${circ}`} strokeLinecap='butt'
-				transform={`rotate(-90 ${cx} ${cy})`} />
-			<circle cx={cx} cy={cy} r={r} fill='none' stroke='#00FF88' strokeWidth='7'
-				strokeDasharray={`${dash} ${circ - dash}`} strokeLinecap='butt'
-				transform={`rotate(-90 ${cx} ${cy})`} />
+			{/* track */}
+			<circle cx={cx} cy={cy} r={r} fill='none' stroke='#1A3A2A' strokeWidth='8' />
+			{segments.map(({ color, pct }, i) => {
+				const rotDeg = cumPct * 360 - 90;
+				const dash   = circ * pct;
+				cumPct += pct;
+				return (
+					<circle key={i} cx={cx} cy={cy} r={r}
+						fill='none' stroke={color} strokeWidth='8'
+						strokeDasharray={`${dash.toFixed(2)} ${(circ - dash).toFixed(2)}`}
+						transform={`rotate(${rotDeg.toFixed(2)} ${cx} ${cy})`}
+					/>
+				);
+			})}
 		</svg>
 	);
 };
@@ -141,14 +171,110 @@ const AuctionPage = () => {
 	}, [fetchAuctions]);
 
 	/* decorative sparkline data derived from stats */
-	const auctionsTrend  = genSparkline(stats?.active_auctions  ?? 5,  12);
-	const bidsHourly     = genSparkline(stats?.bids_today       ?? 20,  6);
-	const investorsTrend = genSparkline(stats?.online_investors ?? 60, 12);
+	const auctionsTrend  = genSparkline(stats?.active_auctions  ?? 5,  14);
+	const bidsHourly     = genSparkline(stats?.bids_today       ?? 20, 10);
+	const investorsTrend = genSparkline(stats?.online_investors ?? 60, 14);
+
+	// count-up animated values
+	const countAuctions  = useCountUp(stats?.active_auctions  ?? 0);
+	const countBids      = useCountUp(stats?.bids_today       ?? 0);
+	const countDeals     = useCountUp(stats?.deals_this_week  ?? 0);
+	const countInvestors = useCountUp(stats?.online_investors ?? 0);
 
 	const cardVariants = {
-		hidden: { opacity: 0, y: 18 },
-		visible: (i) => ({ opacity: 1, y: 0, transition: { delay: i * 0.07, duration: 0.35, ease: 'easeOut' } }),
+		hidden:  { opacity: 0, y: 20 },
+		visible: (i) => ({ opacity: 1, y: 0, transition: { delay: i * 0.08, duration: 0.38, ease: 'easeOut' } }),
 	};
+
+	// Unified card config — one source of truth for all 4
+	const dashCards = [
+		{
+			accent: '#F97316',
+			border: 'dark:border-orange-500/30',
+			iconBg: 'bg-orange-500/15',
+			icon: (
+				<svg width='16' height='16' viewBox='0 0 24 24' fill='none'>
+					<path d='M12 2s-5 5.5-5 9a5 5 0 0010 0c0-3.5-5-9-5-9z' fill='#F97316' opacity='.75'/>
+					<path d='M12 8s-2 2.5-2 4a2 2 0 004 0c0-1.5-2-4-2-4z' fill='#F97316'/>
+				</svg>
+			),
+			value: countAuctions,
+			label: 'Активні аукціони',
+			badge: null,
+			right: <Sparkline data={auctionsTrend} color='#F97316' />,
+		},
+		{
+			accent: '#F97316',
+			border: 'dark:border-orange-500/40',
+			iconBg: 'bg-orange-500/15',
+			icon: (
+				<svg width='16' height='16' viewBox='0 0 24 24' fill='none'>
+					<circle cx='12' cy='12' r='8' stroke='#F97316' strokeWidth='2'/>
+					<path d='M12 8c-1.1 0-2 .6-2 1.4s.9 1.4 2 1.4 2 .6 2 1.4S13.1 14 12 14m0-6v1m0 5v1' stroke='#F97316' strokeWidth='1.8' strokeLinecap='round'/>
+				</svg>
+			),
+			value: countBids,
+			label: 'Ставок сьогодні',
+			badge: (
+				<span className='inline-flex items-center gap-1 bg-green-500/15 text-green-400 text-[10px] font-semibold px-2 py-0.5 rounded-full'>
+					+12% вчора
+				</span>
+			),
+			right: <BarChart data={bidsHourly} color='#F97316' />,
+		},
+		{
+			accent: '#10B981',
+			border: 'dark:border-green-500/30',
+			iconBg: 'bg-green-500/15',
+			icon: (
+				<svg width='16' height='16' viewBox='0 0 24 24' fill='none'>
+					<path d='M5 13l4 4L19 7' stroke='#10B981' strokeWidth='2.5' strokeLinecap='round' strokeLinejoin='round'/>
+				</svg>
+			),
+			value: countDeals,
+			label: 'Угод за тиждень',
+			badge: null,
+			right: (
+				<div className='flex items-center gap-3'>
+					<MiniDonut size={68} />
+					<div className='flex flex-col gap-1'>
+						{[
+							{ color: '#00FF88', label: 'USDT' },
+							{ color: '#F59E0B', label: 'BNB'  },
+							{ color: '#0098EA', label: 'TON'  },
+						].map(({ color, label }) => (
+							<span key={label} className='flex items-center gap-1.5'>
+								<span className='w-2 h-2 rounded-full flex-shrink-0' style={{ backgroundColor: color }} />
+								<span className='text-[10px] text-gray-400'>{label}</span>
+							</span>
+						))}
+					</div>
+				</div>
+			),
+		},
+		{
+			accent: '#A855F7',
+			border: 'dark:border-purple-500/30',
+			iconBg: 'bg-purple-500/15',
+			icon: (
+				<svg width='16' height='16' viewBox='0 0 24 24' fill='none'>
+					<circle cx='9' cy='7' r='3' stroke='#A855F7' strokeWidth='2'/>
+					<circle cx='16' cy='8' r='2.2' stroke='#A855F7' strokeWidth='1.8'/>
+					<path d='M3 19c0-3.3 2.7-6 6-6s6 2.7 6 6' stroke='#A855F7' strokeWidth='2' strokeLinecap='round'/>
+					<path d='M18 14c1.7.5 3 2.1 3 4' stroke='#A855F7' strokeWidth='1.8' strokeLinecap='round'/>
+				</svg>
+			),
+			value: countInvestors,
+			label: 'Онлайн інвесторів',
+			badge: (
+				<span className='inline-flex items-center gap-1.5 text-green-400 text-[10px] font-semibold'>
+					<span className='w-1.5 h-1.5 rounded-full bg-green-400 animate-pulse' />
+					Live
+				</span>
+			),
+			right: <Sparkline data={investorsTrend} color='#A855F7' />,
+		},
+	];
 
 	return (
 		<section className='min-h-screen pt-28 pb-10'>
@@ -171,119 +297,37 @@ const AuctionPage = () => {
 
 			{/* ── Dashboard cards ── */}
 			<div className='grid grid-cols-2 xl:grid-cols-4 gap-3 mb-5'>
+				{dashCards.map((card, i) => (
+					<motion.div key={card.label}
+						custom={i} variants={cardVariants} initial='hidden' animate='visible'
+						whileHover={{ scale: 1.025, transition: { duration: 0.15 } }}
+						className={`relative overflow-hidden bg-white dark:bg-card rounded-2xl border border-gray-100 ${card.border} shadow-sm dark:shadow-neon p-4 flex flex-col justify-between`}
+						style={{ minHeight: 118 }}
+					>
+						{/* Row 1: icon + badge — fixed height so all cards align */}
+						<div className='flex items-center justify-between mb-2'>
+							<div className={`w-8 h-8 rounded-lg ${card.iconBg} flex items-center justify-center flex-shrink-0`}>
+								{card.icon}
+							</div>
+							<div className='text-right'>{card.badge}</div>
+						</div>
 
-				{/* Card 1 — Active Auctions */}
-				<motion.div custom={0} variants={cardVariants} initial='hidden' animate='visible'
-					className='relative overflow-hidden bg-white dark:bg-card rounded-2xl border border-gray-100 dark:border-card-border shadow-sm dark:shadow-neon p-4'>
-					<div className='flex items-start justify-between'>
-						<div>
-							<div className='w-9 h-9 rounded-lg bg-orange-500/15 flex items-center justify-center mb-3'>
-								<svg width='18' height='18' viewBox='0 0 24 24' fill='none'>
-									<path d='M12 2s-5 5.5-5 9a5 5 0 0010 0c0-3.5-5-9-5-9z' fill='#F97316' opacity='.7'/>
-									<path d='M12 8s-2 2.5-2 4a2 2 0 004 0c0-1.5-2-4-2-4z' fill='#F97316'/>
-								</svg>
+						{/* Row 2: number+label (left) + visualization (right) */}
+						<div className='flex items-center justify-between gap-2'>
+							<div className='flex-shrink-0'>
+								<p className='text-[1.85rem] font-black text-gray-900 dark:text-white leading-none tabular-nums'>
+									{card.value}
+								</p>
+								<p className='text-[11px] text-gray-500 dark:text-gray-400 mt-1 whitespace-nowrap'>
+									{card.label}
+								</p>
 							</div>
-							<p className='text-3xl font-extrabold text-gray-900 dark:text-white leading-none'>
-								{stats?.active_auctions ?? '—'}
-							</p>
-							<p className='text-[11px] text-gray-500 dark:text-gray-400 mt-1.5'>Активні аукціони</p>
-						</div>
-						<div className='flex flex-col items-end gap-0.5 pt-1'>
-							<span className='text-[10px] text-gray-400'>24 ч</span>
-							<Sparkline data={auctionsTrend} color='#F97316' width={84} height={32} />
-							<span className='text-[10px] text-gray-400'>0</span>
-						</div>
-					</div>
-				</motion.div>
-
-				{/* Card 2 — Bids Today */}
-				<motion.div custom={1} variants={cardVariants} initial='hidden' animate='visible'
-					className='relative overflow-hidden bg-white dark:bg-card rounded-2xl border border-orange-500/35 shadow-sm dark:shadow-neon p-4'>
-					<span className='absolute top-3 right-3 inline-flex items-center gap-1 bg-green-500/15 text-green-400 text-[10px] font-semibold px-2 py-0.5 rounded-full'>
-						+12% vs вчора
-					</span>
-					<div className='flex items-start justify-between mt-4'>
-						<div>
-							<div className='w-9 h-9 rounded-lg bg-orange-500/15 flex items-center justify-center mb-3'>
-								<svg width='18' height='18' viewBox='0 0 24 24' fill='none'>
-									<circle cx='12' cy='12' r='8' stroke='#F97316' strokeWidth='2'/>
-									<path d='M12 8c-1.1 0-2 .7-2 1.5S11 11 12 11s2 .7 2 1.5S13.1 14 12 14m0-6v1m0 5v1' stroke='#F97316' strokeWidth='1.8' strokeLinecap='round'/>
-								</svg>
-							</div>
-							<p className='text-3xl font-extrabold text-gray-900 dark:text-white leading-none'>
-								{stats?.bids_today ?? '—'}
-							</p>
-							<p className='text-[11px] text-gray-500 dark:text-gray-400 mt-1.5'>Ставок сьогодні</p>
-						</div>
-						<div className='flex flex-col items-end'>
-							<BarSparkline data={bidsHourly} color='#F97316' width={104} height={36} />
-							<div className='flex justify-between w-[104px] mt-0.5'>
-								{[0, 4, 8, 12, 16, 20].map(h => (
-									<span key={h} className='text-[9px] text-gray-500'>{h}</span>
-								))}
+							<div className='flex-shrink-0'>
+								{card.right}
 							</div>
 						</div>
-					</div>
-				</motion.div>
-
-				{/* Card 3 — Deals This Week */}
-				<motion.div custom={2} variants={cardVariants} initial='hidden' animate='visible'
-					className='relative overflow-hidden bg-white dark:bg-card rounded-2xl border border-green-500/30 shadow-sm dark:shadow-neon p-4'>
-					<div className='flex items-start justify-between'>
-						<div>
-							<div className='w-9 h-9 rounded-lg bg-green-500/15 flex items-center justify-center mb-3'>
-								<svg width='18' height='18' viewBox='0 0 24 24' fill='none'>
-									<path d='M5 13l4 4L19 7' stroke='#10B981' strokeWidth='2.5' strokeLinecap='round' strokeLinejoin='round'/>
-								</svg>
-							</div>
-							<p className='text-3xl font-extrabold text-gray-900 dark:text-white leading-none'>
-								{stats?.deals_this_week ?? '—'}
-							</p>
-							<p className='text-[11px] text-gray-500 dark:text-gray-400 mt-1.5'>Угод за тиждень</p>
-						</div>
-						<div className='flex flex-col items-center gap-2 pt-1'>
-							<MiniDonut pct={0.72} size={52} />
-							<div className='flex flex-col gap-0.5'>
-								<span className='flex items-center gap-1'>
-									<span className='w-2 h-2 rounded-full bg-accent inline-block' />
-									<span className='text-[10px] text-gray-400'>USDT</span>
-								</span>
-								<span className='flex items-center gap-1'>
-									<span className='w-2 h-2 rounded-full bg-yellow-500 inline-block' />
-									<span className='text-[10px] text-gray-400'>BNB</span>
-								</span>
-							</div>
-						</div>
-					</div>
-				</motion.div>
-
-				{/* Card 4 — Online Investors */}
-				<motion.div custom={3} variants={cardVariants} initial='hidden' animate='visible'
-					className='relative overflow-hidden bg-white dark:bg-card rounded-2xl border border-purple-500/30 shadow-sm dark:shadow-neon p-4'>
-					<span className='absolute top-3 right-3 inline-flex items-center gap-1.5 text-green-400 text-[10px] font-semibold'>
-						<span className='w-1.5 h-1.5 rounded-full bg-green-400 animate-pulse inline-block' />
-						Live
-					</span>
-					<div className='flex items-start justify-between'>
-						<div>
-							<div className='w-9 h-9 rounded-lg bg-purple-500/15 flex items-center justify-center mb-3'>
-								<svg width='18' height='18' viewBox='0 0 24 24' fill='none'>
-									<circle cx='9' cy='7' r='3' stroke='#A855F7' strokeWidth='2'/>
-									<circle cx='16' cy='8' r='2.5' stroke='#A855F7' strokeWidth='1.8'/>
-									<path d='M3 19c0-3.3 2.7-6 6-6s6 2.7 6 6' stroke='#A855F7' strokeWidth='2' strokeLinecap='round'/>
-									<path d='M18 14c1.7.5 3 2.1 3 4' stroke='#A855F7' strokeWidth='1.8' strokeLinecap='round'/>
-								</svg>
-							</div>
-							<p className='text-3xl font-extrabold text-gray-900 dark:text-white leading-none'>
-								{stats?.online_investors ?? '—'}
-							</p>
-							<p className='text-[11px] text-gray-500 dark:text-gray-400 mt-1.5'>Онлайн інвесторів</p>
-						</div>
-						<div className='pt-1'>
-							<Sparkline data={investorsTrend} color='#A855F7' width={84} height={32} />
-						</div>
-					</div>
-				</motion.div>
+					</motion.div>
+				))}
 			</div>
 
 			{/* ── Filters ── */}
