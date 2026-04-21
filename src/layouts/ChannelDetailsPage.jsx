@@ -90,31 +90,33 @@ const ChannelDetailsPage = () => {
 				<span className='text-gray-600 dark:text-gray-300 font-medium'>{channel.channel_name || 'Канал'}</span>
 			</div>
 
-			{/* Row 1: DetailsCard + Subscribers + Views — 3 columns */}
-			<div className='grid grid-cols-1 lg:grid-cols-[380px_1fr_1fr] gap-4 items-stretch'>
+			{/* 2-column layout: fixed sidebar + fluid content */}
+			<div className='grid grid-cols-1 lg:grid-cols-[380px_1fr] gap-4 items-start'>
+
+				{/* LEFT SIDEBAR: DetailsCard → Comment → Resources → ChannelHealth */}
 				<div className='flex flex-col gap-4'>
 					<DetailsCard channel={channel} onBuy={handleBuy} stats={stats} />
 
 					{channel.description && (
-					<div className='bg-white dark:bg-card rounded-xl border border-gray-100 dark:border-card-border shadow-sm dark:shadow-neon p-4'>
-						<h4 className='font-semibold text-gray-900 dark:text-white text-xs uppercase tracking-wider mb-2'>Коментар власника</h4>
-						<p className='text-gray-600 dark:text-gray-300 text-xs leading-relaxed bg-blue-50 dark:bg-card-inner rounded-lg p-3 break-words overflow-hidden'>
-							{channel.description}
-						</p>
-					</div>
+						<div className='bg-white dark:bg-card rounded-xl border border-gray-100 dark:border-card-border shadow-sm dark:shadow-neon p-4'>
+							<h4 className='font-semibold text-gray-900 dark:text-white text-xs uppercase tracking-wider mb-2'>Коментар власника</h4>
+							<p className='text-gray-600 dark:text-gray-300 text-xs leading-relaxed bg-blue-50 dark:bg-card-inner rounded-lg p-3 break-words overflow-hidden'>
+								{channel.description}
+							</p>
+						</div>
 					)}
 
 					{resources.length > 0 && (
-					<div className='bg-white dark:bg-card rounded-xl border border-gray-100 dark:border-card-border shadow-sm dark:shadow-neon p-4'>
-						<h4 className='font-semibold text-gray-900 dark:text-white text-xs uppercase tracking-wider mb-2'>Додаткові ресурси</h4>
-						<div className='flex flex-wrap gap-1.5'>
-							{resources.map((url, idx) => (
-								<a
-									key={idx}
-									href={url}
-									target='_blank'
-									rel='noopener noreferrer'
-									className='inline-flex items-center gap-1 bg-gray-50 dark:bg-card-inner hover:bg-accent hover:text-white text-gray-600 dark:text-gray-300 font-medium text-[11px] px-3 py-2 rounded-lg border border-gray-200 dark:border-card-border hover:border-accent transition-all'
+						<div className='bg-white dark:bg-card rounded-xl border border-gray-100 dark:border-card-border shadow-sm dark:shadow-neon p-4'>
+							<h4 className='font-semibold text-gray-900 dark:text-white text-xs uppercase tracking-wider mb-2'>Додаткові ресурси</h4>
+							<div className='flex flex-wrap gap-1.5'>
+								{resources.map((url, idx) => (
+									<a
+										key={idx}
+										href={url}
+										target='_blank'
+										rel='noopener noreferrer'
+										className='inline-flex items-center gap-1 bg-gray-50 dark:bg-card-inner hover:bg-accent hover:text-white text-gray-600 dark:text-gray-300 font-medium text-[11px] px-3 py-2 rounded-lg border border-gray-200 dark:border-card-border hover:border-accent transition-all'
 									>
 										<span>🔗</span> Ресурс {idx + 1}
 									</a>
@@ -122,26 +124,31 @@ const ChannelDetailsPage = () => {
 							</div>
 						</div>
 					)}
+
+					<ChannelHealth health={health} loading={healthLoading} />
 				</div>
 
-				<Subscribers stats={stats} current={channel.subscribers_count} />
-				<Views stats={stats} current={channel.avg_views} viewsHidden={channel.views_hidden} />
+				{/* RIGHT CONTENT: charts + AI Analysis stacked */}
+				<div className='flex flex-col gap-4'>
+					{/* Charts row 1: Subscribers + Views */}
+					<div className='grid grid-cols-1 md:grid-cols-2 gap-4'>
+						<Subscribers stats={stats} current={channel.subscribers_count} />
+						<Views stats={stats} current={channel.avg_views} viewsHidden={channel.views_hidden} />
+					</div>
+
+					{/* Charts row 2: ER + PostsPerDay + AIRiskScore */}
+					<div className='grid grid-cols-1 md:grid-cols-3 gap-4'>
+						<ER stats={stats} current={channel.er} />
+						<PostsPerDay stats={stats} />
+						<AIRiskScore health={health} loading={healthLoading} />
+					</div>
+
+					{/* AI Analysis full right-column width */}
+					<AiAnalysis channelId={channel.id} channel={channel} />
+				</div>
 			</div>
 
-			{/* Row 2: ER + PostsPerDay + AI Risk Assessment — 3 columns */}
-			<div className='mt-4 grid md:grid-cols-3 gap-4'>
-				<ER stats={stats} current={channel.er} />
-				<PostsPerDay stats={stats} />
-				<AIRiskScore health={health} loading={healthLoading} />
-			</div>
-
-			{/* Row 3: Health (left) + AI Analysis with AdvReach (right) */}
-			<div className='mt-4 grid md:grid-cols-2 gap-4'>
-				<ChannelHealth health={health} loading={healthLoading} />
-				<AiAnalysis channelId={channel.id} channel={channel} />
-			</div>
-
-			{/* Row 4: Posts full width */}
+			{/* Posts full width */}
 			<div className='mt-4'>
 				<PostsList channelId={channel.id} />
 			</div>

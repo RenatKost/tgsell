@@ -28,9 +28,9 @@ const AIRiskScore = ({ health, loading }) => {
 	const scoreAngle = (score / 100) * Math.PI;
 	const endX = cx - r * Math.cos(scoreAngle);
 	const endY = cy - r * Math.sin(scoreAngle);
-	const largeArc = score > 50 ? 1 : 0;
+	// Gauge is always ≤ 180°, so large-arc is always 0; sweep=1 draws the upper arc
 	const scorePath = score > 0
-		? `M ${cx - r} ${cy} A ${r} ${r} 0 ${largeArc} 1 ${endX} ${endY}`
+		? `M ${cx - r} ${cy} A ${r} ${r} 0 0 1 ${endX} ${endY}`
 		: '';
 
 	return (
