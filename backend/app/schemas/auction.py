@@ -38,6 +38,11 @@ class AuctionResponse(BaseModel):
     channel_avatar: str | None = None
     subscribers_count: int | None = None
     category: str | None = None
+    avg_views: int | None = None
+    er: float | None = None
+    monthly_income: float | None = None
+    age: str | None = None
+    views_hidden: bool = False
 
     model_config = {"from_attributes": True}
 

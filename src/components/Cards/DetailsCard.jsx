@@ -21,7 +21,7 @@ const Tooltip = ({ children, text, desc }) => {
 	);
 };
 
-const DetailsCard = ({ channel, onBuy, stats = [] }) => {
+const DetailsCard = ({ channel, onBuy, onAuction, stats = [] }) => {
 	const { isAuthenticated, favoriteIds, toggleFavorite } = useAuth();
 	const isFav = favoriteIds.has(channel.id);
 
@@ -239,26 +239,73 @@ const DetailsCard = ({ channel, onBuy, stats = [] }) => {
 
 			{/* Price + Buy */}
 			<div className='border-t border-gray-100 dark:border-card-border px-4 py-3'>
-				<div className='flex items-center justify-between mb-3'>
-					<div>
-						<p className='text-gray-400 text-[10px]'>Ціна</p>
-						<p className='font-extrabold text-lg text-gray-900 dark:text-white'>
-							{channel.price?.toLocaleString('uk-UA')}
-							<span className='text-xs font-semibold text-gray-400 ml-1'>USDT</span>
-						</p>
+				{/* Fixed price row — only for 'sale' or 'both' */}
+				{(channel.listing_type === 'sale' || channel.listing_type === 'both' || !channel.listing_type) && (
+					<div className='flex items-center justify-between mb-3'>
+						<div>
+							<p className='text-gray-400 text-[10px]'>
+								{channel.listing_type === 'both' ? 'Фіксована ціна' : 'Ціна'}
+							</p>
+							<p className='font-extrabold text-lg text-gray-900 dark:text-white'>
+								{channel.price?.toLocaleString('uk-UA')}
+								<span className='text-xs font-semibold text-gray-400 ml-1'>USDT</span>
+							</p>
+						</div>
+						{channel.created_at && (
+							<p className='text-gray-300 text-[10px]'>
+								Розміщено {new Date(channel.created_at).toLocaleDateString('uk-UA')}
+							</p>
+						)}
 					</div>
-					{channel.created_at && (
-						<p className='text-gray-300 text-[10px]'>
-							Розміщено {new Date(channel.created_at).toLocaleDateString('uk-UA')}
-						</p>
+				)}
+
+				{/* Auction price row — for 'auction' or 'both' */}
+				{(channel.listing_type === 'auction' || channel.listing_type === 'both') && channel.active_auction_price != null && (
+					<div className='flex items-center justify-between mb-3'>
+						<div>
+							<p className='text-gray-400 text-[10px]'>Поточна ставка</p>
+							<p className='font-extrabold text-lg text-orange-500'>
+								{channel.active_auction_price?.toLocaleString('uk-UA')}
+								<span className='text-xs font-semibold text-gray-400 ml-1'>USDT</span>
+							</p>
+						</div>
+						{channel.active_auction_ends_at && (
+							<span className='text-[10px] text-amber-500 font-semibold bg-amber-500/10 px-2 py-1 rounded-lg'>
+								{(() => {
+									const diff = new Date(channel.active_auction_ends_at) - new Date();
+									if (diff <= 0) return 'Завершено';
+									const h = Math.floor(diff / 3600000);
+									const m = Math.floor((diff % 3600000) / 60000);
+									return `⏱ ${h > 0 ? `${h}г ${m}хв` : `${m} хв`}`;
+								})()}
+							</span>
+						)}
+					</div>
+				)}
+
+				{/* Buttons: side-by-side if both modes active */}
+				<div className={
+					channel.listing_type === 'both' && channel.active_auction_id
+						? 'grid grid-cols-2 gap-2'
+						: ''
+				}>
+					{(channel.listing_type === 'sale' || channel.listing_type === 'both' || !channel.listing_type) && (
+						<button
+							onClick={onBuy}
+							className='w-full font-bold bg-accent text-black py-2.5 rounded-lg shadow-lg shadow-accent/30 hover:shadow-accent/50 hover:brightness-110 transition-all text-sm'
+						>
+							Купити канал
+						</button>
+					)}
+					{(channel.listing_type === 'auction' || channel.listing_type === 'both') && channel.active_auction_id && (
+						<button
+							onClick={onAuction}
+							className='w-full font-bold bg-gradient-to-r from-orange-500 to-amber-500 text-white py-2.5 rounded-lg shadow-lg shadow-orange-500/30 hover:brightness-110 transition-all text-sm flex items-center justify-center gap-1.5'
+						>
+							🔥 Аукціон
+						</button>
 					)}
 				</div>
-				<button
-					onClick={onBuy}
-					className='w-full font-bold bg-accent text-black py-2.5 rounded-lg shadow-lg shadow-accent/30 hover:shadow-accent/50 hover:brightness-110 transition-all text-sm'
-				>
-					Купити канал
-				</button>
 			</div>
 		</div>
 	);

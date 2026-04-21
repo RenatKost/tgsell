@@ -49,6 +49,11 @@ def _auction_to_response(auction: Auction) -> AuctionResponse:
         channel_avatar=channel.avatar_url if channel else None,
         subscribers_count=channel.subscribers_count if channel else None,
         category=channel.category if channel else None,
+        avg_views=channel.avg_views if channel else None,
+        er=channel.er if channel else None,
+        monthly_income=channel.monthly_income if channel else None,
+        age=channel.age if channel else None,
+        views_hidden=channel.views_hidden if channel else False,
     )
 
 

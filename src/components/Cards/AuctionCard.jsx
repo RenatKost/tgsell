@@ -193,6 +193,24 @@ const AuctionCard = ({ auction, onBid }) => {
 							{auction.er != null ? `${Number(auction.er).toFixed(1)}%` : '—'}
 						</p>
 					</div>
+
+					<div className='border-l-2 border-cyan-400 bg-gray-50 dark:bg-card-inner rounded-r-lg pl-3 pr-2 py-2'>
+						<p className='text-gray-400 text-[10px]'>Переглядів</p>
+						<p className='font-bold text-sm text-gray-800 dark:text-gray-100'>
+							{auction.views_hidden
+								? <span className='text-amber-500 text-xs'>🔒</span>
+								: (auction.avg_views ? auction.avg_views.toLocaleString('uk-UA') : '—')}
+						</p>
+					</div>
+
+					<div className='border-l-2 border-violet-400 bg-gray-50 dark:bg-card-inner rounded-r-lg pl-3 pr-2 py-2'>
+						<p className='text-gray-400 text-[10px]'>Прибуток / міс.</p>
+						<p className='font-bold text-sm text-gray-800 dark:text-gray-100'>
+							{auction.monthly_income
+								? `${auction.monthly_income.toLocaleString('uk-UA')} USDT`
+								: '—'}
+						</p>
+					</div>
 				</div>
 			</div>
 

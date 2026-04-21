@@ -108,12 +108,28 @@ async def list_channels(
 
 @router.get("/{channel_id}", response_model=ChannelResponse)
 async def get_channel(channel_id: int, db: AsyncSession = Depends(get_db)):
-    """Get channel details by ID."""
+    """Get channel details by ID. Includes active auction data if present."""
+    from app.models.auction import Auction, AuctionStatus
     result = await db.execute(select(Channel).where(Channel.id == channel_id))
     channel = result.scalar_one_or_none()
     if not channel:
         raise HTTPException(status_code=404, detail="Channel not found")
-    return ChannelResponse.model_validate(channel)
+    data = ChannelResponse.model_validate(channel)
+    # Attach active auction info if channel is on auction
+    if channel.listing_type in ("auction", "both"):
+        auction_result = await db.execute(
+            select(Auction)
+            .where(Auction.channel_id == channel_id)
+            .where(Auction.status == AuctionStatus.active)
+            .order_by(Auction.ends_at.asc())
+            .limit(1)
+        )
+        active_auction = auction_result.scalar_one_or_none()
+        if active_auction:
+            data.active_auction_id = active_auction.id
+            data.active_auction_price = active_auction.current_price
+            data.active_auction_ends_at = active_auction.ends_at
+    return data
 
 
 @router.get("/{channel_id}/stats", response_model=list[ChannelStatsResponse])

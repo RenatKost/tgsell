@@ -69,6 +69,10 @@ const ChannelDetailsPage = () => {
 		}
 	};
 
+	const handleGoAuction = () => {
+		navigate('/auction');
+	};
+
 	if (loading) {
 		return (
 			<div className='mt-28 flex justify-center'>
@@ -95,7 +99,7 @@ const ChannelDetailsPage = () => {
 
 				{/* LEFT SIDEBAR: DetailsCard → Comment → Resources → ChannelHealth */}
 				<div className='flex flex-col gap-4'>
-					<DetailsCard channel={channel} onBuy={handleBuy} stats={stats} />
+					<DetailsCard channel={channel} onBuy={handleBuy} onAuction={handleGoAuction} stats={stats} />
 
 					{channel.description && (
 						<div className='bg-white dark:bg-card rounded-xl border border-gray-100 dark:border-card-border shadow-sm dark:shadow-neon p-4'>

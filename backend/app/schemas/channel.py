@@ -60,6 +60,10 @@ class ChannelResponse(BaseModel):
     auction_duration_hours: int | None = None
     status: str
     created_at: datetime
+    # Active auction data (populated at runtime if available)
+    active_auction_id: int | None = None
+    active_auction_price: float | None = None
+    active_auction_ends_at: datetime | None = None
 
     model_config = {"from_attributes": True}
 
