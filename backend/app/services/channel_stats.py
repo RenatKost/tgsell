@@ -32,19 +32,24 @@ async def _get_telethon_client():
         logger.warning("Telethon: TELEGRAM_API_ID or TELEGRAM_API_HASH not set — skipping")
         return None
 
-    if not settings.telethon_session_string:
-        logger.warning("Telethon: TELETHON_SESSION_STRING not set — skipping")
-        return None
-
     # Retry limit per cycle
     if _telethon_retries >= _MAX_RETRIES:
         return None
+
+    # DB-first session loading: always use the most recent session data.
+    # Falls back to env var on first boot (and seeds the DB immediately after auth).
+    session_string = await _load_session_from_db()
+    if not session_string:
+        session_string = settings.telethon_session_string
+        if not session_string:
+            logger.warning("Telethon: no session in DB and TELETHON_SESSION_STRING not set — skipping")
+            return None
 
     try:
         from telethon import TelegramClient
         from telethon.sessions import StringSession
 
-        session = StringSession(settings.telethon_session_string)
+        session = StringSession(session_string)
         client = TelegramClient(
             session,
             settings.telegram_api_id,
@@ -64,6 +69,9 @@ async def _get_telethon_client():
         logger.info("Telethon client connected and authorized ✓")
         _telethon_client = client
         _telethon_retries = 0
+
+        # Persist updated session data (captures DC migrations and key refreshes)
+        await _save_session_to_db(client.session.save())
 
         # Send recovery alert if was previously down
         if _telethon_was_ok is False:
@@ -86,6 +94,64 @@ def reset_telethon_retries():
     """Reset retry counter — called at start of each stats cycle."""
     global _telethon_retries
     _telethon_retries = 0
+
+
+def reset_telethon_client():
+    """Force the global client to None — call after re-auth to pick up new session."""
+    global _telethon_client
+    _telethon_client = None
+
+
+async def _load_session_from_db() -> str | None:
+    """Load the latest Telethon session string from the database.
+
+    Returns None if the table is empty or unreachable (caller falls back to env var).
+    """
+    try:
+        from sqlalchemy import select
+
+        from app.database import async_session
+        from app.models.settings import TelethonSession
+
+        async with async_session() as db:
+            row = (
+                await db.execute(
+                    select(TelethonSession).where(TelethonSession.id == 1)
+                )
+            ).scalar_one_or_none()
+            if row and row.session_string:
+                return row.session_string
+    except Exception as e:
+        logger.warning(f"Could not load Telethon session from DB: {e}")
+    return None
+
+
+async def _save_session_to_db(session_string: str) -> None:
+    """Persist updated session string to DB.
+
+    Called after every successful connect() so that DC migrations and key
+    refreshes issued by Telegram are never lost between container restarts.
+    """
+    try:
+        from sqlalchemy import select
+
+        from app.database import async_session
+        from app.models.settings import TelethonSession
+
+        async with async_session() as db:
+            row = (
+                await db.execute(
+                    select(TelethonSession).where(TelethonSession.id == 1)
+                )
+            ).scalar_one_or_none()
+            if row:
+                row.session_string = session_string
+            else:
+                db.add(TelethonSession(id=1, session_string=session_string))
+            await db.commit()
+            logger.info("Telethon session saved to DB.")
+    except Exception as e:
+        logger.error(f"Failed to save Telethon session to DB: {e}")
 
 
 async def get_channel_info_bot_api(channel_username: str) -> dict | None:

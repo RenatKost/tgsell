@@ -47,6 +47,8 @@ class Settings(BaseSettings):
     frontend_url: str = "http://localhost:5173"
     admin_group_id: int = 0  # Telegram group chat_id for admin notifications
     alerts_bot_username: str = "tgsell_alert_bot"
+    # Telegram user_id of the platform admin (for /reauth and other privileged bot commands)
+    admin_telegram_id: int = 0
 
     # AI Analysis (Groq — free Llama 3.3 70B)
     groq_api_key: str = ""

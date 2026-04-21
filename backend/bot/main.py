@@ -6,6 +6,8 @@ import os
 from aiogram import Bot, Dispatcher, F, Router
 from aiogram.enums import ParseMode
 from aiogram.filters import Command, CommandStart
+from aiogram.fsm.context import FSMContext
+from aiogram.fsm.state import State, StatesGroup
 from aiogram.types import (
     CallbackQuery,
     InlineKeyboardButton,
@@ -71,6 +73,7 @@ async def cmd_help(message: Message):
         "/start — Привітання\n"
         "/my_deals — Мої активні угоди\n"
         "/deal &lt;id&gt; — Статус угоди\n"
+        "/reauth — Оновити Telethon сесію (тільки адмін)\n"
         "/help — Ця довідка",
         parse_mode=ParseMode.HTML,
     )
@@ -347,6 +350,152 @@ async def notify_admin_called(bot: Bot, deal_id: int, channel_name: str, caller_
         f"<a href='{frontend_url}/deal/{deal_id}'>Перейти до чату угоди →</a>"
     )
     await bot.send_message(settings.admin_group_id, text, parse_mode=ParseMode.HTML)
+
+
+# ── Telethon re-auth flow (admin only) ───────────────────────────────
+
+class ReauthStates(StatesGroup):
+    waiting_code = State()
+    waiting_2fa = State()
+
+
+# In-process store for the temporary Telethon client during re-auth.
+# Not serialised — a single admin session is all we need.
+_reauth_clients: dict[int, dict] = {}
+
+
+def _is_admin(user_id: int) -> bool:
+    aid = settings.admin_telegram_id
+    return bool(aid) and user_id == aid
+
+
+@router.message(Command("reauth"))
+async def cmd_reauth(message: Message, state: FSMContext):
+    """Start Telethon re-auth from Telegram — no server access needed.
+
+    Usage (admin only): /reauth
+    The bot sends an OTP to the registered phone number; admin replies with
+    the code.  If 2FA is enabled the bot asks for the password next.
+    After successful sign-in the new session string is saved to DB and the
+    in-memory client is reset so the next stats cycle picks it up.
+    """
+    if not _is_admin(message.from_user.id):
+        await message.answer("⛔ Тільки адміністратор платформи може виконати цю команду.")
+        return
+
+    phone = settings.telegram_phone
+    if not phone:
+        await message.answer(
+            "❌ TELEGRAM_PHONE не задано в .env.\n"
+            "Додайте номер телефону облікового запису Telethon (напр.: +380XXXXXXXXX)."
+        )
+        return
+
+    if not settings.telegram_api_id or not settings.telegram_api_hash:
+        await message.answer("❌ TELEGRAM_API_ID або TELEGRAM_API_HASH не задані.")
+        return
+
+    try:
+        from telethon import TelegramClient
+        from telethon.sessions import StringSession
+
+        client = TelegramClient(
+            StringSession(),
+            settings.telegram_api_id,
+            settings.telegram_api_hash,
+        )
+        await client.connect()
+        sent = await client.send_code_request(phone)
+        _reauth_clients[message.from_user.id] = {
+            "client": client,
+            "phone": phone,
+            "phone_code_hash": sent.phone_code_hash,
+        }
+        await state.set_state(ReauthStates.waiting_code)
+        await message.answer(
+            f"📱 Код відправлено на <code>{phone}</code>\n\n"
+            "Введіть код з SMS/Telegram (без пробілів):",
+            parse_mode=ParseMode.HTML,
+        )
+    except Exception as e:
+        await message.answer(f"❌ Помилка при запиті коду: {e}")
+
+
+@router.message(ReauthStates.waiting_code)
+async def process_reauth_code(message: Message, state: FSMContext):
+    """Handle OTP code sent by admin."""
+    user_id = message.from_user.id
+    data = _reauth_clients.get(user_id)
+    if not data:
+        await state.clear()
+        return
+
+    code = message.text.strip()
+    try:
+        from telethon import TelegramClient
+
+        client: TelegramClient = data["client"]
+        await client.sign_in(data["phone"], code, phone_code_hash=data["phone_code_hash"])
+
+        session_string = client.session.save()
+        from app.services.channel_stats import _save_session_to_db, reset_telethon_client
+
+        await _save_session_to_db(session_string)
+        reset_telethon_client()
+        _reauth_clients.pop(user_id, None)
+        await state.clear()
+        await client.disconnect()
+        await message.answer("✅ Telethon сесія успішно оновлена! Аналітика каналів відновлена.")
+    except Exception as e:
+        err = str(e)
+        if "SessionPasswordNeeded" in err:
+            await state.set_state(ReauthStates.waiting_2fa)
+            await message.answer(
+                "🔐 Акаунт захищено двофакторною аутентифікацією.\n"
+                "Введіть ваш 2FA пароль:"
+            )
+        elif "PhoneCode" in err:
+            await message.answer("❌ Невірний код. Спробуйте ще раз:")
+        else:
+            _reauth_clients.pop(user_id, None)
+            await state.clear()
+            await message.answer(f"❌ Помилка авторизації: {e}")
+
+
+@router.message(ReauthStates.waiting_2fa)
+async def process_reauth_2fa(message: Message, state: FSMContext):
+    """Handle 2FA password from admin."""
+    user_id = message.from_user.id
+    data = _reauth_clients.get(user_id)
+    if not data:
+        await state.clear()
+        return
+
+    password = message.text.strip()
+    try:
+        from telethon import TelegramClient
+
+        client: TelegramClient = data["client"]
+        await client.sign_in(password=password)
+
+        session_string = client.session.save()
+        from app.services.channel_stats import _save_session_to_db, reset_telethon_client
+
+        await _save_session_to_db(session_string)
+        reset_telethon_client()
+        _reauth_clients.pop(user_id, None)
+        await state.clear()
+        await client.disconnect()
+        # Delete message to avoid exposing the password in chat history
+        try:
+            await message.delete()
+        except Exception:
+            pass
+        await message.answer("✅ Авторизація з 2FA успішна! Telethon сесія оновлена.")
+    except Exception as e:
+        _reauth_clients.pop(user_id, None)
+        await state.clear()
+        await message.answer(f"❌ Невірний 2FA пароль: {e}")
 
 
 # ── Auth bot router (separate bot for login) ─────────────────────────
