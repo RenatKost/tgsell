@@ -33,6 +33,12 @@ async def list_channels(
     limit: int = Query(12, ge=1, le=100),
     seller_id: int | None = Query(None),
     status_filter: str | None = Query(None, alias="status"),
+    min_price: float | None = Query(None, ge=0),
+    max_price: float | None = Query(None, ge=0),
+    roi_max: int | None = Query(None, ge=1, le=120, description="Max ROI in months (price / monthly_income)"),
+    er_min: float | None = Query(None, ge=0, description="Minimum ER percentage"),
+    verified_data: bool | None = Query(None, description="Only channels with collected stats (avg_views & er not null)"),
+    ai_recommended: bool | None = Query(None, description="AI recommends buying: er>=15, roi<=12, monthly_income>0"),
     db: AsyncSession = Depends(get_db),
 ):
     """List channels with filters, search, sorting and pagination."""
@@ -51,6 +57,25 @@ async def list_channels(
         query = query.where(Channel.channel_name.ilike(f"%{search}%"))
     if category:
         query = query.where(Channel.category == category)
+    if min_price is not None:
+        query = query.where(Channel.price >= min_price)
+    if max_price is not None:
+        query = query.where(Channel.price <= max_price)
+    if er_min is not None:
+        query = query.where(Channel.er >= er_min)
+    if roi_max is not None:
+        # ROI months = price / monthly_income — only for channels with monthly_income > 0
+        query = query.where(Channel.monthly_income > 0)
+        query = query.where(Channel.price / Channel.monthly_income <= roi_max)
+    if verified_data:
+        query = query.where(Channel.avg_views.is_not(None), Channel.er.is_not(None))
+    if ai_recommended:
+        # Channels AI recommends: good ER + reasonable ROI + has income data
+        query = query.where(
+            Channel.er >= 15,
+            Channel.monthly_income > 0,
+            Channel.price / Channel.monthly_income <= 12,
+        )
 
     # Sorting
     if sort == "price_asc":
