@@ -10,6 +10,8 @@ import ChannelDetailsPage from './layouts/ChannelDetailsPage';
 import DealPage from './layouts/DealPage';
 import ProfilePage from './layouts/ProfilePage';
 import AuctionPage from './layouts/AuctionPage';
+import PrivacyPage from './layouts/PrivacyPage';
+import OfertaPage from './layouts/OfertaPage';
 import PrivateRoute from './components/PrivateRoute';
 
 export const router = createBrowserRouter([
@@ -73,6 +75,14 @@ export const router = createBrowserRouter([
 						<ProfilePage />
 					</PrivateRoute>
 				),
+			},
+			{
+				path: '/privacy',
+				element: <PrivacyPage />,
+			},
+			{
+				path: '/oferta',
+				element: <OfertaPage />,
 			},
 		],
 	},
