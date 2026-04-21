@@ -217,6 +217,16 @@ export const adminAPI = {
 
 	updateActivityConfig: (config) =>
 		api.put('/admin/activity-config', config),
+
+	// Telethon re-auth
+	getReauthStatus: () =>
+		api.get('/admin/reauth/status'),
+
+	reauthStart: () =>
+		api.post('/admin/reauth/start'),
+
+	reauthConfirm: (code, password) =>
+		api.post('/admin/reauth/confirm', { code, ...(password ? { password } : {}) }),
 };
 
 // ===== Favorites =====

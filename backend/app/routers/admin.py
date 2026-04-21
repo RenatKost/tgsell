@@ -1074,3 +1074,128 @@ async def admin_dashboard_stats(
         "deals_this_week": deals_this_week,
         "total_revenue": round(float(total_revenue), 2),
     }
+
+
+# ═══════════════════════════════════════════════════════════════
+#   TELETHON RE-AUTH  (web-based, no bot / SSH needed)
+# ═══════════════════════════════════════════════════════════════
+
+# Temporary in-process state for the re-auth wizard.
+# Keyed by admin user id so concurrent admins don't collide.
+_reauth_sessions: dict[int, dict] = {}
+
+
+@router.post("/reauth/start")
+async def reauth_start(
+    admin: User = Depends(get_admin_user),
+):
+    """Step 1 — request OTP from Telegram.
+
+    Connects a fresh Telethon client and calls send_code_request().
+    Returns immediately; the OTP arrives on the registered phone.
+    """
+    from app.config import settings as cfg
+
+    phone = cfg.telegram_phone
+    if not phone:
+        raise HTTPException(status_code=400, detail="TELEGRAM_PHONE not set in env")
+    if not cfg.telegram_api_id or not cfg.telegram_api_hash:
+        raise HTTPException(status_code=400, detail="TELEGRAM_API_ID / TELEGRAM_API_HASH not set")
+
+    try:
+        from telethon import TelegramClient
+        from telethon.sessions import StringSession
+
+        client = TelegramClient(
+            StringSession(),
+            cfg.telegram_api_id,
+            cfg.telegram_api_hash,
+        )
+        await client.connect()
+        sent = await client.send_code_request(phone)
+        _reauth_sessions[admin.id] = {
+            "client": client,
+            "phone": phone,
+            "phone_code_hash": sent.phone_code_hash,
+        }
+        return {"ok": True, "phone": phone, "message": "Code sent. Call /reauth/confirm with the code."}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/reauth/confirm")
+async def reauth_confirm(
+    body: dict = Body(...),
+    admin: User = Depends(get_admin_user),
+):
+    """Step 2 — submit the OTP (and optional 2FA password).
+
+    Body: {"code": "12345"}  or  {"code": "12345", "password": "..."}
+    On success, the new session string is persisted to DB and the in-memory
+    Telethon client is reset so the next stats cycle uses the fresh session.
+    """
+    data = _reauth_sessions.get(admin.id)
+    if not data:
+        raise HTTPException(status_code=400, detail="No active re-auth session. Call /reauth/start first.")
+
+    code = body.get("code", "").strip()
+    password = body.get("password", "").strip()
+
+    if not code:
+        raise HTTPException(status_code=422, detail="'code' is required")
+
+    client = data["client"]
+    try:
+        await client.sign_in(data["phone"], code, phone_code_hash=data["phone_code_hash"])
+    except Exception as e:
+        err = str(e)
+        if "SessionPasswordNeeded" in err:
+            if not password:
+                return {"ok": False, "need_2fa": True, "message": "2FA password required. Resend with 'password' field."}
+            try:
+                await client.sign_in(password=password)
+            except Exception as e2:
+                _reauth_sessions.pop(admin.id, None)
+                await client.disconnect()
+                raise HTTPException(status_code=400, detail=f"2FA failed: {e2}")
+        elif "PhoneCode" in err:
+            raise HTTPException(status_code=400, detail="Wrong code. Try again.")
+        else:
+            _reauth_sessions.pop(admin.id, None)
+            await client.disconnect()
+            raise HTTPException(status_code=400, detail=f"Auth error: {e}")
+
+    # Save fresh session to DB
+    session_string = client.session.save()
+    from app.services.channel_stats import _save_session_to_db, reset_telethon_client
+    await _save_session_to_db(session_string)
+    reset_telethon_client()
+
+    _reauth_sessions.pop(admin.id, None)
+    await client.disconnect()
+
+    return {"ok": True, "message": "Telethon session updated. Analytics will resume on the next stats cycle."}
+
+
+@router.get("/reauth/status")
+async def reauth_status(
+    admin: User = Depends(get_admin_user),
+):
+    """Check current Telethon session status (DB + live client)."""
+    from app.services.channel_stats import _load_session_from_db, _telethon_client
+
+    db_session = await _load_session_from_db()
+    live_ok = False
+    live_error = None
+    if _telethon_client is not None:
+        try:
+            live_ok = _telethon_client.is_connected() and await _telethon_client.is_user_authorized()
+        except Exception as e:
+            live_error = str(e)
+
+    return {
+        "db_session_exists": bool(db_session),
+        "live_client_ok": live_ok,
+        "live_client_error": live_error,
+        "pending_reauth": admin.id in _reauth_sessions,
+    }

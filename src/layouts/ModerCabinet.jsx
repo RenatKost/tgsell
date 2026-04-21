@@ -249,6 +249,14 @@ const ModerCabinet = () => {
 
 	const [dashStats, setDashStats] = useState(null);
 
+	// ── Telethon re-auth state ──
+	const [reauthStatus, setReauthStatus] = useState(null);
+	const [reauthStep, setReauthStep] = useState('idle'); // idle | sent | confirm | done | error
+	const [reauthCode, setReauthCode] = useState('');
+	const [reauthPassword, setReauthPassword] = useState('');
+	const [reauthMsg, setReauthMsg] = useState('');
+	const [reauthLoading, setReauthLoading] = useState(false);
+
 	const [pendingChannels, setPendingChannels] = useState([]);
 	const [allChannels, setAllChannels] = useState([]);
 	const [statusFilter, setStatusFilter] = useState('');
@@ -289,6 +297,10 @@ const ModerCabinet = () => {
 			if (section === 'dashboard') {
 				const { data } = await adminAPI.getDashboardStats();
 				setDashStats(data);
+				try {
+					const { data: rs } = await adminAPI.getReauthStatus();
+					setReauthStatus(rs);
+				} catch (_) {}
 			} else if (section === 'pending') {
 				const { data } = await adminAPI.getPendingChannels();
 				setPendingChannels(Array.isArray(data) ? data : data.items || []);
@@ -555,6 +567,119 @@ const ModerCabinet = () => {
 									<StatCard label='Користувачі' value={dashStats.total_users} icon={faUsers} />
 									<StatCard label='Угод за тиждень' value={dashStats.deals_this_week} icon={faChartLine} />
 									<StatCard label='Дохід (USDT)' value={dashStats.total_revenue} icon={faWallet} color='text-green-600' />
+								</div>
+
+								{/* ── Telethon re-auth panel ── */}
+								<div className='mt-8 bg-white dark:bg-slate-800 rounded-2xl border border-gray-100 dark:border-slate-700 p-6'>
+									<div className='flex items-center justify-between mb-4'>
+										<div>
+											<h2 className='font-bold text-gray-800 dark:text-white text-lg'>Telethon сесія</h2>
+											<p className='text-sm text-gray-500 dark:text-gray-400 mt-0.5'>
+												{reauthStatus
+													? reauthStatus.live_client_ok
+														? '✅ Підключено і авторизовано'
+														: reauthStatus.db_session_exists
+															? '⚠️ Сесія є в БД, але клієнт не підключений'
+															: '❌ Сесія відсутня — потрібна авторизація'
+													: 'Статус невідомий'}
+											</p>
+										</div>
+										{reauthStep === 'idle' && (
+											<button
+												onClick={async () => {
+													setReauthLoading(true); setReauthMsg('');
+													try {
+														await adminAPI.reauthStart();
+														setReauthStep('confirm');
+														setReauthMsg('Код відправлено на телефон. Введіть його нижче.');
+													} catch (e) {
+														setReauthMsg('Помилка: ' + (e.response?.data?.detail || e.message));
+													} finally { setReauthLoading(false); }
+												}}
+												disabled={reauthLoading}
+												className='bg-blue-600 text-white px-4 py-2 rounded-xl font-semibold hover:bg-blue-700 duration-200 disabled:opacity-50 flex items-center gap-2 text-sm'
+											>
+												<FontAwesomeIcon icon={faSync} className={reauthLoading ? 'animate-spin' : ''} />
+												Запросити код
+											</button>
+										)}
+									</div>
+
+									{reauthMsg && (
+										<p className={`text-sm mb-4 ${reauthMsg.startsWith('Помилка') ? 'text-red-500' : 'text-green-600 dark:text-green-400'}`}>{reauthMsg}</p>
+									)}
+
+									{reauthStep === 'confirm' && (
+										<div className='flex flex-col gap-3'>
+											<div className='flex gap-3'>
+												<input
+													value={reauthCode}
+													onChange={e => setReauthCode(e.target.value)}
+													placeholder='Код з SMS / Telegram'
+													className='flex-1 border border-gray-200 dark:border-slate-600 rounded-xl px-4 py-2 text-sm bg-white dark:bg-slate-700 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500'
+												/>
+												<button
+													onClick={async () => {
+														setReauthLoading(true); setReauthMsg('');
+														try {
+															const { data } = await adminAPI.reauthConfirm(reauthCode, reauthPassword);
+															if (data.need_2fa) {
+																setReauthStep('2fa');
+																setReauthMsg('Введіть 2FA пароль.');
+															} else {
+																setReauthStep('done');
+																setReauthMsg('✅ Сесія оновлена!');
+																const { data: rs } = await adminAPI.getReauthStatus();
+																setReauthStatus(rs);
+															}
+														} catch (e) {
+															setReauthMsg('Помилка: ' + (e.response?.data?.detail || e.message));
+														} finally { setReauthLoading(false); }
+													}}
+													disabled={reauthLoading || !reauthCode}
+													className='bg-green-600 text-white px-5 py-2 rounded-xl font-semibold hover:bg-green-700 duration-200 disabled:opacity-50 text-sm'
+												>
+													{reauthLoading ? '...' : 'Підтвердити'}
+												</button>
+											</div>
+										</div>
+									)}
+
+									{reauthStep === '2fa' && (
+										<div className='flex gap-3'>
+											<input
+												type='password'
+												value={reauthPassword}
+												onChange={e => setReauthPassword(e.target.value)}
+												placeholder='2FA пароль'
+												className='flex-1 border border-gray-200 dark:border-slate-600 rounded-xl px-4 py-2 text-sm bg-white dark:bg-slate-700 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500'
+											/>
+											<button
+												onClick={async () => {
+													setReauthLoading(true); setReauthMsg('');
+													try {
+														const { data } = await adminAPI.reauthConfirm(reauthCode, reauthPassword);
+														setReauthStep('done');
+														setReauthMsg('✅ Сесія оновлена!');
+														const { data: rs } = await adminAPI.getReauthStatus();
+														setReauthStatus(rs);
+													} catch (e) {
+														setReauthMsg('Помилка: ' + (e.response?.data?.detail || e.message));
+													} finally { setReauthLoading(false); }
+												}}
+												disabled={reauthLoading || !reauthPassword}
+												className='bg-green-600 text-white px-5 py-2 rounded-xl font-semibold hover:bg-green-700 duration-200 disabled:opacity-50 text-sm'
+											>
+												{reauthLoading ? '...' : 'Підтвердити'}
+											</button>
+										</div>
+									)}
+
+									{(reauthStep === 'done' || reauthStep === 'idle') && reauthStatus && !reauthStatus.live_client_ok && reauthStep !== 'done' && (
+										<p className='text-xs text-gray-400 dark:text-gray-500 mt-2'>
+											Клієнт підключиться автоматично при наступному циклі збору статистики (кожні 3 год).
+										</p>
+									)}
 								</div>
 							</>
 						)}
