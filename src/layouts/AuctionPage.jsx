@@ -1,9 +1,33 @@
-import { useState, useEffect, useCallback } from 'react';
-import { motion } from 'framer-motion';
+import { useState, useEffect, useCallback, useRef } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
 import { auctionsAPI, activityAPI } from '../services/api';
 import AuctionCard from '../components/Cards/AuctionCard';
 import BidModal from '../components/Auction/BidModal';
 import ActivityTicker from '../components/Auction/ActivityTicker';
+
+/* ─── Floating spark particles ─────────────────────────────────── */
+const SPARKS = Array.from({ length: 18 }, (_, i) => ({
+	id: i,
+	left: `${5 + Math.random() * 90}%`,
+	size: 2 + Math.random() * 3,
+	delay: Math.random() * 6,
+	dur: 5 + Math.random() * 7,
+	opacity: 0.15 + Math.random() * 0.25,
+}));
+
+const FloatingParticles = () => (
+	<div className='pointer-events-none absolute inset-0 overflow-hidden' aria-hidden>
+		{SPARKS.map(({ id, left, size, delay, dur, opacity }) => (
+			<motion.div
+				key={id}
+				className='absolute rounded-full bg-orange-500'
+				style={{ left, bottom: '-8px', width: size, height: size, opacity }}
+				animate={{ y: [0, -420], opacity: [opacity, 0] }}
+				transition={{ repeat: Infinity, duration: dur, delay, ease: 'easeOut' }}
+			/>
+		))}
+	</div>
+);
 
 /* ─── Count-up hook ────────────────────────────────────────────── */
 const useCountUp = (target, duration = 900) => {
@@ -277,19 +301,41 @@ const AuctionPage = () => {
 	];
 
 	return (
-		<section className='min-h-screen pt-28 pb-10'>
+		<section className='min-h-screen pt-28 pb-10 relative'>
+			<FloatingParticles />
+
 			{/* Header */}
-			<div className='text-center mb-8'>
-				<div className='inline-flex items-center gap-2 bg-orange-900/30 text-orange-400 text-sm font-medium px-4 py-2 rounded-full mb-5'>
-					<svg width='14' height='14' viewBox='0 0 24 24' fill='#F97316'><path d='M12 2s-5 5-5 9a5 5 0 0010 0c0-4-5-9-5-9z'/></svg>
+			<div className='text-center mb-8 relative'>
+				<motion.div
+					initial={{ opacity: 0, y: -12 }}
+					animate={{ opacity: 1, y: 0 }}
+					transition={{ duration: 0.5 }}
+					className='inline-flex items-center gap-2 bg-orange-900/30 text-orange-400 text-sm font-medium px-4 py-2 rounded-full mb-5 border border-orange-500/20'
+				>
+					<motion.span
+						animate={{ scale: [1, 1.2, 1] }}
+						transition={{ repeat: Infinity, duration: 1.6, ease: 'easeInOut' }}
+					>
+						<svg width='14' height='14' viewBox='0 0 24 24' fill='#F97316'><path d='M12 2s-5 5-5 9a5 5 0 0010 0c0-4-5-9-5-9z'/></svg>
+					</motion.span>
 					Аукціон каналів
-				</div>
-				<h1 className='text-3xl md:text-4xl font-bold text-gray-900 dark:text-white mb-3'>
+				</motion.div>
+				<motion.h1
+					initial={{ opacity: 0, y: 10 }}
+					animate={{ opacity: 1, y: 0 }}
+					transition={{ duration: 0.5, delay: 0.1 }}
+					className='text-3xl md:text-4xl font-bold text-gray-900 dark:text-white mb-3'
+				>
 					Аукціон Telegram-каналів
-				</h1>
-				<p className='text-gray-500 dark:text-gray-400 max-w-lg mx-auto'>
+				</motion.h1>
+				<motion.p
+					initial={{ opacity: 0 }}
+					animate={{ opacity: 1 }}
+					transition={{ duration: 0.5, delay: 0.2 }}
+					className='text-gray-500 dark:text-gray-400 max-w-lg mx-auto'
+				>
 					Зробіть ставку та отримайте канал за найкращою ціною
-				</p>
+				</motion.p>
 			</div>
 
 			{/* Activity Ticker */}
@@ -369,25 +415,57 @@ const AuctionPage = () => {
 			{loading ? (
 				<div className='grid md:grid-cols-2 lg:grid-cols-3 gap-6'>
 					{[1, 2, 3].map((i) => (
-						<div key={i} className='bg-white dark:bg-card rounded-2xl border border-gray-100 dark:border-card-border h-72 animate-pulse' />
+						<motion.div
+							key={i}
+							className='bg-white dark:bg-card rounded-xl border border-gray-100 dark:border-card-border border-l-4 border-l-orange-500/40 h-80 overflow-hidden relative'
+							initial={{ opacity: 0 }}
+							animate={{ opacity: 1 }}
+							transition={{ delay: i * 0.07 }}
+						>
+							{/* shimmer sweep */}
+							<motion.div
+								className='absolute inset-0 bg-gradient-to-r from-transparent via-orange-500/5 to-transparent'
+								animate={{ x: ['-100%', '200%'] }}
+								transition={{ repeat: Infinity, duration: 1.5, ease: 'linear', delay: i * 0.2 }}
+							/>
+						</motion.div>
 					))}
 				</div>
 			) : auctions.length === 0 ? (
-				<div className='text-center py-20'>
-					<div className='text-6xl mb-4'>🏷️</div>
+				<motion.div
+					initial={{ opacity: 0, scale: 0.95 }}
+					animate={{ opacity: 1, scale: 1 }}
+					transition={{ duration: 0.4 }}
+					className='text-center py-20'
+				>
+					<motion.div
+						animate={{ rotate: [0, -10, 10, -8, 0], scale: [1, 1.1, 1] }}
+						transition={{ repeat: Infinity, duration: 3, repeatDelay: 2 }}
+						className='text-6xl mb-4 inline-block'
+					>
+						🏷️
+					</motion.div>
 					<h3 className='text-xl font-bold text-gray-900 dark:text-white mb-2'>
 						Поки немає активних аукціонів
 					</h3>
 					<p className='text-gray-500 dark:text-gray-400'>
 						Подайте свій канал на аукціон або перевірте пізніше
 					</p>
-				</div>
+				</motion.div>
 			) : (
-				<div className='grid md:grid-cols-2 lg:grid-cols-3 gap-6'>
+				<motion.div
+					className='grid md:grid-cols-2 lg:grid-cols-3 gap-6'
+					initial='hidden'
+					animate='visible'
+					variants={{
+						visible: { transition: { staggerChildren: 0.07 } },
+						hidden: {},
+					}}
+				>
 					{auctions.map((auction) => (
 						<AuctionCard key={auction.id} auction={auction} onBid={() => setBidAuction(auction)} />
 					))}
-				</div>
+				</motion.div>
 			)}
 
 			{bidAuction && (
