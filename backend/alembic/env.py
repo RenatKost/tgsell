@@ -14,6 +14,7 @@ from app.models.user import User  # noqa: F401
 from app.models.channel import Channel, ChannelPost, ChannelStats  # noqa: F401
 from app.models.deal import Deal, Transaction  # noqa: F401
 from app.models.auction import Auction, AuctionBid  # noqa: F401
+from app.models.settings import TelethonSession  # noqa: F401
 
 config = context.config
 

@@ -8,6 +8,7 @@ from aiogram.enums import ParseMode
 from aiogram.filters import Command, CommandStart
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
+from aiogram.fsm.storage.memory import MemoryStorage
 from aiogram.types import (
     CallbackQuery,
     InlineKeyboardButton,
@@ -588,11 +589,11 @@ async def run_bots_background():
     """Start both Telegram bots as a background task (called from FastAPI lifespan)."""
     try:
         alerts_bot = Bot(token=settings.bot_token_alerts)
-        alerts_dp = Dispatcher()
+        alerts_dp = Dispatcher(storage=MemoryStorage())
         alerts_dp.include_router(router)
 
         auth_bot = Bot(token=settings.bot_token_auth)
-        auth_dp = Dispatcher()
+        auth_dp = Dispatcher(storage=MemoryStorage())
         auth_dp.include_router(auth_router)
 
         logger.info("Telegram bots starting (alerts + auth)…")
@@ -610,12 +611,12 @@ async def start_bot():
     """Start both Telegram bots (standalone entry point)."""
     # Alerts bot (deals, notifications)
     alerts_bot = Bot(token=settings.bot_token_alerts)
-    alerts_dp = Dispatcher()
+    alerts_dp = Dispatcher(storage=MemoryStorage())
     alerts_dp.include_router(router)
 
     # Auth bot (login via deep link)
     auth_bot = Bot(token=settings.bot_token_auth)
-    auth_dp = Dispatcher()
+    auth_dp = Dispatcher(storage=MemoryStorage())
     auth_dp.include_router(auth_router)
 
     logger.info("Telegram bots starting (alerts + auth)…")
