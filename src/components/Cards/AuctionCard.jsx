@@ -234,14 +234,20 @@ const AuctionCard = ({ auction, onBid }) => {
 			<div className='px-4 pb-3 flex items-center justify-between'>
 				<motion.div
 					className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-bold ${
-						veryUrgent
-							? 'bg-red-500/15 text-red-500'
-							: urgent
-							? 'bg-amber-500/15 text-amber-500'
-							: 'bg-orange-500/10 text-orange-500 dark:text-orange-400'
+						veryUrgent ? 'bg-red-500/15' : urgent ? 'bg-amber-500/15' : 'bg-orange-500/10'
 					}`}
-					animate={veryUrgent ? { scale: [1, 1.05, 1] } : {}}
-					transition={{ repeat: Infinity, duration: 0.85 }}
+					animate={{
+						color: veryUrgent
+							? ['#ef4444', '#dc2626', '#ef4444']
+							: urgent
+							? ['#f59e0b', '#ef4444', '#f59e0b']
+							: ['#f97316', '#ef4444', '#f97316'],
+						scale: veryUrgent ? [1, 1.06, 1] : 1,
+					}}
+					transition={{
+						color: { repeat: Infinity, duration: veryUrgent ? 0.7 : urgent ? 1.3 : 2.2, ease: 'easeInOut' },
+						scale: { repeat: Infinity, duration: 0.85 },
+					}}
 				>
 					<svg className='w-3.5 h-3.5 flex-shrink-0' fill='none' viewBox='0 0 24 24' stroke='currentColor' strokeWidth={2.5}>
 						<path strokeLinecap='round' strokeLinejoin='round' d='M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z' />
