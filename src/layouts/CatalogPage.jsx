@@ -1,7 +1,8 @@
 import { useEffect, useState, useRef, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import CatalogCard from '../components/Cards/CatalogCard';
-import { channelsAPI } from '../services/api';
+import { channelsAPI, bundlesAPI } from '../services/api';
+import BundleCard from '../components/Cards/BundleCard';
 import { options as categoryOptions } from '../components/Main/Calculator';
 
 /* ── Dual-range price slider ────────────────────────────────────── */
@@ -62,6 +63,8 @@ const PRICE_MAX = 50000;
 
 const CatalogPage = () => {
 	const [channels, setChannels] = useState([]);
+	const [bundles, setBundles] = useState([]);
+	const [bundlesLoading, setBundlesLoading] = useState(true);
 	const [loading, setLoading] = useState(true);
 	const [search, setSearch] = useState('');
 	const [category, setCategory] = useState('');
@@ -111,6 +114,14 @@ const CatalogPage = () => {
 			setLoading(false);
 		}
 	}, [search, category, sortBy, page, roi6, roi12, er20, verifiedData, aiRecommended, debouncedPrice]);
+
+	useEffect(() => {
+		setBundlesLoading(true);
+		bundlesAPI.getAll({ limit: 20 })
+			.then(({ data }) => setBundles(data.items || []))
+			.catch(() => setBundles([]))
+			.finally(() => setBundlesLoading(false));
+	}, []);
 
 	useEffect(() => {
 		fetchChannels();
@@ -298,6 +309,29 @@ const CatalogPage = () => {
 					</motion.div>
 				)}
 			</AnimatePresence>
+
+			{/* Bundles section */}
+			{(bundlesLoading || bundles.length > 0) && (
+				<div className='mb-10'>
+					<div className='flex items-center gap-2 mb-4'>
+						<span className='text-accent text-xl'>📡</span>
+						<h2 className='font-black text-xl text-white uppercase tracking-tight'>Сетки каналів</h2>
+						{!bundlesLoading && (
+							<span className='text-xs text-gray-500 ml-1'>{bundles.length} {bundles.length === 1 ? 'сетка' : 'сетки'}</span>
+						)}
+					</div>
+					{bundlesLoading ? (
+						<div className='grid xl:grid-cols-3 md:grid-cols-2 gap-6'>
+							{[1, 2].map(i => <div key={i} className='bg-card rounded-2xl border border-card-border h-64 animate-pulse' />)}
+						</div>
+					) : (
+						<div className='grid xl:grid-cols-3 md:grid-cols-2 gap-6'>
+							{bundles.map(b => <BundleCard key={b.id} bundle={b} />)}
+						</div>
+					)}
+					<div className='border-b border-card-border mt-8' />
+				</div>
+			)}
 
 			{/* Results count */}
 			{!loading && channels.length > 0 && (

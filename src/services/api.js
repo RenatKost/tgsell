@@ -116,8 +116,8 @@ export const channelsAPI = {
 
 // ===== Deals =====
 export const dealsAPI = {
-	create: (channelId) =>
-		api.post('/deals', { channel_id: channelId }),
+	create: (channelId, bundleId = null) =>
+		api.post('/deals', bundleId ? { bundle_id: bundleId } : { channel_id: channelId }),
 
 	getById: (id) =>
 		api.get(`/deals/${id}`),
@@ -230,6 +230,15 @@ export const adminAPI = {
 
 	runStatsNow: () =>
 		api.post('/admin/run-stats-now'),
+
+	getPendingBundles: () =>
+		api.get('/admin/bundles/pending'),
+
+	approveBundle: (id) =>
+		api.post(`/admin/bundles/${id}/approve`),
+
+	rejectBundle: (id, reason) =>
+		api.post(`/admin/bundles/${id}/reject`, null, { params: { reason } }),
 };
 
 // ===== Favorites =====
@@ -263,6 +272,27 @@ export const auctionsAPI = {
 
 	createFromChannel: (params) =>
 		api.post('/auctions/from-channel', null, { params }),
+};
+
+// ===== Bundles =====
+export const bundlesAPI = {
+	getAll: (params = {}) =>
+		api.get('/bundles', { params }),
+
+	getById: (id) =>
+		api.get(`/bundles/${id}`),
+
+	getStats: (id) =>
+		api.get(`/bundles/${id}/stats`),
+
+	create: (data) =>
+		api.post('/bundles', data),
+
+	update: (id, data) =>
+		api.put(`/bundles/${id}`, data),
+
+	delete: (id) =>
+		api.delete(`/bundles/${id}`),
 };
 
 // ===== Activity / Gamification =====

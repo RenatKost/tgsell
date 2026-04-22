@@ -289,21 +289,30 @@ const DetailsCard = ({ channel, onBuy, onAuction, stats = [] }) => {
 						? 'grid grid-cols-2 gap-2'
 						: ''
 				}>
-					{(channel.listing_type === 'sale' || channel.listing_type === 'both' || !channel.listing_type) && (
-						<button
-							onClick={onBuy}
-							className='w-full font-bold bg-accent text-black py-2.5 rounded-lg shadow-lg shadow-accent/30 hover:shadow-accent/50 hover:brightness-110 transition-all text-sm'
-						>
-							Купити канал
-						</button>
-					)}
-					{(channel.listing_type === 'auction' || channel.listing_type === 'both') && channel.active_auction_id && (
-						<button
-							onClick={onAuction}
-							className='w-full font-bold bg-gradient-to-r from-orange-500 to-amber-500 text-white py-2.5 rounded-lg shadow-lg shadow-orange-500/30 hover:brightness-110 transition-all text-sm flex items-center justify-center gap-1.5'
-						>
-							🔥 Аукціон
-						</button>
+					{channel.bundle_id ? (
+						<a href={`/bundle/${channel.bundle_id}`}
+							className='w-full font-bold bg-accent text-black py-2.5 rounded-lg shadow-lg shadow-accent/30 hover:brightness-110 transition-all text-sm flex items-center justify-center gap-1.5'>
+							📡 Перейти до сетки
+						</a>
+					) : (
+						<>
+							{(channel.listing_type === 'sale' || channel.listing_type === 'both' || !channel.listing_type) && (
+								<button
+									onClick={onBuy}
+									className='w-full font-bold bg-accent text-black py-2.5 rounded-lg shadow-lg shadow-accent/30 hover:shadow-accent/50 hover:brightness-110 transition-all text-sm'
+								>
+									Купити канал
+								</button>
+							)}
+							{(channel.listing_type === 'auction' || channel.listing_type === 'both') && channel.active_auction_id && (
+								<button
+									onClick={onAuction}
+									className='w-full font-bold bg-gradient-to-r from-orange-500 to-amber-500 text-white py-2.5 rounded-lg shadow-lg shadow-orange-500/30 hover:brightness-110 transition-all text-sm flex items-center justify-center gap-1.5'
+								>
+									🔥 Аукціон
+								</button>
+							)}
+						</>
 					)}
 				</div>
 			</div>

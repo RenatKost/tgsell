@@ -13,6 +13,8 @@ import AuctionPage from './layouts/AuctionPage';
 import PrivacyPage from './layouts/PrivacyPage';
 import OfertaPage from './layouts/OfertaPage';
 import PrivateRoute from './components/PrivateRoute';
+import BundleSellPage from './layouts/BundleSellPage';
+import BundleDetailsPage from './layouts/BundleDetailsPage';
 
 export const router = createBrowserRouter([
 	{
@@ -59,6 +61,18 @@ export const router = createBrowserRouter([
 			{
 				path: '/channel/:id',
 				element: <ChannelDetailsPage />,
+			},
+			{
+				path: '/bundle/:id',
+				element: <BundleDetailsPage />,
+			},
+			{
+				path: '/sell-bundle',
+				element: (
+					<PrivateRoute>
+						<BundleSellPage />
+					</PrivateRoute>
+				),
 			},
 			{
 				path: '/deal/:id',

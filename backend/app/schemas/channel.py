@@ -64,6 +64,9 @@ class ChannelResponse(BaseModel):
     active_auction_id: int | None = None
     active_auction_price: float | None = None
     active_auction_ends_at: datetime | None = None
+    # Bundle info (populated at runtime if channel is part of a bundle)
+    bundle_id: int | None = None
+    bundle_name: str | None = None
 
     model_config = {"from_attributes": True}
 

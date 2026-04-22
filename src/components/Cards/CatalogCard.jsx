@@ -119,7 +119,11 @@ const CatalogCard = ({ channel }) => {
 							↗ Відкрити
 						</a>
 					)}
-					{channel.category && (
+					{channel.bundle_id ? (
+						<span className='bg-accent/15 text-accent text-[11px] font-bold px-2.5 py-1 rounded-lg border border-accent/30'>
+							📡 В сетці · {channel.bundle_name}
+						</span>
+					) : channel.category && (
 						<span className='bg-gray-50 dark:bg-card-inner text-gray-500 dark:text-gray-400 text-[11px] font-medium px-2.5 py-1 rounded-lg'>
 							{channel.category}
 						</span>
@@ -254,8 +258,10 @@ const CatalogCard = ({ channel }) => {
 					<div>
 						<p className='text-gray-400 text-[10px]'>Ціна</p>
 						<p className='font-extrabold text-lg text-gray-900 dark:text-white leading-none'>
-							{channel.price?.toLocaleString('uk-UA') || '—'}
-							<span className='text-xs font-semibold text-gray-400 ml-1'>USDT</span>
+							{channel.bundle_id
+								? <><span>{channel.price?.toLocaleString('uk-UA') || '—'}</span><span className='text-xs font-semibold text-gray-400 ml-1'>USDT за сетку</span></>
+								: <>{channel.price?.toLocaleString('uk-UA') || '—'}<span className='text-xs font-semibold text-gray-400 ml-1'>USDT</span></>
+							}
 						</p>
 					</div>
 					{channel.created_at && (
@@ -265,18 +271,31 @@ const CatalogCard = ({ channel }) => {
 					)}
 				</div>
 				<div className='flex gap-2'>
-					<NavLink
-						to={`/channel/${channel.id}`}
-						className='flex-1 text-center px-3 py-2 rounded-lg text-xs font-semibold text-gray-500 dark:text-gray-300 bg-gray-50 dark:bg-card-inner hover:bg-gray-100 dark:hover:bg-card-hover border border-gray-200 dark:border-card-border transition-all'
-					>
-						Деталі
-					</NavLink>
-					<button
-						onClick={handleBuy}
-						className='flex-1 px-3 py-2 rounded-lg text-xs font-bold bg-accent text-black shadow-sm shadow-accent/20 hover:brightness-110 hover:shadow-accent/40 transition-all'
-					>
-						Купити
-					</button>
+					{channel.bundle_id ? (
+						<>
+							<NavLink
+								to={`/bundle/${channel.bundle_id}`}
+								className='flex-1 text-center px-3 py-2 rounded-lg text-xs font-semibold text-accent bg-accent/10 hover:bg-accent/20 border border-accent/30 transition-all'
+							>
+								📡 До сетки
+							</NavLink>
+						</>
+					) : (
+						<>
+							<NavLink
+								to={`/channel/${channel.id}`}
+								className='flex-1 text-center px-3 py-2 rounded-lg text-xs font-semibold text-gray-500 dark:text-gray-300 bg-gray-50 dark:bg-card-inner hover:bg-gray-100 dark:hover:bg-card-hover border border-gray-200 dark:border-card-border transition-all'
+							>
+								Деталі
+							</NavLink>
+							<button
+								onClick={handleBuy}
+								className='flex-1 px-3 py-2 rounded-lg text-xs font-bold bg-accent text-black shadow-sm shadow-accent/20 hover:brightness-110 hover:shadow-accent/40 transition-all'
+							>
+								Купити
+							</button>
+						</>
+					)}
 				</div>
 			</div>
 		</div>

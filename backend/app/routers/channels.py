@@ -19,9 +19,61 @@ from app.schemas.channel import (
 )
 from app.utils.security import get_current_user
 
+import logging
+import math
+
+from fastapi import APIRouter, Depends, HTTPException, Query, status
+from sqlalchemy import func, select
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.database import get_db
+from app.models.channel import Channel, ChannelPost, ChannelStats, ChannelStatus
+from app.models.user import User
+from app.schemas.channel import (
+    ChannelCreate,
+    ChannelListResponse,
+    ChannelPostResponse,
+    ChannelPostsListResponse,
+    ChannelResponse,
+    ChannelStatsResponse,
+    ChannelUpdate,
+)
+from app.utils.security import get_current_user
+
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/channels", tags=["channels"])
+
+
+async def _attach_bundle_info(db: AsyncSession, data: ChannelResponse) -> ChannelResponse:
+    """Populate bundle_id and bundle_name on a ChannelResponse if the channel is in a bundle."""
+    from app.models.bundle import BundleChannel, ChannelBundle
+    bc_res = await db.execute(
+        select(BundleChannel, ChannelBundle)
+        .join(ChannelBundle, BundleChannel.bundle_id == ChannelBundle.id)
+        .where(BundleChannel.channel_id == data.id)
+    )
+    row = bc_res.first()
+    if row:
+        _bc, bundle = row
+        data.bundle_id = bundle.id
+        data.bundle_name = bundle.name
+    return data
+
+
+async def _attach_bundle_info_bulk(
+    db: AsyncSession, channel_ids: list[int]
+) -> dict[int, tuple[int, str]]:
+    """Return {channel_id: (bundle_id, bundle_name)} for all channels that are in a bundle."""
+    if not channel_ids:
+        return {}
+    from app.models.bundle import BundleChannel, ChannelBundle
+    rows = (await db.execute(
+        select(BundleChannel.channel_id, ChannelBundle.id, ChannelBundle.name)
+        .join(ChannelBundle, BundleChannel.bundle_id == ChannelBundle.id)
+        .where(BundleChannel.channel_id.in_(channel_ids))
+    )).all()
+    return {row[0]: (row[1], row[2]) for row in rows}
 
 
 @router.get("", response_model=ChannelListResponse)
@@ -98,8 +150,18 @@ async def list_channels(
     result = await db.execute(query)
     channels = result.scalars().all()
 
+    # Attach bundle info
+    channel_ids = [c.id for c in channels]
+    bundle_map = await _attach_bundle_info_bulk(db, channel_ids)
+    items = []
+    for c in channels:
+        resp = ChannelResponse.model_validate(c)
+        if c.id in bundle_map:
+            resp.bundle_id, resp.bundle_name = bundle_map[c.id]
+        items.append(resp)
+
     return ChannelListResponse(
-        items=[ChannelResponse.model_validate(c) for c in channels],
+        items=items,
         total=total,
         total_pages=total_pages,
         page=page,
@@ -129,6 +191,8 @@ async def get_channel(channel_id: int, db: AsyncSession = Depends(get_db)):
             data.active_auction_id = active_auction.id
             data.active_auction_price = active_auction.current_price
             data.active_auction_ends_at = active_auction.ends_at
+    # Attach bundle info
+    data = await _attach_bundle_info(db, data)
     return data
 
 

@@ -94,6 +94,20 @@ const ChannelDetailsPage = () => {
 				<span className='text-gray-600 dark:text-gray-300 font-medium'>{channel.channel_name || 'Канал'}</span>
 			</div>
 
+			{/* Bundle banner */}
+			{channel.bundle_id && (
+				<div className='mb-5 flex items-center gap-3 p-3 rounded-xl bg-accent/10 border border-accent/30'>
+					<span className='text-accent text-xl'>📡</span>
+					<span className='text-sm text-gray-200'>
+						Цей канал продається у складі сетки <span className='text-accent font-semibold'>«{channel.bundle_name}»</span>
+					</span>
+					<NavLink to={`/bundle/${channel.bundle_id}`}
+						className='ml-auto text-sm text-accent hover:underline whitespace-nowrap'>
+						Переглянути сетку →
+					</NavLink>
+				</div>
+			)}
+
 			{/* 2-column layout: fixed sidebar + fluid content */}
 			<div className='grid grid-cols-1 lg:grid-cols-[380px_1fr] gap-4 items-start'>
 

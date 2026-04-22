@@ -4,17 +4,21 @@ from pydantic import BaseModel
 
 
 class DealCreate(BaseModel):
-    channel_id: int
+    channel_id: int | None = None
+    bundle_id: int | None = None
 
 
 class DealResponse(BaseModel):
     id: int
-    channel_id: int
+    channel_id: int | None = None
+    bundle_id: int | None = None
     buyer_id: int
     seller_id: int
     channel_name: str | None = None
     channel_avatar_url: str | None = None
     channel_link: str | None = None
+    bundle_name: str | None = None
+    bundle_channel_count: int | None = None
     buyer_name: str | None = None
     seller_name: str | None = None
     status: str

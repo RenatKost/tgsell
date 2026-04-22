@@ -353,6 +353,70 @@ async def notify_admin_called(bot: Bot, deal_id: int, channel_name: str, caller_
     await bot.send_message(settings.admin_group_id, text, parse_mode=ParseMode.HTML)
 
 
+async def notify_bundle_approved(bot: Bot, bundle, seller: User):
+    """Notify seller that their bundle was approved."""
+    if not seller or not seller.telegram_id:
+        return
+    frontend_url = settings.frontend_url.rstrip("/")
+    text = (
+        f"✅ <b>Вашу сетку схвалено!</b>\n\n"
+        f"📡 «{bundle.name}» тепер доступна в каталозі.\n"
+        f"💰 Ціна: <b>{bundle.price} USDT</b>\n\n"
+        f"<a href='{frontend_url}/bundle/{bundle.id}'>Переглянути сетку →</a>"
+    )
+    try:
+        await bot.send_message(seller.telegram_id, text, parse_mode=ParseMode.HTML)
+    except Exception as e:
+        logger.warning(f"[NOTIFY] Cannot notify seller {seller.telegram_id} about bundle approval: {e}")
+
+
+async def notify_bundle_rejected(bot: Bot, bundle, seller: User):
+    """Notify seller that their bundle was rejected."""
+    if not seller or not seller.telegram_id:
+        return
+    reason = bundle.rejection_reason or "Не вказано"
+    text = (
+        f"❌ <b>Вашу сетку відхилено</b>\n\n"
+        f"📡 «{bundle.name}»\n"
+        f"Причина: {reason}\n\n"
+        f"Виправте помилки та подайте заявку знову."
+    )
+    try:
+        await bot.send_message(seller.telegram_id, text, parse_mode=ParseMode.HTML)
+    except Exception as e:
+        logger.warning(f"[NOTIFY] Cannot notify seller {seller.telegram_id} about bundle rejection: {e}")
+
+
+async def notify_new_bundle_deal(bot: Bot, deal, bundle, buyer: User, seller: User):
+    """Notify seller about a new bundle deal."""
+    frontend_url = settings.frontend_url.rstrip("/")
+    if seller and seller.telegram_id:
+        text = (
+            f"🎉 <b>Нова угода на вашу сетку!</b>\n\n"
+            f"📡 «{bundle.name}»\n"
+            f"💰 Сума: <b>{deal.amount_usdt} USDT</b>\n"
+            f"👤 Покупець: {buyer.first_name or 'Анонім'}\n\n"
+            f"<a href='{frontend_url}/deal/{deal.id}'>Перейти до угоди →</a>"
+        )
+        try:
+            await bot.send_message(seller.telegram_id, text, parse_mode=ParseMode.HTML)
+        except Exception as e:
+            logger.warning(f"[NOTIFY] Cannot notify seller about bundle deal: {e}")
+
+    if settings.admin_group_id:
+        admin_text = (
+            f"📡 <b>Нова угода на сетку</b>\n\n"
+            f"Сетка: «{bundle.name}» #{bundle.id}\n"
+            f"Угода: #{deal.id}\n"
+            f"Покупець: {buyer.first_name or 'Анонім'} (id={buyer.id})\n"
+            f"Сума: {deal.amount_usdt} USDT"
+        )
+        try:
+            await bot.send_message(settings.admin_group_id, admin_text, parse_mode=ParseMode.HTML)
+        except Exception as e:
+            logger.warning(f"[NOTIFY] Cannot send bundle deal to admin group: {e}")
+
+
 # ── Telethon re-auth flow (admin only) ───────────────────────────────
 
 class ReauthStates(StatesGroup):

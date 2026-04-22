@@ -1217,3 +1217,131 @@ async def run_stats_now(
 
     asyncio.create_task(collect_stats_once())
     return {"ok": True, "message": "Stats collection started in background. Check channel pages in ~1-2 minutes."}
+
+
+# ─── Bundle moderation ──────────────────────────────────────────────────────
+
+
+@router.get("/bundles/pending")
+async def get_pending_bundles(
+    admin: User = Depends(get_admin_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """List all bundles awaiting moderation."""
+    from app.models.bundle import ChannelBundle, BundleStatus, BundleChannel
+    from sqlalchemy.orm import selectinload
+    result = await db.execute(
+        select(ChannelBundle)
+        .options(selectinload(ChannelBundle.seller), selectinload(ChannelBundle.bundle_channels))
+        .where(ChannelBundle.status == BundleStatus.pending)
+        .order_by(ChannelBundle.created_at.asc())
+    )
+    bundles = result.scalars().all()
+
+    items = []
+    for b in bundles:
+        # Gather channel links for display
+        channel_ids = [bc.channel_id for bc in b.bundle_channels]
+        channel_links: list[str] = []
+        if channel_ids:
+            ch_rows = (await db.execute(
+                select(Channel.telegram_link, Channel.channel_name)
+                .where(Channel.id.in_(channel_ids))
+            )).all()
+            channel_links = [f"{r[1]} ({r[0]})" for r in ch_rows]
+
+        items.append({
+            "id": b.id,
+            "name": b.name,
+            "description": b.description,
+            "category": b.category,
+            "price": b.price,
+            "monthly_income": b.monthly_income,
+            "resources": b.resources,
+            "seller_id": b.seller_id,
+            "seller_name": b.seller.first_name if b.seller else None,
+            "channel_count": len(b.bundle_channels),
+            "channels": channel_links,
+            "created_at": b.created_at.isoformat() if b.created_at else None,
+        })
+    return {"items": items, "total": len(items)}
+
+
+@router.post("/bundles/{bundle_id}/approve")
+async def approve_bundle(
+    bundle_id: int,
+    admin: User = Depends(get_admin_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Approve a bundle listing."""
+    from app.models.bundle import ChannelBundle, BundleStatus, BundleChannel
+    from datetime import datetime
+
+    result = await db.execute(select(ChannelBundle).where(ChannelBundle.id == bundle_id))
+    bundle = result.scalar_one_or_none()
+    if not bundle:
+        raise HTTPException(status_code=404, detail="Bundle not found")
+    if bundle.status != BundleStatus.pending:
+        raise HTTPException(status_code=400, detail="Bundle is not pending")
+
+    bundle.status = BundleStatus.approved
+    bundle.moderator_id = admin.id
+    bundle.moderated_at = datetime.utcnow()
+    await db.commit()
+    await db.refresh(bundle)
+
+    # Notify seller
+    try:
+        from bot.main import notify_bundle_approved
+        from aiogram import Bot
+        from app.config import settings
+        seller_result = await db.execute(select(User).where(User.id == bundle.seller_id))
+        seller = seller_result.scalar_one_or_none()
+        bot = Bot(token=settings.bot_token_alerts)
+        await notify_bundle_approved(bot, bundle, seller)
+        await bot.session.close()
+    except Exception as e:
+        logger.warning(f"[ADMIN] Bundle #{bundle_id} approved but notification failed: {e}")
+
+    return {"ok": True, "bundle_id": bundle_id, "status": "approved"}
+
+
+@router.post("/bundles/{bundle_id}/reject")
+async def reject_bundle(
+    bundle_id: int,
+    reason: str = Query(..., max_length=500),
+    admin: User = Depends(get_admin_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Reject a bundle listing with a reason."""
+    from app.models.bundle import ChannelBundle, BundleStatus
+    from datetime import datetime
+
+    result = await db.execute(select(ChannelBundle).where(ChannelBundle.id == bundle_id))
+    bundle = result.scalar_one_or_none()
+    if not bundle:
+        raise HTTPException(status_code=404, detail="Bundle not found")
+    if bundle.status != BundleStatus.pending:
+        raise HTTPException(status_code=400, detail="Bundle is not pending")
+
+    bundle.status = BundleStatus.rejected
+    bundle.moderator_id = admin.id
+    bundle.moderated_at = datetime.utcnow()
+    bundle.rejection_reason = reason
+    await db.commit()
+
+    # Notify seller
+    try:
+        from bot.main import notify_bundle_rejected
+        from aiogram import Bot
+        from app.config import settings
+        seller_result = await db.execute(select(User).where(User.id == bundle.seller_id))
+        seller = seller_result.scalar_one_or_none()
+        bot = Bot(token=settings.bot_token_alerts)
+        await notify_bundle_rejected(bot, bundle, seller)
+        await bot.session.close()
+    except Exception as e:
+        logger.warning(f"[ADMIN] Bundle #{bundle_id} rejected but notification failed: {e}")
+
+    return {"ok": True, "bundle_id": bundle_id, "status": "rejected", "reason": reason}
+

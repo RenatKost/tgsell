@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { adminAPI, dealsAPI } from '../services/api';
+import { adminAPI, dealsAPI, bundlesAPI } from '../services/api';
 import { useAuth } from '../context/AppContext';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import {
@@ -37,6 +37,7 @@ import {
 const SECTIONS = [
 	{ id: 'dashboard', label: 'Дашборд', icon: faTachometerAlt },
 	{ id: 'pending', label: 'На модерації', icon: faClipboardCheck },
+	{ id: 'bundles', label: 'Сетки', icon: faLayerGroup },
 	{ id: 'channels', label: 'Канали', icon: faLayerGroup },
 	{ id: 'deals', label: 'Угоди', icon: faHandshake },
 	{ id: 'disputes', label: 'Спори', icon: faScaleBalanced },
@@ -258,6 +259,9 @@ const ModerCabinet = () => {
 	const [reauthLoading, setReauthLoading] = useState(false);
 
 	const [pendingChannels, setPendingChannels] = useState([]);
+	const [pendingBundles, setPendingBundles] = useState([]);
+	const [bundleRejectId, setBundleRejectId] = useState(null);
+	const [bundleRejectReason, setBundleRejectReason] = useState('');
 	const [allChannels, setAllChannels] = useState([]);
 	const [statusFilter, setStatusFilter] = useState('');
 	const [rejectId, setRejectId] = useState(null);
@@ -304,6 +308,9 @@ const ModerCabinet = () => {
 			} else if (section === 'pending') {
 				const { data } = await adminAPI.getPendingChannels();
 				setPendingChannels(Array.isArray(data) ? data : data.items || []);
+			} else if (section === 'bundles') {
+				const { data } = await adminAPI.getPendingBundles();
+				setPendingBundles(data.items || []);
 			} else if (section === 'channels') {
 				const params = statusFilter ? { status: statusFilter } : {};
 				const { data } = await adminAPI.getAllChannels(params);
@@ -807,6 +814,83 @@ const ModerCabinet = () => {
 											<div className='mt-4 flex gap-2'>
 												<input type='text' value={rejectReason} onChange={e => setRejectReason(e.target.value)} placeholder='Причина відхилення...' className='flex-1 border border-gray-200 dark:border-slate-600 rounded-xl px-4 py-2.5 bg-white dark:bg-slate-700 text-gray-800 dark:text-gray-200 focus:outline-none focus:ring-2 focus:ring-red-300 focus:border-transparent' />
 												<button onClick={() => handleReject(channel.id)} className='bg-red-500 text-white px-5 py-2.5 rounded-xl font-semibold hover:bg-red-600 duration-300'>Підтвердити</button>
+											</div>
+										)}
+									</div>
+								))}
+							</div>
+						)}
+					</div>
+				)}
+
+				{section === 'bundles' && (
+					<div>
+						<div className='flex items-center justify-between mb-6'>
+							<h1 className='text-2xl font-bold text-white'>Сетки на модерації</h1>
+							<span className='text-sm text-gray-400'>{pendingBundles.length} сеток</span>
+						</div>
+						{loading ? <div className='text-center py-20 text-gray-400'>Завантаження...</div> : pendingBundles.length === 0 ? (
+							<div className='text-center py-16 bg-card rounded-2xl border border-dashed border-card-border'>
+								<div className='text-5xl mb-4'>📡</div>
+								<p className='text-gray-400'>Немає сеток на модерації</p>
+							</div>
+						) : (
+							<div className='space-y-4'>
+								{pendingBundles.map(b => (
+									<div key={b.id} className='bg-card border border-card-border rounded-xl p-5 shadow-neon'>
+										<div className='flex items-start justify-between mb-3'>
+											<div>
+												<h3 className='font-bold text-white text-lg'>📡 {b.name}</h3>
+												<p className='text-sm text-gray-400'>
+													Продавець: {b.seller_name} · {b.channel_count} каналів · {b.price} USDT
+												</p>
+											</div>
+										</div>
+										{b.description && (
+											<p className='text-sm text-gray-300 mb-3 bg-card-inner rounded-lg p-3'>{b.description}</p>
+										)}
+										<div className='mb-3'>
+											<p className='text-xs text-gray-500 mb-1'>Канали:</p>
+											<ul className='space-y-0.5'>
+												{(b.channels || []).map((ch, i) => (
+													<li key={i} className='text-xs text-accent'>{ch}</li>
+												))}
+											</ul>
+										</div>
+										{bundleRejectId === b.id ? (
+											<div className='flex gap-2 mt-3'>
+												<input value={bundleRejectReason} onChange={e => setBundleRejectReason(e.target.value)}
+													placeholder='Причина відхилення...'
+													className='flex-1 bg-card-inner border border-card-border rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-accent/50' />
+												<button onClick={async () => {
+													if (!bundleRejectReason.trim()) return;
+													try {
+														await adminAPI.rejectBundle(b.id, bundleRejectReason.trim());
+														setPendingBundles(prev => prev.filter(x => x.id !== b.id));
+														setBundleRejectId(null); setBundleRejectReason('');
+													} catch { alert('Помилка'); }
+												}} className='px-4 py-2 rounded-lg bg-red-700 text-white text-sm font-semibold hover:bg-red-600'>
+													Підтвердити
+												</button>
+												<button onClick={() => { setBundleRejectId(null); setBundleRejectReason(''); }}
+													className='px-4 py-2 rounded-lg bg-card-inner text-gray-300 text-sm border border-card-border'>
+													Скасувати
+												</button>
+											</div>
+										) : (
+											<div className='flex gap-2 mt-3'>
+												<button onClick={async () => {
+													try {
+														await adminAPI.approveBundle(b.id);
+														setPendingBundles(prev => prev.filter(x => x.id !== b.id));
+													} catch { alert('Помилка'); }
+												}} className='px-5 py-2 rounded-lg bg-accent text-black font-bold text-sm hover:brightness-110 transition-all'>
+													✓ Схвалити
+												</button>
+												<button onClick={() => setBundleRejectId(b.id)}
+													className='px-5 py-2 rounded-lg bg-red-900/40 text-red-400 font-semibold text-sm border border-red-900 hover:bg-red-900/60 transition-all'>
+													✕ Відхилити
+												</button>
 											</div>
 										)}
 									</div>

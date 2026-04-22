@@ -37,7 +37,7 @@ class Deal(Base):
     __tablename__ = "deals"
 
     id: Mapped[int] = mapped_column(primary_key=True)
-    channel_id: Mapped[int] = mapped_column(ForeignKey("channels.id"))
+    channel_id: Mapped[int | None] = mapped_column(ForeignKey("channels.id"), nullable=True)
     buyer_id: Mapped[int] = mapped_column(ForeignKey("users.id"))
     seller_id: Mapped[int] = mapped_column(ForeignKey("users.id"))
 
@@ -63,8 +63,13 @@ class Deal(Base):
     paid_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     completed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
 
+    bundle_id: Mapped[int | None] = mapped_column(
+        Integer, ForeignKey("channel_bundles.id"), nullable=True
+    )
+
     # Relationships
     channel = relationship("Channel", back_populates="deals")
+    bundle = relationship("ChannelBundle", back_populates="deals", foreign_keys=[bundle_id])
     buyer = relationship("User", back_populates="deals_as_buyer", foreign_keys=[buyer_id])
     seller = relationship("User", back_populates="deals_as_seller", foreign_keys=[seller_id])
     transactions = relationship("Transaction", back_populates="deal", cascade="all, delete-orphan")

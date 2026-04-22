@@ -23,15 +23,18 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/deals", tags=["deals"])
 
 
-def _deal_to_response(deal: Deal, channel: Channel | None = None, buyer: User | None = None, seller: User | None = None) -> DealResponse:
+def _deal_to_response(deal: Deal, channel: Channel | None = None, buyer: User | None = None, seller: User | None = None, bundle=None) -> DealResponse:
     return DealResponse(
         id=deal.id,
         channel_id=deal.channel_id,
+        bundle_id=deal.bundle_id,
         buyer_id=deal.buyer_id,
         seller_id=deal.seller_id,
-        channel_name=channel.channel_name if channel else None,
+        channel_name=channel.channel_name if channel else (bundle.name if bundle else None),
         channel_avatar_url=channel.avatar_url if channel else None,
         channel_link=channel.telegram_link if channel else None,
+        bundle_name=bundle.name if bundle else None,
+        bundle_channel_count=len(bundle.bundle_channels) if bundle and bundle.bundle_channels else None,
         buyer_name=buyer.first_name if buyer else None,
         seller_name=seller.first_name if seller else None,
         status=deal.status.value,
@@ -58,8 +61,89 @@ async def create_deal(
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    """Initiate a purchase — create a deal with escrow wallet."""
-    # Get channel
+    """Initiate a purchase — create a deal with escrow wallet.
+    Accepts either channel_id (single channel) or bundle_id (network of channels).
+    """
+    if body.bundle_id is not None:
+        # ── Bundle deal ────────────────────────────────────────────────
+        from app.models.bundle import ChannelBundle, BundleStatus, BundleChannel
+        from sqlalchemy.orm import selectinload as _si
+
+        res = await db.execute(
+            select(ChannelBundle)
+            .options(_si(ChannelBundle.bundle_channels))
+            .where(ChannelBundle.id == body.bundle_id)
+        )
+        bundle = res.scalar_one_or_none()
+        if not bundle:
+            raise HTTPException(status_code=404, detail="Bundle not found")
+        if bundle.status != BundleStatus.approved:
+            raise HTTPException(status_code=400, detail="Bundle is not available for purchase")
+        if bundle.seller_id == user.id:
+            raise HTTPException(status_code=400, detail="Cannot buy your own bundle")
+
+        # Check no active deal for this bundle
+        existing = await db.execute(
+            select(Deal).where(
+                Deal.bundle_id == body.bundle_id,
+                Deal.status.in_([
+                    DealStatus.created, DealStatus.payment_pending,
+                    DealStatus.paid, DealStatus.channel_transferring,
+                ]),
+            )
+        )
+        if existing.scalar_one_or_none():
+            raise HTTPException(status_code=400, detail="Bundle already has an active deal")
+
+        wallet_address, encrypted_private_key = generate_escrow_wallet()
+        fee = bundle.price * (settings.service_fee_percent / 100)
+
+        deal = Deal(
+            channel_id=None,
+            bundle_id=bundle.id,
+            buyer_id=user.id,
+            seller_id=bundle.seller_id,
+            status=DealStatus.created,
+            escrow_wallet_address=wallet_address,
+            escrow_private_key_encrypted=encrypted_private_key,
+            amount_usdt=bundle.price,
+            service_fee=fee,
+        )
+        db.add(deal)
+        await db.commit()
+        await db.refresh(deal)
+        logger.info(f"[DEAL] Bundle deal #{deal.id} CREATED: buyer={user.id}, seller={bundle.seller_id}, bundle={bundle.id}, amount={bundle.price} USDT")
+
+        seller_result = await db.execute(select(User).where(User.id == bundle.seller_id))
+        seller = seller_result.scalar_one_or_none()
+
+        payout = deal.amount_usdt - fee
+        channel_count = len(bundle.bundle_channels)
+        init_msg = (
+            f"Угоду на сетку «{bundle.name}» створено! Каналів: {channel_count}\n"
+            f"Вартість: {deal.amount_usdt} USDT\n"
+            f"Комісія сервісу: 3% ({fee:.2f} USDT)\n"
+            f"Продавець отримає: {payout:.2f} USDT\n\n"
+            f"Підтвердіть готовність, щоб перейти до оплати."
+        )
+        await _add_system_message(db, deal.id, user.id, init_msg)
+        await db.commit()
+
+        try:
+            from bot.main import notify_new_bundle_deal
+            from aiogram import Bot
+            bot = Bot(token=settings.bot_token_alerts)
+            await notify_new_bundle_deal(bot, deal, bundle, user, seller)
+            await bot.session.close()
+        except Exception as e:
+            logger.error(f"[DEAL] Failed to notify about bundle deal #{deal.id}: {e}", exc_info=True)
+
+        return _deal_to_response(deal, None, user, seller, bundle)
+
+    # ── Single channel deal ────────────────────────────────────────────
+    if body.channel_id is None:
+        raise HTTPException(status_code=422, detail="Either channel_id or bundle_id is required")
+
     result = await db.execute(select(Channel).where(Channel.id == body.channel_id))
     channel = result.scalar_one_or_none()
     if not channel:
@@ -91,6 +175,7 @@ async def create_deal(
 
     deal = Deal(
         channel_id=channel.id,
+        bundle_id=None,
         buyer_id=user.id,
         seller_id=channel.seller_id,
         status=DealStatus.created,
@@ -148,7 +233,19 @@ async def get_my_deals(
         .order_by(Deal.created_at.desc())
     )
     deals = result.scalars().all()
-    return [_deal_to_response(d, d.channel, d.buyer, d.seller) for d in deals]
+    # Load bundles for bundle deals
+    from app.models.bundle import ChannelBundle, BundleChannel
+    from sqlalchemy.orm import selectinload as _si
+    bundle_ids = [d.bundle_id for d in deals if d.bundle_id]
+    bundle_map = {}
+    if bundle_ids:
+        b_res = await db.execute(
+            select(ChannelBundle)
+            .options(_si(ChannelBundle.bundle_channels))
+            .where(ChannelBundle.id.in_(bundle_ids))
+        )
+        bundle_map = {b.id: b for b in b_res.scalars().all()}
+    return [_deal_to_response(d, d.channel, d.buyer, d.seller, bundle_map.get(d.bundle_id)) for d in deals]
 
 
 @router.get("/{deal_id}", response_model=DealResponse)
@@ -169,7 +266,18 @@ async def get_deal(
     if deal.buyer_id != user.id and deal.seller_id != user.id and user.role not in ("admin", "moderator"):
         raise HTTPException(status_code=403, detail="Access denied")
 
-    return _deal_to_response(deal, deal.channel, deal.buyer, deal.seller)
+    bundle = None
+    if deal.bundle_id:
+        from app.models.bundle import ChannelBundle, BundleChannel
+        from sqlalchemy.orm import selectinload as _si
+        b_res = await db.execute(
+            select(ChannelBundle)
+            .options(_si(ChannelBundle.bundle_channels))
+            .where(ChannelBundle.id == deal.bundle_id)
+        )
+        bundle = b_res.scalar_one_or_none()
+
+    return _deal_to_response(deal, deal.channel, deal.buyer, deal.seller, bundle)
 
 
 @router.post("/{deal_id}/confirm-transfer", response_model=DealResponse)
@@ -328,9 +436,26 @@ async def confirm_channel_transfer(
     # Both confirmed → awaiting payout
     if deal.buyer_confirmed_transfer and deal.seller_confirmed_transfer:
         deal.status = DealStatus.awaiting_payout
-        deal.channel.status = ChannelStatus.sold
+        if deal.channel:
+            deal.channel.status = ChannelStatus.sold
+            logger.info(f"[DEAL] Deal #{deal.id}: STATUS → awaiting_payout, channel #{deal.channel_id} SOLD, payout={deal.amount_usdt - deal.service_fee:.2f} USDT")
+        elif deal.bundle_id:
+            # Mark all channels in the bundle as sold
+            from app.models.bundle import ChannelBundle, BundleChannel, BundleStatus
+            bc_rows = (await db.execute(
+                select(BundleChannel).where(BundleChannel.bundle_id == deal.bundle_id)
+            )).scalars().all()
+            for bc in bc_rows:
+                ch_res = await db.execute(select(Channel).where(Channel.id == bc.channel_id))
+                ch = ch_res.scalar_one_or_none()
+                if ch:
+                    ch.status = ChannelStatus.sold
+            bundle_res = await db.execute(select(ChannelBundle).where(ChannelBundle.id == deal.bundle_id))
+            bundle = bundle_res.scalar_one_or_none()
+            if bundle:
+                bundle.status = BundleStatus.sold
+            logger.info(f"[DEAL] Bundle deal #{deal.id}: STATUS → awaiting_payout, bundle #{deal.bundle_id} SOLD")
         payout_amount = deal.amount_usdt - deal.service_fee
-        logger.info(f"[DEAL] Deal #{deal.id}: STATUS → awaiting_payout, channel #{deal.channel_id} SOLD, payout={payout_amount:.2f} USDT")
         payout_msg = (
             f"🎉 Канал успішно передано!\n\n"
             f"Продавець, вкажіть свій USDT (TRC-20) гаманець для отримання коштів:\n"

@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { NavLink, useNavigate } from 'react-router-dom';
-import { channelsAPI, favoritesAPI, dealsAPI, auctionsAPI } from '../services/api';
+import { channelsAPI, favoritesAPI, dealsAPI, auctionsAPI, bundlesAPI } from '../services/api';
 import { useAuth } from '../context/AppContext';
 import CabinetCard from '../components/Cards/CabinetCard';
 import CatalogCard from '../components/Cards/CatalogCard';
@@ -19,6 +19,7 @@ import {
 
 const TABS = [
 	{ text: 'Мої оголошення', value: 'my', icon: faList },
+	{ text: 'Мої сетки', value: 'bundles', icon: faUsers },
 	{ text: 'Мої аукціони', value: 'auctions', icon: faGavel },
 	{ text: 'Мої угоди', value: 'deals', icon: faHandshake },
 	{ text: 'Обране', value: 'favorites', icon: faHeart },
@@ -59,6 +60,7 @@ const CabinetPage = () => {
 	const [favorites, setFavorites] = useState([]);
 	const [deals, setDeals] = useState([]);
 	const [myAuctions, setMyAuctions] = useState([]);
+	const [myBundles, setMyBundles] = useState([]);
 	const [loading, setLoading] = useState(true);
 
 	// Auction creation modal
@@ -80,6 +82,9 @@ const CabinetPage = () => {
 					}
 					const { data } = await channelsAPI.getAll(params);
 					setChannels(data.items || data);
+				} else if (activeTab.value === 'bundles') {
+					const { data } = await bundlesAPI.getAll({ seller_id: user?.id });
+					setMyBundles(data.items || []);
 				} else if (activeTab.value === 'auctions') {
 					const [auctRes, chRes] = await Promise.all([
 						auctionsAPI.getAll({ seller_id: user?.id }),
@@ -269,6 +274,75 @@ const CabinetPage = () => {
 						<div className='grid grid-cols-1 md:grid-cols-2 2xl:grid-cols-3 gap-6'>
 							{filteredChannels.map(channel => (
 								<CabinetCard key={channel.id} channel={channel} onDelete={handleDelete} />
+							))}
+						</div>
+					)}
+				</>
+			) : activeTab.value === 'bundles' ? (
+				<>
+					<div className='flex justify-end mb-6'>
+						<NavLink to='/sell-bundle'
+							className='inline-flex items-center gap-2 bg-accent text-black font-bold py-3 px-6 rounded-xl shadow-lg shadow-accent/30 hover:brightness-110 transition-all'>
+							<FontAwesomeIcon icon={faPlus} />
+							Продати сетку каналів
+						</NavLink>
+					</div>
+					{loading ? (
+						<div className='flex justify-center py-20'>
+							<div className='animate-spin rounded-full h-10 w-10 border-b-2 border-accent' />
+						</div>
+					) : myBundles.length === 0 ? (
+						<div className='text-center py-16 bg-card rounded-2xl border border-dashed border-card-border'>
+							<div className='text-5xl mb-4'>📡</div>
+							<p className='text-gray-300 font-semibold text-lg mb-1'>У вас немає сеток</p>
+							<p className='text-gray-500 text-sm mb-6'>Об'єднайте кілька каналів в одну пропозицію</p>
+							<NavLink to='/sell-bundle'
+								className='inline-flex items-center gap-2 bg-accent text-black font-bold py-2.5 px-6 rounded-xl hover:brightness-110 transition-all'>
+								<FontAwesomeIcon icon={faPlus} /> Створити сетку
+							</NavLink>
+						</div>
+					) : (
+						<div className='grid grid-cols-1 md:grid-cols-2 gap-6'>
+							{myBundles.map(b => (
+								<div key={b.id} className='bg-card border border-card-border rounded-xl p-5 shadow-neon'>
+									<div className='flex items-start justify-between mb-2'>
+										<div className='flex items-center gap-2'>
+											<span className='text-accent font-bold'>📡</span>
+											<span className='font-semibold text-white'>{b.name}</span>
+										</div>
+										<span className={`text-xs px-2 py-0.5 rounded-full font-semibold ${
+											b.status === 'approved' ? 'bg-green-900/40 text-green-400' :
+											b.status === 'rejected' ? 'bg-red-900/40 text-red-400' :
+											b.status === 'sold' ? 'bg-gray-700 text-gray-400' :
+											'bg-yellow-900/40 text-yellow-400'
+										}`}>
+											{b.status === 'approved' ? 'Схвалено' : b.status === 'rejected' ? 'Відхилено' : b.status === 'sold' ? 'Продано' : 'На модерації'}
+										</span>
+									</div>
+									<div className='text-sm text-gray-400 mb-3'>
+										{b.channel_count} каналів · <span className='text-accent font-semibold'>{b.price} USDT</span>
+									</div>
+									{b.rejection_reason && (
+										<div className='text-xs text-red-400 mb-3 bg-red-900/20 rounded p-2'>
+											Причина: {b.rejection_reason}
+										</div>
+									)}
+									<div className='flex gap-2'>
+										<NavLink to={`/bundle/${b.id}`}
+											className='flex-1 text-center text-xs py-1.5 rounded-lg bg-card-inner text-gray-300 hover:text-accent border border-card-border transition-all'>
+											Переглянути
+										</NavLink>
+										{b.status === 'pending' && (
+											<button onClick={async () => {
+												if (!confirm('Видалити сетку?')) return;
+												try { await bundlesAPI.delete(b.id); setMyBundles(prev => prev.filter(x => x.id !== b.id)); }
+												catch { alert('Помилка видалення'); }
+											}} className='px-3 py-1.5 rounded-lg text-xs bg-red-900/30 text-red-400 hover:bg-red-900/50 border border-red-900 transition-all'>
+												Видалити
+											</button>
+										)}
+									</div>
+								</div>
 							))}
 						</div>
 					)}
