@@ -680,6 +680,30 @@ const ModerCabinet = () => {
 											Клієнт підключиться автоматично при наступному циклі збору статистики (кожні 3 год).
 										</p>
 									)}
+
+									{/* Run stats now — visible when session exists in DB */}
+									{reauthStatus?.db_session_exists && (
+										<div className='mt-4 pt-4 border-t border-gray-100 dark:border-slate-700 flex items-center justify-between gap-4'>
+											<p className='text-xs text-gray-500 dark:text-gray-400'>Зібрати статистику зараз, не чекаючи 3-годинного циклу:</p>
+											<button
+												onClick={async () => {
+													setReauthLoading(true);
+													setReauthMsg('');
+													try {
+														await adminAPI.runStatsNow();
+														setReauthMsg('✅ Збір статистики запущено! Дані з\'являться через ~1-2 хв.');
+													} catch (e) {
+														setReauthMsg('Помилка: ' + (e.response?.data?.detail || e.message));
+													} finally { setReauthLoading(false); }
+												}}
+												disabled={reauthLoading}
+												className='whitespace-nowrap bg-accent text-black px-4 py-2 rounded-xl font-semibold hover:brightness-110 duration-200 disabled:opacity-50 text-sm flex items-center gap-2'
+											>
+												<FontAwesomeIcon icon={faSync} className={reauthLoading ? 'animate-spin' : ''} />
+												Зібрати зараз
+											</button>
+										</div>
+									)}
 								</div>
 							</>
 						)}

@@ -227,6 +227,9 @@ export const adminAPI = {
 
 	reauthConfirm: (code, password) =>
 		api.post('/admin/reauth/confirm', { code, ...(password ? { password } : {}) }),
+
+	runStatsNow: () =>
+		api.post('/admin/run-stats-now'),
 };
 
 // ===== Favorites =====

@@ -930,26 +930,31 @@ async def admin_telegram_diagnostics(
     diagnostics["bot_api_ok"] = bot_api_ok
     diagnostics["bot_api_error"] = bot_api_error
 
-    # Test Telethon
+    # Test Telethon — session can come from env var OR from DB (DB-first storage)
     telethon_ok = False
     telethon_error = None
-    if cfg.telegram_api_id and cfg.telegram_api_hash and cfg.telethon_session_string:
-        try:
-            from app.services.channel_stats import _get_telethon_client
-            client = await _get_telethon_client()
-            telethon_ok = client is not None and client.is_connected()
-            if not telethon_ok:
-                telethon_error = "Client not connected or not authorized"
-        except Exception as e:
-            telethon_error = str(e)
+    if cfg.telegram_api_id and cfg.telegram_api_hash:
+        # Check whether a session exists (env var OR DB)
+        from app.services.channel_stats import _load_session_from_db
+        db_session = await _load_session_from_db()
+        has_session = bool(cfg.telethon_session_string or db_session)
+        if has_session:
+            try:
+                from app.services.channel_stats import _get_telethon_client
+                client = await _get_telethon_client()
+                telethon_ok = client is not None and client.is_connected()
+                if not telethon_ok:
+                    telethon_error = "Client not connected or not authorized"
+            except Exception as e:
+                telethon_error = str(e)
+        else:
+            telethon_error = "No session — use the Telethon сесія panel to authorize"
     else:
         missing = []
         if not cfg.telegram_api_id:
             missing.append("TELEGRAM_API_ID")
         if not cfg.telegram_api_hash:
             missing.append("TELEGRAM_API_HASH")
-        if not cfg.telethon_session_string:
-            missing.append("TELETHON_SESSION_STRING")
         telethon_error = f"Missing env vars: {', '.join(missing)}"
 
     diagnostics["telethon_ok"] = telethon_ok
@@ -1200,3 +1205,15 @@ async def reauth_status(
         "live_client_error": live_error,
         "pending_reauth": admin.id in _reauth_sessions,
     }
+
+
+@router.post("/run-stats-now")
+async def run_stats_now(
+    admin: User = Depends(get_admin_user),
+):
+    """Immediately trigger one stats-collection cycle for all channels (runs in background)."""
+    import asyncio
+    from app.tasks.stats_collector import collect_stats_once
+
+    asyncio.create_task(collect_stats_once())
+    return {"ok": True, "message": "Stats collection started in background. Check channel pages in ~1-2 minutes."}
