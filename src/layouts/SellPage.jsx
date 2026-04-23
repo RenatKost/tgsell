@@ -2,51 +2,59 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import SellForm from '../components/SellForm';
 
-const MEGAPHONE_URL = 'https://cdn.jsdelivr.net/gh/microsoft/fluentui-emoji@latest/assets/Megaphone/3D/megaphone_3d.png';
+const TV_URL = 'https://cdn.jsdelivr.net/gh/microsoft/fluentui-emoji@latest/assets/Television/3D/television_3d.png';
 const SATELLITE_URL = 'https://cdn.jsdelivr.net/gh/microsoft/fluentui-emoji@latest/assets/Satellite%20antenna/3D/satellite_antenna_3d.png';
 
-const ChoiceCard = ({ imgSrc, imgAlt, title, desc, cta, onClick, highlighted }) => (
-	<button
-		onClick={onClick}
-		className={`group relative w-full flex flex-col items-center text-center rounded-2xl p-8 pt-10 transition-all duration-300 overflow-hidden
-			${
-				highlighted
-					? 'bg-card border-2 border-accent shadow-[0_0_40px_rgba(0,255,136,0.18)] hover:shadow-[0_0_55px_rgba(0,255,136,0.28)]'
-					: 'bg-card border border-card-border shadow-neon hover:border-accent/50 hover:shadow-[0_0_35px_rgba(0,255,136,0.13)]'
-			}`}
-	>
-		{/* Subtle inner glow at top for highlighted card */}
-		{highlighted && (
-			<div className="absolute inset-x-0 top-0 h-32 bg-gradient-to-b from-accent/8 to-transparent pointer-events-none" />
-		)}
-
-		{/* 3D Icon */}
-		<div className="relative mb-7">
-			<div className={`absolute inset-0 rounded-full blur-2xl ${highlighted ? 'bg-accent/20' : 'bg-accent/10'}`} />
+// glowColor: 'blue' | 'green'
+const ChoiceCard = ({ imgSrc, imgAlt, title, desc, cta, onClick, highlighted, glowColor = 'green' }) => (
+	<div className="relative" style={{ paddingTop: '3.5rem' }}>
+		{/* Icon floating above card — overflows the top edge */}
+		<div className="absolute top-0 left-1/2 -translate-x-1/2 z-10" style={{ width: 120, height: 120 }}>
+			{/* Ambient glow blob behind icon */}
+			<div className={`absolute inset-0 scale-125 rounded-full blur-2xl ${
+				glowColor === 'blue' ? 'bg-blue-400/25' : 'bg-accent/25'
+			}`} />
 			<img
 				src={imgSrc}
 				alt={imgAlt}
-				className="relative w-32 h-32 object-contain drop-shadow-[0_8px_24px_rgba(0,0,0,0.6)] group-hover:scale-105 transition-transform duration-300"
+				className="relative w-full h-full object-contain drop-shadow-[0_6px_18px_rgba(0,0,0,0.55)]"
 			/>
 		</div>
 
-		{/* Text */}
-		<h2 className="text-xl font-black text-white mb-3">{title}</h2>
-		<p className="text-sm text-gray-400 leading-relaxed mb-8">{desc}</p>
-
-		{/* CTA Button */}
-		<div className={`w-full py-3 px-5 rounded-xl border font-semibold text-sm flex items-center justify-center gap-2 transition-all duration-200
-			${
+		{/* Square card */}
+		<button
+			onClick={onClick}
+			className={`group relative w-full rounded-2xl overflow-hidden flex flex-col justify-end text-left px-5 pb-5 transition-all duration-300 ${
 				highlighted
-					? 'border-accent text-accent group-hover:bg-accent group-hover:text-black'
-					: 'border-accent/50 text-accent group-hover:bg-accent group-hover:text-black'
-			}`}>
-			{cta}
-			<svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-				<path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-			</svg>
-		</div>
-	</button>
+					? 'bg-card border-2 border-accent shadow-[0_0_50px_rgba(0,255,136,0.22)] hover:shadow-[0_0_65px_rgba(0,255,136,0.33)]'
+					: 'bg-[#0C1A1A] border border-[#1A2E2E] hover:border-accent/45 hover:shadow-[0_0_40px_rgba(0,255,136,0.12)]'
+			}`}
+			style={{ aspectRatio: '1 / 1' }}
+		>
+			{/* Top glow gradient matching icon color */}
+			<div className={`absolute inset-x-0 top-0 h-36 pointer-events-none ${
+				glowColor === 'blue'
+					? 'bg-gradient-to-b from-blue-500/10 to-transparent'
+					: 'bg-gradient-to-b from-accent/10 to-transparent'
+			}`} />
+
+			{/* Text + CTA — anchored to bottom */}
+			<div className="relative z-10">
+				<h2 className="text-[1.1rem] font-black text-white mb-2 leading-snug">{title}</h2>
+				<p className="text-xs text-gray-400 leading-relaxed mb-5">{desc}</p>
+				<div className={`w-full py-2.5 px-4 rounded-xl border font-semibold text-sm flex items-center justify-center gap-2 transition-all duration-200 ${
+					highlighted
+						? 'border-accent text-accent group-hover:bg-accent group-hover:text-black'
+						: 'border-accent/55 text-accent group-hover:bg-accent group-hover:text-black'
+				}`}>
+					{cta}
+					<svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+						<path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+					</svg>
+				</div>
+			</div>
+		</button>
+	</div>
 );
 
 const SellPage = () => {
@@ -59,7 +67,7 @@ const SellPage = () => {
 
 	return (
 		<div className="min-h-screen text-white flex items-center">
-			<div className="w-full max-w-2xl mx-auto px-4 py-24">
+		<div className="w-full max-w-2xl mx-auto px-4" style={{ paddingTop: '7rem', paddingBottom: '5rem' }}>
 				{/* Heading */}
 				<div className="text-center mb-10">
 					<h1 className="text-4xl md:text-5xl font-black mb-3 leading-tight">
@@ -74,12 +82,13 @@ const SellPage = () => {
 				{/* Cards */}
 				<div className="grid sm:grid-cols-2 gap-5">
 					<ChoiceCard
-						imgSrc={MEGAPHONE_URL}
-						imgAlt="Megaphone"
+						imgSrc={TV_URL}
+						imgAlt="Television"
 						title="Один канал"
 						desc="Розмістіть окреме оголошення для одного Telegram-каналу з фіксованою ціною або аукціоном."
 						cta="Оформити оголошення"
 						onClick={() => setMode('channel')}
+						glowColor="blue"
 					/>
 					<ChoiceCard
 						imgSrc={SATELLITE_URL}
@@ -89,6 +98,7 @@ const SellPage = () => {
 						cta="Об'єднати та продати"
 						onClick={() => navigate('/sell-bundle')}
 						highlighted
+						glowColor="green"
 					/>
 				</div>
 			</div>
