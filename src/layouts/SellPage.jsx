@@ -2,51 +2,76 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import SellForm from '../components/SellForm';
 
-const TV_URL = '/icon-channel.png';
-const SATELLITE_URL = '/icon-bundle.png';
+const CHANNEL_URL = '/icon-channel.png';
+const BUNDLE_URL = '/icon-bundle.png';
 
-// glowColor: 'blue' | 'green'
-const ChoiceCard = ({ imgSrc, imgAlt, title, desc, cta, onClick, highlighted, glowColor = 'green' }) => (
-	<div className="relative" style={{ paddingTop: '4.5rem' }}>
-		{/* Icon floating above card — overflows the top edge */}
-		<div className="absolute top-0 left-1/2 -translate-x-1/2 z-10" style={{ width: 150, height: 150 }}>
-			{/* Ambient glow blob behind icon */}
-			<div className={`absolute inset-0 scale-150 rounded-full blur-3xl ${
-				glowColor === 'purple' ? 'bg-purple-400/30' : 'bg-accent/30'
-			}`} />
-			<img
-				src={imgSrc}
-				alt={imgAlt}
-				className="relative w-full h-full object-contain drop-shadow-[0_8px_24px_rgba(0,0,0,0.6)]"
-			/>
-		</div>
+// color: 'pink' | 'teal'
+const COLORS = {
+	pink: {
+		hex:        '#FF3FA4',
+		border:     '1px solid #FF3FA4',
+		boxShadow:  '0 0 0 1px rgba(255,63,164,0.55), 0 0 28px rgba(255,63,164,0.30), 0 0 60px rgba(255,63,164,0.12)',
+		hoverShadow:'0 0 0 1px rgba(255,63,164,0.75), 0 0 42px rgba(255,63,164,0.42), 0 0 80px rgba(255,63,164,0.18)',
+		glow:       'rgba(255,63,164,0.30)',
+		gradient:   'linear-gradient(160deg, rgba(255,63,164,0.13) 0%, transparent 55%)',
+		iconFilter: 'drop-shadow(0 0 18px rgba(255,63,164,0.75)) drop-shadow(0 0 6px rgba(255,63,164,0.5))',
+		btnBorder:  '1px solid rgba(255,63,164,0.7)',
+		btnColor:   '#FF3FA4',
+		btnHover:   'rgba(255,63,164,0.12)',
+	},
+	teal: {
+		hex:        '#00D4AA',
+		border:     '1px solid #00D4AA',
+		boxShadow:  '0 0 0 1px rgba(0,212,170,0.55), 0 0 28px rgba(0,212,170,0.30), 0 0 60px rgba(0,212,170,0.12)',
+		hoverShadow:'0 0 0 1px rgba(0,212,170,0.75), 0 0 42px rgba(0,212,170,0.42), 0 0 80px rgba(0,212,170,0.18)',
+		glow:       'rgba(0,212,170,0.28)',
+		gradient:   'linear-gradient(160deg, rgba(0,212,170,0.11) 0%, transparent 55%)',
+		iconFilter: 'drop-shadow(0 0 18px rgba(0,212,170,0.75)) drop-shadow(0 0 6px rgba(0,212,170,0.5))',
+		btnBorder:  '1px solid rgba(0,212,170,0.7)',
+		btnColor:   '#00D4AA',
+		btnHover:   'rgba(0,212,170,0.12)',
+	},
+};
 
-		{/* Square card */}
+const ChoiceCard = ({ imgSrc, imgAlt, title, desc, cta, onClick, color = 'teal' }) => {
+	const c = COLORS[color];
+	return (
 		<button
 			onClick={onClick}
-			className={`group relative w-full rounded-2xl overflow-hidden flex flex-col justify-end text-left px-5 pb-5 transition-all duration-300 ${
-				highlighted
-					? 'bg-card border-2 border-accent shadow-[0_0_50px_rgba(0,255,136,0.22)] hover:shadow-[0_0_65px_rgba(0,255,136,0.33)]'
-					: 'bg-[#0C1A1A] border border-[#1A2E2E] hover:border-accent/45 hover:shadow-[0_0_40px_rgba(0,255,136,0.12)]'
-			}`}
-			style={{ aspectRatio: '1 / 1' }}
+			className="group relative w-full rounded-2xl overflow-hidden flex flex-col text-left transition-all duration-300 bg-card"
+			style={{ aspectRatio: '1 / 1', border: c.border, boxShadow: c.boxShadow }}
+			onMouseEnter={e => { e.currentTarget.style.boxShadow = c.hoverShadow; }}
+			onMouseLeave={e => { e.currentTarget.style.boxShadow = c.boxShadow; }}
 		>
-			{/* Top glow gradient matching icon color */}
-			<div className={`absolute inset-x-0 top-0 h-36 pointer-events-none ${
-				glowColor === 'blue'
-					? 'bg-gradient-to-b from-blue-500/10 to-transparent'
-					: 'bg-gradient-to-b from-accent/10 to-transparent'
-			}`} />
+			{/* Top-left gradient tint */}
+			<div className="absolute inset-0 pointer-events-none" style={{ background: c.gradient }} />
 
-			{/* Text + CTA — anchored to bottom */}
-			<div className="relative z-10">
-				<h2 className="text-[1.1rem] font-black text-white mb-2 leading-snug">{title}</h2>
+			{/* Icon glow blob */}
+			<div
+				className="absolute top-3 right-3 w-36 h-36 rounded-full blur-3xl pointer-events-none"
+				style={{ background: c.glow }}
+			/>
+
+			{/* Icon */}
+			<div className="absolute top-3 right-2 w-40 h-40">
+				<img
+					src={imgSrc}
+					alt={imgAlt}
+					className="w-full h-full object-contain"
+					style={{ filter: c.iconFilter }}
+				/>
+			</div>
+
+			{/* Text + CTA anchored to bottom */}
+			<div className="relative z-10 mt-auto px-5 pb-5">
+				<h2 className="text-[1.15rem] font-black text-white mb-2 leading-snug">{title}</h2>
 				<p className="text-xs text-gray-400 leading-relaxed mb-5">{desc}</p>
-				<div className={`w-full py-2.5 px-4 rounded-xl border font-semibold text-sm flex items-center justify-center gap-2 transition-all duration-200 ${
-					highlighted
-						? 'border-accent text-accent group-hover:bg-accent group-hover:text-black'
-						: 'border-accent/55 text-accent group-hover:bg-accent group-hover:text-black'
-				}`}>
+				<div
+					className="w-full py-2.5 px-4 rounded-xl font-semibold text-sm flex items-center justify-center gap-2 transition-all duration-200"
+					style={{ border: c.btnBorder, color: c.btnColor }}
+					onMouseEnter={e => { e.currentTarget.style.background = c.btnHover; }}
+					onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; }}
+				>
 					{cta}
 					<svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
 						<path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
@@ -54,8 +79,8 @@ const ChoiceCard = ({ imgSrc, imgAlt, title, desc, cta, onClick, highlighted, gl
 				</div>
 			</div>
 		</button>
-	</div>
-);
+	);
+};
 
 const SellPage = () => {
 	const [mode, setMode] = useState(null);
@@ -82,23 +107,22 @@ const SellPage = () => {
 				{/* Cards */}
 				<div className="grid sm:grid-cols-2 gap-5">
 					<ChoiceCard
-						imgSrc={TV_URL}
-						imgAlt="Television"
+						imgSrc={CHANNEL_URL}
+						imgAlt="Megaphone"
 						title="Один канал"
 						desc="Розмістіть окреме оголошення для одного Telegram-каналу з фіксованою ціною або аукціоном."
 						cta="Оформити оголошення"
 						onClick={() => setMode('channel')}
-						glowColor="purple"
+						color="pink"
 					/>
 					<ChoiceCard
-						imgSrc={SATELLITE_URL}
+						imgSrc={BUNDLE_URL}
 						imgAlt="Satellite antenna"
 						title="Сітка каналів"
 						desc="Об'єднайте кілька каналів в одну пропозицію. Покупець придбає всю сітку одразу."
 						cta="Об'єднати та продати"
 						onClick={() => navigate('/sell-bundle')}
-						highlighted
-						glowColor="green"
+						color="teal"
 					/>
 				</div>
 			</div>
