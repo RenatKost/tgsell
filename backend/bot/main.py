@@ -359,10 +359,10 @@ async def notify_bundle_approved(bot: Bot, bundle, seller: User):
         return
     frontend_url = settings.frontend_url.rstrip("/")
     text = (
-        f"✅ <b>Вашу сетку схвалено!</b>\n\n"
+        f"✅ <b>Вашу сітку схвалено!</b>\n\n"
         f"📡 «{bundle.name}» тепер доступна в каталозі.\n"
         f"💰 Ціна: <b>{bundle.price} USDT</b>\n\n"
-        f"<a href='{frontend_url}/bundle/{bundle.id}'>Переглянути сетку →</a>"
+        f"<a href='{frontend_url}/bundle/{bundle.id}'>Переглянути сітку →</a>"
     )
     try:
         await bot.send_message(seller.telegram_id, text, parse_mode=ParseMode.HTML)
@@ -376,7 +376,7 @@ async def notify_bundle_rejected(bot: Bot, bundle, seller: User):
         return
     reason = bundle.rejection_reason or "Не вказано"
     text = (
-        f"❌ <b>Вашу сетку відхилено</b>\n\n"
+        f"❌ <b>Вашу сітку відхилено</b>\n\n"
         f"📡 «{bundle.name}»\n"
         f"Причина: {reason}\n\n"
         f"Виправте помилки та подайте заявку знову."
@@ -392,7 +392,7 @@ async def notify_new_bundle_deal(bot: Bot, deal, bundle, buyer: User, seller: Us
     frontend_url = settings.frontend_url.rstrip("/")
     if seller and seller.telegram_id:
         text = (
-            f"🎉 <b>Нова угода на вашу сетку!</b>\n\n"
+            f"🎉 <b>Нова угода на вашу сітку!</b>\n\n"
             f"📡 «{bundle.name}»\n"
             f"💰 Сума: <b>{deal.amount_usdt} USDT</b>\n"
             f"👤 Покупець: {buyer.first_name or 'Анонім'}\n\n"
@@ -405,8 +405,8 @@ async def notify_new_bundle_deal(bot: Bot, deal, bundle, buyer: User, seller: Us
 
     if settings.admin_group_id:
         admin_text = (
-            f"📡 <b>Нова угода на сетку</b>\n\n"
-            f"Сетка: «{bundle.name}» #{bundle.id}\n"
+            f"📡 <b>Нова угода на сітку</b>\n\n"
+            f"Сітка: «{bundle.name}» #{bundle.id}\n"
             f"Угода: #{deal.id}\n"
             f"Покупець: {buyer.first_name or 'Анонім'} (id={buyer.id})\n"
             f"Сума: {deal.amount_usdt} USDT"

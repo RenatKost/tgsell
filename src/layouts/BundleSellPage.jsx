@@ -8,7 +8,7 @@ const CATEGORIES = [
 ];
 
 function StepIndicator({ step }) {
-  const steps = ['Про сетку', 'Канали', 'Підсумок'];
+  const steps = ['Про сітку', 'Канали', 'Підсумок'];
   return (
     <div className="flex items-center justify-center gap-2 mb-8">
       {steps.map((label, i) => {
@@ -68,7 +68,7 @@ export default function BundleSellPage() {
   };
 
   const validateStep1 = () => {
-    if (!form.name.trim()) return 'Назва сетки обов\'язкова';
+    if (!form.name.trim()) return 'Назва сітки обов\'язкова';
     if (!form.price || isNaN(Number(form.price)) || Number(form.price) <= 0)
       return 'Вкажіть коректну ціну';
     return '';
@@ -111,7 +111,7 @@ export default function BundleSellPage() {
       navigate('/cabinet', { state: { tab: 'bundles', bundleCreated: res.data.id } });
     } catch (e) {
       const detail = e.response?.data?.detail;
-      setError(typeof detail === 'string' ? detail : 'Помилка при створенні сетки');
+      setError(typeof detail === 'string' ? detail : 'Помилка при створенні сітки');
     } finally {
       setSubmitting(false);
     }
@@ -121,7 +121,7 @@ export default function BundleSellPage() {
     <div className="min-h-screen bg-page text-white">
       <div className="max-w-2xl mx-auto px-4 py-12">
         <h1 className="text-3xl font-bold text-center mb-2">
-          Продати <span className="text-accent">сетку каналів</span>
+          Продати <span className="text-accent">сітку каналів</span>
         </h1>
         <p className="text-center text-gray-400 mb-8 text-sm">
           Об'єднайте кілька каналів в одну пропозицію для покупців
@@ -138,10 +138,10 @@ export default function BundleSellPage() {
         {/* Step 1 — Info */}
         {step === 1 && (
           <div className="bg-card border border-card-border rounded-xl p-6 shadow-neon space-y-4">
-            <h2 className="text-lg font-semibold mb-2">Про сетку</h2>
+            <h2 className="text-lg font-semibold mb-2">Про сітку</h2>
 
             <div>
-              <label className="block text-sm text-gray-400 mb-1">Назва сетки *</label>
+              <label className="block text-sm text-gray-400 mb-1">Назва сітки *</label>
               <input name="name" value={form.name} onChange={handleFormChange}
                 placeholder="Наприклад: Крипто-медіа UA"
                 className="w-full bg-card-inner border border-card-border rounded-lg px-4 py-2.5 text-white placeholder-gray-600 focus:outline-none focus:border-accent/50" />
@@ -172,9 +172,9 @@ export default function BundleSellPage() {
             </div>
 
             <div>
-              <label className="block text-sm text-gray-400 mb-1">Опис сетки</label>
+              <label className="block text-sm text-gray-400 mb-1">Опис сітки</label>
               <textarea name="description" value={form.description} onChange={handleFormChange}
-                rows={3} placeholder="Розкажіть про тематику, аудиторію та переваги сетки..."
+                rows={3} placeholder="Розкажіть про тематику, аудиторію та переваги сітки..."
                 className="w-full bg-card-inner border border-card-border rounded-lg px-4 py-2.5 text-white placeholder-gray-600 focus:outline-none focus:border-accent/50 resize-none" />
             </div>
 
@@ -195,7 +195,7 @@ export default function BundleSellPage() {
         {/* Step 2 — Channels */}
         {step === 2 && (
           <div className="bg-card border border-card-border rounded-xl p-6 shadow-neon space-y-4">
-            <h2 className="text-lg font-semibold mb-2">Канали сетки</h2>
+            <h2 className="text-lg font-semibold mb-2">Канали сітки</h2>
             <p className="text-sm text-gray-400">Вставте посилання на Telegram-канали (@username або t.me/...)</p>
 
             {links.map((link, i) => (
@@ -235,7 +235,7 @@ export default function BundleSellPage() {
 
             <div className="bg-card-inner rounded-lg p-4 space-y-2 text-sm">
               <div className="flex justify-between">
-                <span className="text-gray-400">Назва сетки</span>
+                <span className="text-gray-400">Назва сітки</span>
                 <span className="font-medium text-white">{form.name}</span>
               </div>
               {form.category && (
@@ -270,7 +270,7 @@ export default function BundleSellPage() {
             </div>
 
             <p className="text-xs text-gray-500">
-              Після подачі сетка пройде модерацію. Зазвичай це займає до 24 годин.
+              Після подачі сітка пройде модерацію. Зазвичай це займає до 24 годин.
             </p>
 
             <div className="flex gap-3 pt-2">
@@ -280,7 +280,7 @@ export default function BundleSellPage() {
               </button>
               <button onClick={handleSubmit} disabled={submitting}
                 className="flex-1 py-3 rounded-xl font-bold bg-accent text-black shadow-lg shadow-accent/30 hover:brightness-110 transition-all disabled:opacity-60">
-                {submitting ? 'Відправляємо...' : '📡 Подати сетку'}
+                {submitting ? 'Відправляємо...' : '📡 Подати сітку'}
               </button>
             </div>
           </div>

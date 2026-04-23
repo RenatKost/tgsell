@@ -37,7 +37,7 @@ import {
 const SECTIONS = [
 	{ id: 'dashboard', label: 'Дашборд', icon: faTachometerAlt },
 	{ id: 'pending', label: 'На модерації', icon: faClipboardCheck },
-	{ id: 'bundles', label: 'Сетки', icon: faLayerGroup },
+	{ id: 'bundles', label: 'Сітки', icon: faLayerGroup },
 	{ id: 'channels', label: 'Канали', icon: faLayerGroup },
 	{ id: 'deals', label: 'Угоди', icon: faHandshake },
 	{ id: 'disputes', label: 'Спори', icon: faScaleBalanced },
@@ -826,7 +826,7 @@ const ModerCabinet = () => {
 				{section === 'bundles' && (
 					<div>
 						<div className='flex items-center justify-between mb-6'>
-							<h1 className='text-2xl font-bold text-white'>Сетки на модерації</h1>
+							<h1 className='text-2xl font-bold text-white'>Сітки на модерації</h1>
 							<span className='text-sm text-gray-400'>{pendingBundles.length} сеток</span>
 						</div>
 						{loading ? <div className='text-center py-20 text-gray-400'>Завантаження...</div> : pendingBundles.length === 0 ? (

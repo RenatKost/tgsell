@@ -292,7 +292,7 @@ const DetailsCard = ({ channel, onBuy, onAuction, stats = [] }) => {
 					{channel.bundle_id ? (
 						<a href={`/bundle/${channel.bundle_id}`}
 							className='w-full font-bold bg-accent text-black py-2.5 rounded-lg shadow-lg shadow-accent/30 hover:brightness-110 transition-all text-sm flex items-center justify-center gap-1.5'>
-							📡 Перейти до сетки
+							📡 Перейти до сітки
 						</a>
 					) : (
 						<>

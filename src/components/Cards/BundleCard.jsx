@@ -19,7 +19,7 @@ export default function BundleCard({ bundle }) {
       {/* Badge + Title */}
       <div className="flex items-center gap-2 mb-3">
         <span className="inline-flex items-center gap-1 text-xs font-bold px-2 py-0.5 rounded-full bg-accent/15 text-accent border border-accent/30">
-          📡 СЕТКА · {bundle.channel_count} каналів
+          📡 СІТКА · {bundle.channel_count} каналів
         </span>
       </div>
 
@@ -82,7 +82,7 @@ export default function BundleCard({ bundle }) {
       <div className="flex items-center justify-between pt-3 border-t border-card-border">
         <div>
           <span className="text-xl font-black text-accent">{bundle.price}</span>
-          <span className="text-sm text-gray-400 ml-1">USDT за всю сетку</span>
+          <span className="text-sm text-gray-400 ml-1">USDT за всю сітку</span>
         </div>
         <span className="text-sm text-accent group-hover:underline">Переглянути →</span>
       </div>

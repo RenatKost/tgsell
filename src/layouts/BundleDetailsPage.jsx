@@ -31,7 +31,7 @@ export default function BundleDetailsPage() {
         setBundle(bRes.data);
         setStats(sRes.data);
       } catch {
-        setError('Сетку не знайдено');
+        setError('Сітку не знайдено');
       } finally {
         setLoading(false);
       }
@@ -63,7 +63,7 @@ export default function BundleDetailsPage() {
   if (error || !bundle) {
     return (
       <div className="min-h-screen bg-page flex items-center justify-center text-gray-400">
-        {error || 'Сетку не знайдено'}
+        {error || 'Сітку не знайдено'}
       </div>
     );
   }
@@ -80,7 +80,7 @@ export default function BundleDetailsPage() {
         <div className="flex items-center gap-2 text-sm text-gray-500 mb-6">
           <Link to="/catalog" className="hover:text-accent">Каталог</Link>
           <span>/</span>
-          <span className="text-accent">📡 Сетки каналів</span>
+          <span className="text-accent">📡 Сітки каналів</span>
           <span>/</span>
           <span className="text-white">{bundle.name}</span>
         </div>
@@ -91,7 +91,7 @@ export default function BundleDetailsPage() {
             <div className="flex-1">
               <div className="flex items-center gap-2 mb-3">
                 <span className="inline-flex items-center gap-1 text-xs font-bold px-2 py-0.5 rounded-full bg-accent/15 text-accent border border-accent/30">
-                  📡 СЕТКА · {bundle.channel_count} каналів
+                  📡 СІТКА · {bundle.channel_count} каналів
                 </span>
                 {bundle.category && (
                   <span className="text-xs px-2 py-0.5 rounded-full bg-card-inner text-gray-400 border border-card-border">
@@ -113,7 +113,7 @@ export default function BundleDetailsPage() {
             {/* Price + CTA */}
             <div className="md:w-72 bg-card-inner rounded-xl border border-card-border p-5 flex-shrink-0">
               <div className="text-4xl font-black text-accent mb-1">{bundle.price}</div>
-              <div className="text-gray-400 text-sm mb-4">USDT за всю сетку</div>
+              <div className="text-gray-400 text-sm mb-4">USDT за всю сітку</div>
               {bundle.monthly_income > 0 && (
                 <div className="text-sm text-gray-400 mb-4">
                   Місячний дохід: <span className="text-white font-semibold">{bundle.monthly_income} USDT</span>
@@ -125,14 +125,14 @@ export default function BundleDetailsPage() {
               {!isSold && !isSeller && (
                 <button onClick={handleBuy} disabled={buying}
                   className="w-full py-3 rounded-xl font-bold bg-accent text-black shadow-lg shadow-accent/30 hover:brightness-110 transition-all disabled:opacity-60">
-                  {buying ? 'Зачекайте...' : '💸 Купити всю сетку'}
+                  {buying ? 'Зачекайте...' : '💸 Купити всю сітку'}
                 </button>
               )}
               {isSold && (
-                <div className="text-center text-gray-500 text-sm py-3">Сетку продано</div>
+                <div className="text-center text-gray-500 text-sm py-3">Сітку продано</div>
               )}
               {isSeller && !isSold && (
-                <div className="text-center text-gray-400 text-sm py-3">Це ваша сетка</div>
+                <div className="text-center text-gray-400 text-sm py-3">Це ваша сітка</div>
               )}
             </div>
           </div>
@@ -157,7 +157,7 @@ export default function BundleDetailsPage() {
 
         {/* Channels grid */}
         <div className="mb-6">
-          <h2 className="text-lg font-bold mb-4">Канали сетки</h2>
+          <h2 className="text-lg font-bold mb-4">Канали сітки</h2>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             {channels.map(ch => (
               <Link key={ch.id} to={`/channel/${ch.id}`}

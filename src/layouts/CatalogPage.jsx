@@ -315,9 +315,9 @@ const CatalogPage = () => {
 				<div className='mb-10'>
 					<div className='flex items-center gap-2 mb-4'>
 						<span className='text-accent text-xl'>📡</span>
-						<h2 className='font-black text-xl text-white uppercase tracking-tight'>Сетки каналів</h2>
+						<h2 className='font-black text-xl text-white uppercase tracking-tight'>Сітки каналів</h2>
 						{!bundlesLoading && (
-							<span className='text-xs text-gray-500 ml-1'>{bundles.length} {bundles.length === 1 ? 'сетка' : 'сетки'}</span>
+							<span className='text-xs text-gray-500 ml-1'>{bundles.length} {bundles.length === 1 ? 'сітка' : 'сітки'}</span>
 						)}
 					</div>
 					{bundlesLoading ? (

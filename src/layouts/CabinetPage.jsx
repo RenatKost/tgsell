@@ -19,7 +19,7 @@ import {
 
 const TABS = [
 	{ text: 'Мої оголошення', value: 'my', icon: faList },
-	{ text: 'Мої сетки', value: 'bundles', icon: faUsers },
+	{ text: 'Мої сітки', value: 'bundles', icon: faUsers },
 	{ text: 'Мої аукціони', value: 'auctions', icon: faGavel },
 	{ text: 'Мої угоди', value: 'deals', icon: faHandshake },
 	{ text: 'Обране', value: 'favorites', icon: faHeart },
@@ -284,7 +284,7 @@ const CabinetPage = () => {
 						<NavLink to='/sell-bundle'
 							className='inline-flex items-center gap-2 bg-accent text-black font-bold py-3 px-6 rounded-xl shadow-lg shadow-accent/30 hover:brightness-110 transition-all'>
 							<FontAwesomeIcon icon={faPlus} />
-							Продати сетку каналів
+							Продати сітку каналів
 						</NavLink>
 					</div>
 					{loading ? (
@@ -298,7 +298,7 @@ const CabinetPage = () => {
 							<p className='text-gray-500 text-sm mb-6'>Об'єднайте кілька каналів в одну пропозицію</p>
 							<NavLink to='/sell-bundle'
 								className='inline-flex items-center gap-2 bg-accent text-black font-bold py-2.5 px-6 rounded-xl hover:brightness-110 transition-all'>
-								<FontAwesomeIcon icon={faPlus} /> Створити сетку
+								<FontAwesomeIcon icon={faPlus} /> Створити сітку
 							</NavLink>
 						</div>
 					) : (
@@ -334,7 +334,7 @@ const CabinetPage = () => {
 										</NavLink>
 										{b.status === 'pending' && (
 											<button onClick={async () => {
-												if (!confirm('Видалити сетку?')) return;
+												if (!confirm('Видалити сітку?')) return;
 												try { await bundlesAPI.delete(b.id); setMyBundles(prev => prev.filter(x => x.id !== b.id)); }
 												catch { alert('Помилка видалення'); }
 											}} className='px-3 py-1.5 rounded-lg text-xs bg-red-900/30 text-red-400 hover:bg-red-900/50 border border-red-900 transition-all'>

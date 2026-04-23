@@ -120,7 +120,7 @@ async def create_deal(
         payout = deal.amount_usdt - fee
         channel_count = len(bundle.bundle_channels)
         init_msg = (
-            f"Угоду на сетку «{bundle.name}» створено! Каналів: {channel_count}\n"
+            f"Угоду на сітку «{bundle.name}» створено! Каналів: {channel_count}\n"
             f"Вартість: {deal.amount_usdt} USDT\n"
             f"Комісія сервісу: 3% ({fee:.2f} USDT)\n"
             f"Продавець отримає: {payout:.2f} USDT\n\n"

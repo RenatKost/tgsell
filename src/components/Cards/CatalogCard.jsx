@@ -259,7 +259,7 @@ const CatalogCard = ({ channel }) => {
 						<p className='text-gray-400 text-[10px]'>Ціна</p>
 						<p className='font-extrabold text-lg text-gray-900 dark:text-white leading-none'>
 							{channel.bundle_id
-								? <><span>{channel.price?.toLocaleString('uk-UA') || '—'}</span><span className='text-xs font-semibold text-gray-400 ml-1'>USDT за сетку</span></>
+								? <><span>{channel.price?.toLocaleString('uk-UA') || '—'}</span><span className='text-xs font-semibold text-gray-400 ml-1'>USDT за сітку</span></>
 								: <>{channel.price?.toLocaleString('uk-UA') || '—'}<span className='text-xs font-semibold text-gray-400 ml-1'>USDT</span></>
 							}
 						</p>
@@ -277,7 +277,7 @@ const CatalogCard = ({ channel }) => {
 								to={`/bundle/${channel.bundle_id}`}
 								className='flex-1 text-center px-3 py-2 rounded-lg text-xs font-semibold text-accent bg-accent/10 hover:bg-accent/20 border border-accent/30 transition-all'
 							>
-								📡 До сетки
+								📡 До сітки
 							</NavLink>
 						</>
 					) : (
