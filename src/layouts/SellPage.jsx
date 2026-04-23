@@ -2,8 +2,8 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import SellForm from '../components/SellForm';
 
-const CHANNEL_URL = '/icon-channel.png';
-const BUNDLE_URL = '/icon-bundle.png';
+const CHANNEL_URL = '/megaphone-3d.png';
+const BUNDLE_URL = '/satellite-3d.png';
 
 // color: 'pink' | 'teal'
 const COLORS = {
