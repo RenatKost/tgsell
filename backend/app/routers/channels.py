@@ -458,13 +458,17 @@ async def get_ai_analysis(channel_id: int, db: AsyncSession = Depends(get_db)):
     analysis = await analyze_channel(channel_data, posts_data, stats_data)
     if analysis is None:
         raise HTTPException(status_code=503, detail="AI analysis unavailable")
-    if "error" in analysis:
+    if isinstance(analysis, dict) and analysis.get("error"):
         raise HTTPException(status_code=503, detail=analysis.get("detail", "AI analysis error"))
 
-    # Save to cache
-    channel.ai_cache = json.dumps(analysis, ensure_ascii=False)
-    channel.ai_cache_updated_at = datetime.now(timezone.utc)
-    await db.commit()
+    # Save to cache (non-blocking — don't fail the request if cache write fails)
+    try:
+        channel.ai_cache = json.dumps(analysis, ensure_ascii=False)
+        channel.ai_cache_updated_at = datetime.now(timezone.utc)
+        await db.commit()
+    except Exception as cache_err:
+        logger.warning(f"Failed to save AI cache for channel {channel_id}: {cache_err}")
+        await db.rollback()
 
     return analysis
 

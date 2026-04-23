@@ -355,12 +355,16 @@ async def get_bundle_ai_analysis(
     analysis = await analyze_bundle(bundle_data, channels_data)
     if analysis is None:
         raise HTTPException(status_code=503, detail="AI сервіс недоступний")
-    if "error" in analysis:
-        raise HTTPException(status_code=503, detail=analysis.get("detail", "AI analysis error"))
+    if isinstance(analysis, dict) and analysis.get("error"):
+        raise HTTPException(status_code=503, detail=analysis.get("detail", "Помилка AI аналізу"))
 
-    # Save to cache
-    bundle.ai_cache = json.dumps(analysis, ensure_ascii=False)
-    bundle.ai_cache_updated_at = datetime.now(timezone.utc)
-    await db.commit()
+    # Save to cache (non-blocking — don't fail the request if cache write fails)
+    try:
+        bundle.ai_cache = json.dumps(analysis, ensure_ascii=False)
+        bundle.ai_cache_updated_at = datetime.now(timezone.utc)
+        await db.commit()
+    except Exception as cache_err:
+        logger.warning(f"Failed to save AI cache for bundle {bundle_id}: {cache_err}")
+        await db.rollback()
 
     return analysis

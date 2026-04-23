@@ -102,7 +102,7 @@ export const channelsAPI = {
 		api.get(`/channels/${id}/health`),
 
 	getAiAnalysis: (id) =>
-		api.get(`/channels/${id}/ai-analysis`),
+		api.get(`/channels/${id}/ai-analysis`, { timeout: 55000 }),
 
 	create: (channelData) =>
 		api.post('/channels', channelData),
@@ -286,7 +286,7 @@ export const bundlesAPI = {
 		api.get(`/bundles/${id}/stats`),
 
 	getAiAnalysis: (id) =>
-		api.get(`/bundles/${id}/ai-analysis`),
+		api.get(`/bundles/${id}/ai-analysis`, { timeout: 55000 }),
 
 	create: (data) =>
 		api.post('/bundles', data),

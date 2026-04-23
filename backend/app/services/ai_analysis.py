@@ -160,35 +160,32 @@ async def analyze_bundle(bundle_data: dict, channels_data: list[dict]) -> dict |
         logger.warning("GROQ_API_KEY not set — skipping bundle AI analysis")
         return None
 
-    bundle_info = (
-        f"Назва сітки: {bundle_data.get('name', '?')}\n"
-        f"Кількість каналів: {bundle_data.get('channel_count', 0)}\n"
-        f"Ціна: {bundle_data.get('price', 0)} USDT\n"
-        f"Категорія: {bundle_data.get('category', '?')}\n"
-        f"Місячний дохід: {bundle_data.get('monthly_income', 0) or 0} USDT\n"
-        f"Всього підписників: {bundle_data.get('total_subscribers', 0):,}\n"
-        f"Середній ER: {bundle_data.get('avg_er', 0):.2f}%\n"
-        f"Опис: {bundle_data.get('description', '') or 'Немає'}\n"
-    )
+    try:
+        # Convert to native types to avoid Decimal formatting errors
+        price = float(bundle_data.get('price') or 0)
+        monthly_income = float(bundle_data.get('monthly_income') or 0)
+        total_subs = int(bundle_data.get('total_subscribers') or 0)
+        avg_er = float(bundle_data.get('avg_er') or 0)
+        channel_count = int(bundle_data.get('channel_count') or 0)
 
-    channels_text = ""
-    for i, ch in enumerate(channels_data, 1):
-        channels_text += (
-            f"{i}. {ch.get('channel_name', '?')} — "
-            f"{ch.get('subscribers_count', 0):,} підп., "
-            f"ER {ch.get('er') or 0:.1f}%, "
-            f"перегляди: {ch.get('avg_views') or 0:,}\n"
-        )
+        channels_text = ""
+        for i, ch in enumerate(channels_data, 1):
+            subs = int(ch.get('subscribers_count') or 0)
+            er = float(ch.get('er') or 0)
+            views = int(ch.get('avg_views') or 0)
+            channels_text += (
+                f"{i}. {ch.get('channel_name', '?')} — "
+                f"{subs:,} підп., ER {er:.1f}%, перегляди: {views:,}\n"
+            )
 
-    prompt = f"""Ти — аналітик покупки Telegram-сіток. Дай КОНКРЕТНИЙ аналіз без води.
+        prompt = f"""Ти — аналітик покупки Telegram-сіток. Дай КОНКРЕТНИЙ аналіз без води.
 
-СІТКА: {bundle_data.get('name')} | {bundle_data.get('channel_count')} каналів | {bundle_data.get('category', '?')}
-Ціна: {bundle_data.get('price', 0):,} USDT | Дохід/міс: {bundle_data.get('monthly_income', 0) or 0:,} USDT
-Всього підписників: {bundle_data.get('total_subscribers', 0):,} | Середній ER: {bundle_data.get('avg_er', 0):.1f}%
+СІТКА: {bundle_data.get('name')} | {channel_count} каналів | {bundle_data.get('category', '?')}
+Ціна: {price:,.0f} USDT | Дохід/міс: {monthly_income:,.0f} USDT
+Всього підписників: {total_subs:,} | Середній ER: {avg_er:.1f}%
 
 КАНАЛИ:
 {channels_text}
-
 Відповідай ТІЛЬКИ JSON (без коментарів, без markdown):
 {{
   "summary": "2 речення: що це за сітка і чому варто/не варто купувати. З конкретними числами.",
@@ -196,31 +193,17 @@ async def analyze_bundle(bundle_data: dict, channels_data: list[dict]) -> dict |
   "synergy": "Одне речення: чи доповнюють канали одне одного за тематикою та аудиторією.",
   "total_potential_income_min": 400,
   "total_potential_income_max": 1200,
-  "risks": [
-    "Конкретний ризик 1 з числами або фактами",
-    "Конкретний ризик 2",
-    "Конкретний ризик 3"
-  ],
-  "opportunities": [
-    "Конкретна можливість 1: крос-просування між каналами збільшить охоплення на X%",
-    "Конкретна можливість 2: пакетна реклама для рекламодавців",
-    "Конкретна можливість 3"
-  ],
+  "risks": ["Конкретний ризик 1 з числами або фактами", "Конкретний ризик 2", "Конкретний ризик 3"],
+  "opportunities": ["Конкретна можливість 1: крос-просування", "Конкретна можливість 2: пакетна реклама", "Конкретна можливість 3"],
   "fair_price_estimate": "X USDT. ROI: ціна / (місячний дохід + потенційна монетизація) = Y місяців.",
   "roi_months": 14,
   "verdict": "buy",
   "verdict_reason": "2 речення. Конкретні аргументи: числа, ER, ROI.",
   "score": 70
 }}
+ПРАВИЛА: verdict "buy" якщо score>=65 і ROI<=18міс, "avoid" якщо score<40, інакше "hold". Тільки валідний JSON."""
 
-ПРАВИЛА:
-- verdict: "buy" якщо score>=65 і ROI<=18міс, "avoid" якщо score<40, інакше "hold"
-- total_potential_income_min/max — реалістичні USDT на місяць для ЦІЄЇ сітки
-- roi_months — число (місяців)
-- Тільки валідний JSON"""
-
-    try:
-        async with httpx.AsyncClient(timeout=60.0) as client:
+        async with httpx.AsyncClient(timeout=45.0) as client:
             resp = await client.post(
                 GROQ_URL,
                 headers={
@@ -236,8 +219,8 @@ async def analyze_bundle(bundle_data: dict, channels_data: list[dict]) -> dict |
                         },
                         {"role": "user", "content": prompt},
                     ],
-                    "temperature": 0.7,
-                    "max_tokens": 2048,
+                    "temperature": 0.5,
+                    "max_tokens": 1500,
                 },
             )
             resp.raise_for_status()
@@ -258,9 +241,12 @@ async def analyze_bundle(bundle_data: dict, channels_data: list[dict]) -> dict |
         if e.response.status_code == 429:
             return {"error": "rate_limit", "detail": "API ліміт вичерпано. Спробуйте через хвилину."}
         return {"error": "api_error", "detail": f"Groq API помилка {e.response.status_code}"}
+    except httpx.TimeoutException:
+        logger.error("Groq bundle analysis timed out")
+        return {"error": "timeout", "detail": "AI аналіз перевищив ліміт часу. Спробуйте ще раз."}
     except json.JSONDecodeError as e:
         logger.error(f"Failed to parse Groq bundle response as JSON: {e}")
         return {"error": "parse_error", "detail": "AI повернув невалідну відповідь. Спробуйте ще раз."}
     except Exception as e:
         logger.error(f"Bundle AI analysis failed: {e}")
-        return None
+        return {"error": "unexpected", "detail": f"Несподівана помилка: {str(e)[:100]}"}
