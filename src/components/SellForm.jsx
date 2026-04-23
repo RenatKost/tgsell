@@ -191,7 +191,7 @@ const SellForm = ({ onBack }) => {
 
 	return (
 		<>
-			<section className='min-h-screen bg-page pt-8 pb-10 text-white'>
+			<section className='min-h-screen pt-8 pb-10 text-white'>
 				<div className='max-w-3xl mx-auto px-4'>
 					{/* Back button */}
 					{onBack && (

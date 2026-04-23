@@ -6,7 +6,7 @@ import { ScrollRestoration } from '../components/ScrollRestoration';
 const Layout = () => {
 	return (
 		<ScrollRestoration>
-			<div className='wrapper bg-gray-50 dark:bg-slate-950 transition-colors duration-300'>
+			<div className='wrapper bg-gray-50 dark:bg-transparent transition-colors duration-300'>
 				<Header />
 				<div className='max-w-7xl mx-auto px-4 md:px-8 content'>
 					<Outlet></Outlet>
