@@ -2,22 +2,22 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import SellForm from '../components/SellForm';
 
-const TV_URL = 'https://cdn.jsdelivr.net/gh/microsoft/fluentui-emoji@latest/assets/Television/3D/television_3d.png';
-const SATELLITE_URL = 'https://cdn.jsdelivr.net/gh/microsoft/fluentui-emoji@latest/assets/Satellite%20antenna/3D/satellite_antenna_3d.png';
+const TV_URL = '/icon-channel.png';
+const SATELLITE_URL = '/icon-bundle.png';
 
 // glowColor: 'blue' | 'green'
 const ChoiceCard = ({ imgSrc, imgAlt, title, desc, cta, onClick, highlighted, glowColor = 'green' }) => (
-	<div className="relative" style={{ paddingTop: '3.5rem' }}>
+	<div className="relative" style={{ paddingTop: '4.5rem' }}>
 		{/* Icon floating above card — overflows the top edge */}
-		<div className="absolute top-0 left-1/2 -translate-x-1/2 z-10" style={{ width: 120, height: 120 }}>
+		<div className="absolute top-0 left-1/2 -translate-x-1/2 z-10" style={{ width: 150, height: 150 }}>
 			{/* Ambient glow blob behind icon */}
-			<div className={`absolute inset-0 scale-125 rounded-full blur-2xl ${
-				glowColor === 'blue' ? 'bg-blue-400/25' : 'bg-accent/25'
+			<div className={`absolute inset-0 scale-150 rounded-full blur-3xl ${
+				glowColor === 'purple' ? 'bg-purple-400/30' : 'bg-accent/30'
 			}`} />
 			<img
 				src={imgSrc}
 				alt={imgAlt}
-				className="relative w-full h-full object-contain drop-shadow-[0_6px_18px_rgba(0,0,0,0.55)]"
+				className="relative w-full h-full object-contain drop-shadow-[0_8px_24px_rgba(0,0,0,0.6)]"
 			/>
 		</div>
 
@@ -88,7 +88,7 @@ const SellPage = () => {
 						desc="Розмістіть окреме оголошення для одного Telegram-каналу з фіксованою ціною або аукціоном."
 						cta="Оформити оголошення"
 						onClick={() => setMode('channel')}
-						glowColor="blue"
+						glowColor="purple"
 					/>
 					<ChoiceCard
 						imgSrc={SATELLITE_URL}
