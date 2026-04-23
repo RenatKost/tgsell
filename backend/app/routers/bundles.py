@@ -20,6 +20,7 @@ from app.schemas.bundle import (
 )
 from app.utils.security import get_current_user
 from app.models.user import User
+from app.services.ai_analysis import analyze_bundle
 
 logger = logging.getLogger(__name__)
 
@@ -300,3 +301,51 @@ async def delete_bundle(
 
     await db.delete(bundle)
     await db.commit()
+
+
+@router.get("/{bundle_id}/ai-analysis")
+async def get_bundle_ai_analysis(
+    bundle_id: int,
+    db: AsyncSession = Depends(get_db),
+):
+    """AI-powered investment analysis for a bundle."""
+    result = await db.execute(
+        select(ChannelBundle)
+        .options(
+            selectinload(ChannelBundle.bundle_channels).selectinload(BundleChannel.channel)
+        )
+        .where(ChannelBundle.id == bundle_id)
+    )
+    bundle = result.scalar_one_or_none()
+    if not bundle:
+        raise HTTPException(status_code=404, detail="Bundle not found")
+
+    channels = [bc.channel for bc in bundle.bundle_channels if bc.channel is not None]
+    total_subs = sum(c.subscribers_count or 0 for c in channels)
+    er_vals = [c.er for c in channels if c.er is not None]
+    avg_er = round(sum(er_vals) / len(er_vals), 2) if er_vals else 0.0
+
+    bundle_data = {
+        "name": bundle.name,
+        "channel_count": len(channels),
+        "price": bundle.price,
+        "category": bundle.category,
+        "monthly_income": bundle.monthly_income,
+        "total_subscribers": total_subs,
+        "avg_er": avg_er,
+        "description": bundle.description,
+    }
+    channels_data = [
+        {
+            "channel_name": c.channel_name,
+            "subscribers_count": c.subscribers_count or 0,
+            "er": c.er,
+            "avg_views": c.avg_views,
+        }
+        for c in channels
+    ]
+
+    analysis = await analyze_bundle(bundle_data, channels_data)
+    if analysis is None:
+        raise HTTPException(status_code=503, detail="AI сервіс недоступний")
+    return analysis

@@ -285,6 +285,9 @@ export const bundlesAPI = {
 	getStats: (id) =>
 		api.get(`/bundles/${id}/stats`),
 
+	getAiAnalysis: (id) =>
+		api.get(`/bundles/${id}/ai-analysis`),
+
 	create: (data) =>
 		api.post('/bundles', data),
 

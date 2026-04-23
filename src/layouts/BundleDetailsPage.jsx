@@ -20,6 +20,9 @@ export default function BundleDetailsPage() {
   const [error, setError] = useState('');
   const [buying, setBuying] = useState(false);
   const [buyError, setBuyError] = useState('');
+  const [aiAnalysis, setAiAnalysis] = useState(null);
+  const [aiLoading, setAiLoading] = useState(false);
+  const [aiError, setAiError] = useState('');
 
   useEffect(() => {
     (async () => {
@@ -52,6 +55,20 @@ export default function BundleDetailsPage() {
     }
   };
 
+  const handleAiAnalysis = async () => {
+    setAiLoading(true);
+    setAiError('');
+    try {
+      const res = await bundlesAPI.getAiAnalysis(id);
+      setAiAnalysis(res.data);
+    } catch (e) {
+      const detail = e.response?.data?.detail;
+      setAiError(typeof detail === 'string' ? detail : 'Помилка AI аналізу');
+    } finally {
+      setAiLoading(false);
+    }
+  };
+
   if (loading) {
     return (
       <div className="min-h-screen bg-page flex items-center justify-center">
@@ -74,16 +91,7 @@ export default function BundleDetailsPage() {
 
   return (
     <div className="min-h-screen bg-page text-white">
-      <div className="max-w-5xl mx-auto px-4 py-10">
-
-        {/* Breadcrumb */}
-        <div className="flex items-center gap-2 text-sm text-gray-500 mb-6">
-          <Link to="/catalog" className="hover:text-accent">Каталог</Link>
-          <span>/</span>
-          <span className="text-accent">📡 Сітки каналів</span>
-          <span>/</span>
-          <span className="text-white">{bundle.name}</span>
-        </div>
+      <div className="max-w-5xl mx-auto px-4 pt-24 pb-16">
 
         {/* Hero */}
         <div className="bg-card border border-card-border rounded-xl p-6 shadow-neon mb-6">
@@ -144,7 +152,7 @@ export default function BundleDetailsPage() {
             {[
               { label: '∑ Підписників', value: fmt(stats.total_subscribers) },
               { label: 'Середній ER', value: stats.avg_er != null ? stats.avg_er.toFixed(1) + '%' : '—' },
-              { label: '∑ Доходу / міс', value: stats.total_monthly_income ? fmt(stats.total_monthly_income) + ' $' : '—' },
+              { label: '∑ Доходу / міс', value: stats.total_monthly_income != null ? fmt(stats.total_monthly_income) + ' USDT' : '—' },
               { label: 'Каналів', value: stats.channel_count },
             ].map(m => (
               <div key={m.label} className="bg-card border border-card-border rounded-xl p-4 shadow-neon text-center">
@@ -189,11 +197,142 @@ export default function BundleDetailsPage() {
 
         {/* Resources */}
         {bundle.resources && (
-          <div className="bg-card border border-card-border rounded-xl p-6 shadow-neon">
+          <div className="bg-card border border-card-border rounded-xl p-6 shadow-neon mb-6">
             <h2 className="text-lg font-bold mb-3">Що входить у продаж</h2>
             <p className="text-gray-300 text-sm whitespace-pre-wrap">{bundle.resources}</p>
           </div>
         )}
+
+        {/* AI Analysis */}
+        <div className="bg-card border border-card-border rounded-xl p-6 shadow-neon">
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-lg font-bold">🤖 AI аналіз сітки</h2>
+            {!aiAnalysis && (
+              <button
+                onClick={handleAiAnalysis}
+                disabled={aiLoading}
+                className="px-4 py-2 rounded-lg bg-accent text-black text-sm font-bold shadow-lg shadow-accent/30 hover:brightness-110 transition-all disabled:opacity-60"
+              >
+                {aiLoading ? 'Аналізую...' : 'Запустити аналіз'}
+              </button>
+            )}
+          </div>
+
+          {aiError && <div className="text-red-400 text-sm mb-3">{aiError}</div>}
+
+          {aiLoading && (
+            <div className="flex items-center gap-3 text-gray-400 text-sm py-6 justify-center">
+              <div className="w-5 h-5 border-2 border-accent/40 border-t-accent rounded-full animate-spin" />
+              Groq AI аналізує сітку каналів...
+            </div>
+          )}
+
+          {aiAnalysis && !aiAnalysis.error && (() => {
+            const verdictColor = aiAnalysis.verdict === 'buy' ? 'text-accent border-accent/40 bg-accent/10'
+              : aiAnalysis.verdict === 'avoid' ? 'text-red-400 border-red-400/40 bg-red-400/10'
+              : 'text-yellow-400 border-yellow-400/40 bg-yellow-400/10';
+            const verdictLabel = aiAnalysis.verdict === 'buy' ? '✅ Купувати'
+              : aiAnalysis.verdict === 'avoid' ? '❌ Уникати' : '⏳ Чекати';
+            return (
+              <div className="space-y-5">
+                {/* Verdict + Score */}
+                <div className="flex items-center gap-4 flex-wrap">
+                  <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full border text-sm font-bold ${verdictColor}`}>
+                    {verdictLabel}
+                  </span>
+                  <div className="flex items-center gap-2">
+                    <span className="text-gray-500 text-xs">Рейтинг:</span>
+                    <span className="text-2xl font-black text-accent">{aiAnalysis.score}</span>
+                    <span className="text-gray-500 text-xs">/100</span>
+                  </div>
+                  {aiAnalysis.roi_months && (
+                    <span className="text-xs text-gray-400">Окупність: <span className="text-white font-semibold">{aiAnalysis.roi_months} міс.</span></span>
+                  )}
+                </div>
+
+                {/* Summary */}
+                <p className="text-gray-300 text-sm leading-relaxed">{aiAnalysis.summary}</p>
+
+                {/* Verdict reason */}
+                {aiAnalysis.verdict_reason && (
+                  <div className={`rounded-lg border p-3 text-sm ${verdictColor}`}>
+                    {aiAnalysis.verdict_reason}
+                  </div>
+                )}
+
+                {/* Income + Audience */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {(aiAnalysis.total_potential_income_min || aiAnalysis.total_potential_income_max) && (
+                    <div className="bg-card-inner rounded-lg border border-card-border p-4">
+                      <div className="text-xs text-gray-500 mb-1">Потенційний дохід / міс</div>
+                      <div className="text-accent font-black text-xl">
+                        {aiAnalysis.total_potential_income_min}–{aiAnalysis.total_potential_income_max} <span className="text-sm font-normal text-gray-400">USDT</span>
+                      </div>
+                    </div>
+                  )}
+                  {aiAnalysis.fair_price_estimate && (
+                    <div className="bg-card-inner rounded-lg border border-card-border p-4">
+                      <div className="text-xs text-gray-500 mb-1">Справедлива ціна</div>
+                      <div className="text-sm text-white">{aiAnalysis.fair_price_estimate}</div>
+                    </div>
+                  )}
+                </div>
+
+                {/* Synergy */}
+                {aiAnalysis.synergy && (
+                  <div>
+                    <div className="text-xs text-gray-500 uppercase tracking-wide mb-2">Синергія каналів</div>
+                    <p className="text-gray-300 text-sm">{aiAnalysis.synergy}</p>
+                  </div>
+                )}
+
+                {/* Audience */}
+                {aiAnalysis.audience_quality && (
+                  <div>
+                    <div className="text-xs text-gray-500 uppercase tracking-wide mb-2">Якість аудиторії</div>
+                    <p className="text-gray-300 text-sm">{aiAnalysis.audience_quality}</p>
+                  </div>
+                )}
+
+                {/* Risks + Opportunities */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {aiAnalysis.risks?.length > 0 && (
+                    <div>
+                      <div className="text-xs text-red-400 uppercase tracking-wide mb-2">Ризики</div>
+                      <ul className="space-y-1.5">
+                        {aiAnalysis.risks.map((r, i) => (
+                          <li key={i} className="text-xs text-gray-400 flex gap-2">
+                            <span className="text-red-400 flex-shrink-0">▸</span>{r}
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+                  {aiAnalysis.opportunities?.length > 0 && (
+                    <div>
+                      <div className="text-xs text-accent uppercase tracking-wide mb-2">Можливості</div>
+                      <ul className="space-y-1.5">
+                        {aiAnalysis.opportunities.map((o, i) => (
+                          <li key={i} className="text-xs text-gray-400 flex gap-2">
+                            <span className="text-accent flex-shrink-0">▸</span>{o}
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+                </div>
+              </div>
+            );
+          })()}
+
+          {aiAnalysis?.error && (
+            <div className="text-red-400 text-sm">{aiAnalysis.detail || 'Помилка AI аналізу'}</div>
+          )}
+
+          {!aiAnalysis && !aiLoading && (
+            <p className="text-gray-500 text-sm">Натисніть кнопку щоб отримати AI-оцінку інвестиційної привабливості цієї сітки.</p>
+          )}
+        </div>
       </div>
     </div>
   );

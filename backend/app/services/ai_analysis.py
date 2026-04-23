@@ -181,3 +181,119 @@ async def analyze_channel(channel_data: dict, posts_data: list[dict], stats_data
     except Exception as e:
         logger.error(f"AI analysis failed: {e}")
         return None
+
+
+async def analyze_bundle(bundle_data: dict, channels_data: list[dict]) -> dict | None:
+    """Analyze a bundle of Telegram channels for investment potential."""
+    if not settings.groq_api_key:
+        logger.warning("GROQ_API_KEY not set — skipping bundle AI analysis")
+        return None
+
+    bundle_info = (
+        f"Назва сітки: {bundle_data.get('name', '?')}\n"
+        f"Кількість каналів: {bundle_data.get('channel_count', 0)}\n"
+        f"Ціна: {bundle_data.get('price', 0)} USDT\n"
+        f"Категорія: {bundle_data.get('category', '?')}\n"
+        f"Місячний дохід: {bundle_data.get('monthly_income', 0) or 0} USDT\n"
+        f"Всього підписників: {bundle_data.get('total_subscribers', 0):,}\n"
+        f"Середній ER: {bundle_data.get('avg_er', 0):.2f}%\n"
+        f"Опис: {bundle_data.get('description', '') or 'Немає'}\n"
+    )
+
+    channels_text = ""
+    for i, ch in enumerate(channels_data, 1):
+        channels_text += (
+            f"{i}. {ch.get('channel_name', '?')} — "
+            f"{ch.get('subscribers_count', 0):,} підп., "
+            f"ER {ch.get('er') or 0:.1f}%, "
+            f"перегляди: {ch.get('avg_views') or 0:,}\n"
+        )
+
+    prompt = f"""Ти — топовий аналітик Telegram-каналів. Проведи інвестиційний аналіз СІТКИ каналів для потенційного покупця.
+
+══════ ДАНІ СІТКИ ══════
+{bundle_info}
+
+══════ КАНАЛИ СІТКИ ══════
+{channels_text}
+
+══════ ЗАВДАННЯ ══════
+Оціни сітку каналів як єдиний медіа-актив: синергію каналів, спільний охват, потенціал крос-монетизації.
+
+Відповідь СТРОГО у форматі JSON (без markdown, без ```, без коментарів):
+{{
+  "summary": "Загальний висновок про сітку та її інвестиційну привабливість (3-4 речення)",
+  "audience_quality": "Оцінка сукупної аудиторії: залученість, дублікати між каналами, якість підписників",
+  "synergy": "Оцінка синергії каналів: чи доповнюють вони одне одного, переваги сітки як єдиного активу",
+  "total_potential_income_min": 500,
+  "total_potential_income_max": 2000,
+  "risks": [
+    "Ризик 1 з поясненням",
+    "Ризик 2 з поясненням",
+    "Ризик 3 з поясненням"
+  ],
+  "opportunities": [
+    "Можливість 1 з поясненням",
+    "Можливість 2 з поясненням",
+    "Можливість 3 з поясненням"
+  ],
+  "fair_price_estimate": "Справедлива ціна сітки в USDT з обґрунтуванням",
+  "roi_months": 12,
+  "verdict": "buy",
+  "verdict_reason": "Чому купувати/чекати/уникати цю сітку (2-3 речення з аргументами)",
+  "score": 75
+}}
+
+ВАЖЛИВО:
+- "verdict" — одне з: "buy", "hold", "avoid"
+- "score" — число від 1 до 100
+- "total_potential_income_min/max" — числа в USDT на місяць
+- "roi_months" — число (місяців до окупності)
+- Мова відповіді — українська
+- Тільки валідний JSON"""
+
+    try:
+        async with httpx.AsyncClient(timeout=60.0) as client:
+            resp = await client.post(
+                GROQ_URL,
+                headers={
+                    "Authorization": f"Bearer {settings.groq_api_key}",
+                    "Content-Type": "application/json",
+                },
+                json={
+                    "model": MODEL,
+                    "messages": [
+                        {
+                            "role": "system",
+                            "content": "Ти — експерт-аналітик Telegram-каналів. Відповідай ТІЛЬКИ валідним JSON без markdown-обгортки.",
+                        },
+                        {"role": "user", "content": prompt},
+                    ],
+                    "temperature": 0.7,
+                    "max_tokens": 2048,
+                },
+            )
+            resp.raise_for_status()
+            data = resp.json()
+            text = data["choices"][0]["message"]["content"].strip()
+            if text.startswith("```"):
+                first_newline = text.find("\n")
+                text = text[first_newline + 1:] if first_newline != -1 else text[3:]
+            if text.endswith("```"):
+                text = text[:-3]
+            text = text.strip()
+            result = json.loads(text)
+            logger.info(f"Bundle AI analysis completed for '{bundle_data.get('name')}'")
+            return result
+    except httpx.HTTPStatusError as e:
+        body = e.response.text[:300]
+        logger.error(f"Groq API error {e.response.status_code}: {body}")
+        if e.response.status_code == 429:
+            return {"error": "rate_limit", "detail": "API ліміт вичерпано. Спробуйте через хвилину."}
+        return {"error": "api_error", "detail": f"Groq API помилка {e.response.status_code}"}
+    except json.JSONDecodeError as e:
+        logger.error(f"Failed to parse Groq bundle response as JSON: {e}")
+        return {"error": "parse_error", "detail": "AI повернув невалідну відповідь. Спробуйте ще раз."}
+    except Exception as e:
+        logger.error(f"Bundle AI analysis failed: {e}")
+        return None
