@@ -36,6 +36,10 @@ class ChannelBundle(Base):
     )
     rejection_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
 
+    # AI analysis cache
+    ai_cache: Mapped[str | None] = mapped_column(Text, nullable=True)
+    ai_cache_updated_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
     moderated_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
 

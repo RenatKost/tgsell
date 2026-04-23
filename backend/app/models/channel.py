@@ -53,6 +53,10 @@ class Channel(Base):
     avg_reactions: Mapped[int | None] = mapped_column(Integer, nullable=True)
     views_hidden: Mapped[bool] = mapped_column(Boolean, server_default="false", default=False)
 
+    # AI analysis cache
+    ai_cache: Mapped[str | None] = mapped_column(Text, nullable=True)
+    ai_cache_updated_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+
     # Listing type & auction params
     listing_type: Mapped[str] = mapped_column(
         String(20), default="sale"

@@ -1,26 +1,7 @@
+import json
 import logging
 import math
-
-from fastapi import APIRouter, Depends, HTTPException, Query, status
-from sqlalchemy import func, select
-from sqlalchemy.ext.asyncio import AsyncSession
-
-from app.database import get_db
-from app.models.channel import Channel, ChannelPost, ChannelStats, ChannelStatus
-from app.models.user import User
-from app.schemas.channel import (
-    ChannelCreate,
-    ChannelListResponse,
-    ChannelPostResponse,
-    ChannelPostsListResponse,
-    ChannelResponse,
-    ChannelStatsResponse,
-    ChannelUpdate,
-)
-from app.utils.security import get_current_user
-
-import logging
-import math
+from datetime import datetime, timedelta, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import func, select
@@ -102,8 +83,11 @@ async def list_channels(
         if status_filter:
             query = query.where(Channel.status == status_filter)
     else:
-        # Public listing — only approved
+        # Public listing — only approved, exclude channels that belong to a bundle
+        from app.models.bundle import BundleChannel
+        bundled_ids_subq = select(BundleChannel.channel_id).scalar_subquery()
         query = query.where(Channel.status == ChannelStatus.approved)
+        query = query.where(~Channel.id.in_(bundled_ids_subq))
 
     if search:
         query = query.where(Channel.channel_name.ilike(f"%{search}%"))
@@ -401,7 +385,7 @@ async def get_channel_health(channel_id: int, db: AsyncSession = Depends(get_db)
 
 @router.get("/{channel_id}/ai-analysis")
 async def get_ai_analysis(channel_id: int, db: AsyncSession = Depends(get_db)):
-    """Get AI-powered deep analysis of a channel using Google Gemini."""
+    """Get AI-powered deep analysis of a channel. Cached for 7 days."""
     from app.services.ai_analysis import analyze_channel
 
     # Get channel
@@ -409,6 +393,12 @@ async def get_ai_analysis(channel_id: int, db: AsyncSession = Depends(get_db)):
     channel = result.scalar_one_or_none()
     if not channel:
         raise HTTPException(status_code=404, detail="Channel not found")
+
+    # Return cached result if fresher than 7 days
+    if channel.ai_cache and channel.ai_cache_updated_at:
+        age = datetime.now(timezone.utc) - channel.ai_cache_updated_at.replace(tzinfo=timezone.utc)
+        if age < timedelta(days=7):
+            return json.loads(channel.ai_cache)
 
     # Prepare channel data dict
     channel_data = {
@@ -470,6 +460,11 @@ async def get_ai_analysis(channel_id: int, db: AsyncSession = Depends(get_db)):
         raise HTTPException(status_code=503, detail="AI analysis unavailable")
     if "error" in analysis:
         raise HTTPException(status_code=503, detail=analysis.get("detail", "AI analysis error"))
+
+    # Save to cache
+    channel.ai_cache = json.dumps(analysis, ensure_ascii=False)
+    channel.ai_cache_updated_at = datetime.now(timezone.utc)
+    await db.commit()
 
     return analysis
 

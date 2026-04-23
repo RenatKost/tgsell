@@ -69,6 +69,10 @@ export default function BundleDetailsPage() {
     }
   };
 
+  useEffect(() => {
+    if (bundle) handleAiAnalysis();
+  }, [bundle?.id]);
+
   if (loading) {
     return (
       <div className="min-h-screen bg-page flex items-center justify-center">
@@ -207,15 +211,6 @@ export default function BundleDetailsPage() {
         <div className="bg-card border border-card-border rounded-xl p-6 shadow-neon">
           <div className="flex items-center justify-between mb-4">
             <h2 className="text-lg font-bold">🤖 AI аналіз сітки</h2>
-            {!aiAnalysis && (
-              <button
-                onClick={handleAiAnalysis}
-                disabled={aiLoading}
-                className="px-4 py-2 rounded-lg bg-accent text-black text-sm font-bold shadow-lg shadow-accent/30 hover:brightness-110 transition-all disabled:opacity-60"
-              >
-                {aiLoading ? 'Аналізую...' : 'Запустити аналіз'}
-              </button>
-            )}
           </div>
 
           {aiError && <div className="text-red-400 text-sm mb-3">{aiError}</div>}
@@ -329,8 +324,8 @@ export default function BundleDetailsPage() {
             <div className="text-red-400 text-sm">{aiAnalysis.detail || 'Помилка AI аналізу'}</div>
           )}
 
-          {!aiAnalysis && !aiLoading && (
-            <p className="text-gray-500 text-sm">Натисніть кнопку щоб отримати AI-оцінку інвестиційної привабливості цієї сітки.</p>
+          {!aiAnalysis && !aiLoading && !aiError && (
+            <p className="text-gray-500 text-sm">Аналіз недоступний для цієї сітки.</p>
           )}
         </div>
       </div>

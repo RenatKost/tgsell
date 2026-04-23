@@ -1,6 +1,7 @@
 """Channel bundle router — create, list, detail, stats."""
+import json
 import logging
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 
 from fastapi import APIRouter, Body, Depends, HTTPException, Query, status
 from sqlalchemy import func, select
@@ -308,7 +309,7 @@ async def get_bundle_ai_analysis(
     bundle_id: int,
     db: AsyncSession = Depends(get_db),
 ):
-    """AI-powered investment analysis for a bundle."""
+    """AI-powered investment analysis for a bundle. Cached for 7 days."""
     result = await db.execute(
         select(ChannelBundle)
         .options(
@@ -319,6 +320,12 @@ async def get_bundle_ai_analysis(
     bundle = result.scalar_one_or_none()
     if not bundle:
         raise HTTPException(status_code=404, detail="Bundle not found")
+
+    # Return cached result if fresher than 7 days
+    if bundle.ai_cache and bundle.ai_cache_updated_at:
+        age = datetime.now(timezone.utc) - bundle.ai_cache_updated_at.replace(tzinfo=timezone.utc)
+        if age < timedelta(days=7):
+            return json.loads(bundle.ai_cache)
 
     channels = [bc.channel for bc in bundle.bundle_channels if bc.channel is not None]
     total_subs = sum(c.subscribers_count or 0 for c in channels)
@@ -348,4 +355,12 @@ async def get_bundle_ai_analysis(
     analysis = await analyze_bundle(bundle_data, channels_data)
     if analysis is None:
         raise HTTPException(status_code=503, detail="AI сервіс недоступний")
+    if "error" in analysis:
+        raise HTTPException(status_code=503, detail=analysis.get("detail", "AI analysis error"))
+
+    # Save to cache
+    bundle.ai_cache = json.dumps(analysis, ensure_ascii=False)
+    bundle.ai_cache_updated_at = datetime.now(timezone.utc)
+    await db.commit()
+
     return analysis
