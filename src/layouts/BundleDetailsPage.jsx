@@ -247,29 +247,46 @@ export default function BundleDetailsPage() {
               )}
             </div>
 
-            {/* Right: price */}
-            <div className="lg:w-64 flex-shrink-0">
-              <div className="bg-card-inner rounded-xl border border-card-border p-5 flex flex-col h-full">
-                <div className="text-5xl font-black text-accent tracking-tight mb-0.5">
-                  {Number(bundle.price)?.toLocaleString('en') ?? bundle.price}
-                </div>
-                <div className="text-gray-500 text-sm mb-3">USDT за всю сітку</div>
-                {income > 0 && (
-                  <div className="flex items-center justify-between text-sm py-3 border-t border-b border-card-border mb-4">
-                    <span className="text-gray-500">Дохід / міс</span>
-                    <span className="text-white font-bold">{income} USDT</span>
+            {/* Right: price card */}
+            <div className="lg:w-72 flex-shrink-0">
+              <div className="relative rounded-2xl overflow-hidden flex flex-col h-full" style={{background: 'linear-gradient(145deg, #0D1F18 0%, #081410 100%)', border: '1px solid #1A3A2A', boxShadow: '0 0 40px rgba(0,255,136,0.07), inset 0 1px 0 rgba(0,255,136,0.08)'}}>
+                {/* Glow orb */}
+                <div className="absolute top-0 right-0 w-40 h-40 rounded-full pointer-events-none" style={{background: 'radial-gradient(circle, rgba(0,255,136,0.08) 0%, transparent 70%)'}} />
+                <div className="relative p-6 flex flex-col flex-1">
+                  {/* Label */}
+                  <div className="inline-flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-widest text-accent/70 mb-4">
+                    <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z" /></svg>
+                    Ціна продажу
                   </div>
-                )}
-                {buyError && <div className="text-red-400 text-xs mb-3">{buyError}</div>}
-                <div className="mt-auto">
-                  {!isSold && !isSeller && (
-                    <button onClick={handleBuy} disabled={buying}
-                      className="w-full py-3 rounded-xl font-bold bg-accent text-black text-base shadow-lg shadow-accent/30 hover:brightness-110 transition-all disabled:opacity-60">
-                      {buying ? 'Зачекайте...' : '💸 Купити всю сітку'}
-                    </button>
-                  )}
-                  {isSold && <div className="text-center text-gray-500 text-sm py-3">Сітку продано</div>}
-                  {isSeller && !isSold && <div className="text-center text-gray-400 text-sm py-3">Це ваша сітка</div>}
+                  {/* Price */}
+                  <div className="flex items-baseline gap-2 mb-1">
+                    <span className="text-6xl font-black text-accent tracking-tighter leading-none">
+                      {Number(bundle.price)?.toLocaleString('en') ?? bundle.price}
+                    </span>
+                  </div>
+                  <div className="text-gray-500 text-sm mb-6">USDT за всю сітку</div>
+                  {/* Divider */}
+                  <div className="h-px mb-6" style={{background: 'linear-gradient(90deg, transparent, rgba(0,255,136,0.2), transparent)'}} />
+                  {buyError && <div className="text-red-400 text-xs mb-3">{buyError}</div>}
+                  <div className="mt-auto space-y-2">
+                    {!isSold && !isSeller && (
+                      <button onClick={handleBuy} disabled={buying}
+                        className="w-full py-3.5 rounded-xl font-black bg-accent text-black text-base tracking-wide shadow-lg hover:brightness-110 active:scale-95 transition-all disabled:opacity-60"
+                        style={{boxShadow: '0 0 24px rgba(0,255,136,0.35)'}}>
+                        {buying ? 'Зачекайте...' : 'Купити сітку'}
+                      </button>
+                    )}
+                    {isSold && (
+                      <div className="w-full py-3.5 rounded-xl text-center text-gray-500 text-sm bg-card-inner border border-card-border">
+                        Сітку продано
+                      </div>
+                    )}
+                    {isSeller && !isSold && (
+                      <div className="w-full py-3 rounded-xl text-center text-accent/60 text-sm bg-accent/5 border border-accent/15">
+                        Це ваша сітка
+                      </div>
+                    )}
+                  </div>
                 </div>
               </div>
             </div>
@@ -282,7 +299,7 @@ export default function BundleDetailsPage() {
             {[
               { icon: '👥', label: '∑ Підписників',  value: fmt(stats.total_subscribers) },
               { icon: '📊', label: 'Середній ER',    value: stats.avg_er != null ? stats.avg_er.toFixed(1) + '%' : '—' },
-              { icon: '💰', label: '∑ Дохід / міс',  value: stats.total_monthly_income > 0 ? fmt(stats.total_monthly_income) + ' USDT' : '—' },
+              { icon: '💰', label: 'Дохід / міс',    value: stats.total_monthly_income > 0 ? fmt(stats.total_monthly_income) + ' USDT' : income > 0 ? fmt(income) + ' USDT' : '—' },
               { icon: '📡', label: 'Каналів у сітці', value: stats.channel_count },
             ].map(m => (
               <div key={m.label}
@@ -442,10 +459,15 @@ export default function BundleDetailsPage() {
         <div className="bg-card border border-card-border rounded-2xl p-6 shadow-neon-lg">
 
           <div className="flex items-center gap-3 mb-5">
-            <div className="w-8 h-8 rounded-lg bg-accent/15 border border-accent/30 flex items-center justify-center text-sm">🤖</div>
+            <div className="w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0" style={{background: 'linear-gradient(135deg, rgba(0,255,136,0.15), rgba(0,212,170,0.08))', border: '1px solid rgba(0,255,136,0.25)'}}>
+              <svg className="w-4.5 h-4.5" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#00FF88" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 3H5a2 2 0 00-2 2v4m6-6h10a2 2 0 012 2v4M9 3v18m0 0h10a2 2 0 002-2V9M9 21H5a2 2 0 01-2-2V9m0 0h18"/></svg>
+            </div>
             <div>
-              <h2 className="text-base font-bold leading-none">AI аналіз сітки</h2>
-              <div className="text-[10px] text-gray-600 mt-0.5">Groq · Llama 3.3 70B · кеш 7 днів</div>
+              <div className="flex items-center gap-2">
+                <h2 className="text-base font-black leading-none">TgSell Аудит сітки</h2>
+                <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-accent/15 text-accent border border-accent/20 uppercase tracking-wide">Pro</span>
+              </div>
+              <div className="text-[10px] text-gray-600 mt-0.5">Автоматичний аналіз · оновлюється раз на 7 днів</div>
             </div>
           </div>
 
@@ -471,7 +493,7 @@ export default function BundleDetailsPage() {
                   style={{ animationDirection: 'reverse', animationDuration: '1.8s' }} />
               </div>
               <div className="text-center">
-                <div className="text-gray-400 text-sm">Groq аналізує {channels.length} каналів...</div>
+                <div className="text-gray-400 text-sm">TgSell аналізує {channels.length} каналів...</div>
                 <div className="text-gray-600 text-xs mt-1">Зазвичай 10–20 секунд</div>
               </div>
             </div>
@@ -482,7 +504,10 @@ export default function BundleDetailsPage() {
 
               {/* Verdict row */}
               <div className="flex flex-wrap items-center gap-4 p-4 bg-card-inner rounded-xl border border-card-border">
-                <ScoreRing score={aiAnalysis.score || 0} />
+                <div className="flex flex-col items-center gap-1">
+                  <ScoreRing score={aiAnalysis.score || 0} />
+                  <div className="text-[9px] text-gray-600 uppercase tracking-wide">TgSell Score</div>
+                </div>
                 <div className="flex-1 min-w-0">
                   <div className="flex flex-wrap items-center gap-2 mb-2">
                     <span className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full border text-sm font-bold ${vCfg.cls}`}>
