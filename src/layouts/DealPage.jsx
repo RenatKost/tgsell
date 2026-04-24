@@ -1,14 +1,15 @@
 import { useEffect, useRef, useState } from 'react';
 import { useParams } from 'react-router-dom';
+import { Handshake, DollarSign, Send, CreditCard, CheckCircle2, Check } from 'lucide-react';
 import { dealsAPI } from '../services/api';
 import { useAuth } from '../context/AppContext';
 
 const STEPS = [
-	{ key: 'created', label: 'Готовність', icon: '🤝' },
-	{ key: 'payment_pending', label: 'Оплата', icon: '💰' },
-	{ key: 'paid', label: 'Передача', icon: '📤' },
-	{ key: 'awaiting_payout', label: 'Виплата', icon: '💳' },
-	{ key: 'completed', label: 'Завершено', icon: '✅' },
+	{ key: 'created',         label: 'Готовність', LIcon: Handshake,    preset: 'blue'   },
+	{ key: 'payment_pending', label: 'Оплата',     LIcon: DollarSign,   preset: 'gold'   },
+	{ key: 'paid',            label: 'Передача',    LIcon: Send,         preset: 'purple' },
+	{ key: 'awaiting_payout', label: 'Виплата',     LIcon: CreditCard,   preset: 'cyan'   },
+	{ key: 'completed',       label: 'Завершено',   LIcon: CheckCircle2, preset: 'green'  },
 ];
 
 const STATUS_META = {
@@ -33,18 +34,22 @@ const StepProgress = ({ status }) => {
 			{STEPS.map((step, i) => {
 				const done = i < currentIdx;
 				const active = i === currentIdx;
+				const IconCmp = step.LIcon;
 				return (
 					<div key={step.key} className='flex items-center flex-1 last:flex-none'>
 						<div className='flex flex-col items-center'>
-							<div className={`w-10 h-10 rounded-full flex items-center justify-center text-lg font-bold transition-all duration-500 ${
-								done ? 'bg-green-500 text-white shadow-md shadow-green-200' :
-								active ? 'bg-[#3498db] text-white shadow-lg shadow-blue-200 scale-110' :
-								'bg-gray-100 text-gray-400'
-							}`}>
-								{done ? '✓' : step.icon}
+							<div className={`w-10 h-10 rounded-full flex items-center justify-center transition-all duration-500 ${
+								done   ? 'shadow-md' :
+								active ? 'scale-110 shadow-lg' :
+								'bg-gray-100 dark:bg-card-inner'
+							}`} style={done ? {background:'linear-gradient(145deg,#10b981,#059669)',boxShadow:'0 4px 14px rgba(16,185,129,0.5)'} : active ? {background:'linear-gradient(145deg,#38bdf8,#0ea5e9)',boxShadow:'0 4px 14px rgba(56,189,248,0.5)'} : {}}>
+								{done
+									? <Check size={18} color='#fff' strokeWidth={2.5} />
+									: <IconCmp size={18} color={active ? '#fff' : '#9CA3AF'} strokeWidth={1.8} />
+								}
 							</div>
 							<span className={`text-xs mt-1.5 font-medium whitespace-nowrap ${
-								active ? 'text-[#3498db]' : done ? 'text-green-600' : 'text-gray-400'
+								active ? 'text-sky-400' : done ? 'text-emerald-500' : 'text-gray-400'
 							}`}>
 								{step.label}
 							</span>

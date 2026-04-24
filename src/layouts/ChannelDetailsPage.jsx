@@ -1,7 +1,9 @@
 import { useEffect, useState } from 'react';
 import { useParams, useNavigate, NavLink } from 'react-router-dom';
+import { Radio, ExternalLink } from 'lucide-react';
 import { channelsAPI, dealsAPI } from '../services/api';
 import { useAuth } from '../context/AppContext';
+import { IcoSignal } from '../components/Icon3D';
 import DetailsCard from '../components/Cards/DetailsCard';
 import ChannelHealth from '../components/ChanelDetails/ChannelHealth';
 import AIRiskScore from '../components/ChanelDetails/AIRiskScore';
@@ -97,7 +99,7 @@ const ChannelDetailsPage = () => {
 			{/* Bundle banner */}
 			{channel.bundle_id && (
 				<div className='mb-5 flex items-center gap-3 p-3 rounded-xl bg-accent/10 border border-accent/30'>
-					<span className='text-accent text-xl'>📡</span>
+					<IcoSignal size='sm' className='flex-shrink-0' />
 					<span className='text-sm text-gray-200'>
 						Цей канал продається у складі сітки <span className='text-accent font-semibold'>«{channel.bundle_name}»</span>
 					</span>
@@ -134,9 +136,9 @@ const ChannelDetailsPage = () => {
 										href={url}
 										target='_blank'
 										rel='noopener noreferrer'
-										className='inline-flex items-center gap-1 bg-gray-50 dark:bg-card-inner hover:bg-accent hover:text-white text-gray-600 dark:text-gray-300 font-medium text-[11px] px-3 py-2 rounded-lg border border-gray-200 dark:border-card-border hover:border-accent transition-all'
+										className='inline-flex items-center gap-1.5 bg-gray-50 dark:bg-card-inner hover:bg-accent hover:text-white text-gray-600 dark:text-gray-300 font-medium text-[11px] px-3 py-2 rounded-lg border border-gray-200 dark:border-card-border hover:border-accent transition-all'
 									>
-										<span>🔗</span> Ресурс {idx + 1}
+										<ExternalLink size={11} /> Ресурс {idx + 1}
 									</a>
 								))}
 							</div>

@@ -1,8 +1,13 @@
+import { IcoCpu } from '../Icon3D';
+
 const AIRiskScore = ({ health, loading }) => {
 	if (loading) {
 		return (
 			<div className='bg-white dark:bg-card rounded-xl border border-gray-100 dark:border-card-border shadow-sm dark:shadow-neon px-4 pt-4 pb-3 w-full'>
-				<p className='text-gray-400 text-xs'>TgSell Скор</p>
+			<div className='flex items-center gap-2 mb-1'>
+				<IcoCpu size='xs' />
+				<p className='text-gray-400 dark:text-gray-500 text-xs font-semibold'>TgSell Скор</p>
+			</div>
 				<div className='flex justify-center py-6'>
 					<div className='w-32 h-16 rounded-t-full bg-gray-100 dark:bg-card-inner animate-pulse' />
 				</div>
@@ -13,7 +18,10 @@ const AIRiskScore = ({ health, loading }) => {
 	if (!health) {
 		return (
 			<div className='bg-white dark:bg-card rounded-xl border border-gray-100 dark:border-card-border shadow-sm dark:shadow-neon px-4 pt-4 pb-3 w-full'>
-				<p className='text-gray-400 text-xs'>TgSell Скор</p>
+			<div className='flex items-center gap-2 mb-1'>
+				<IcoCpu size='xs' />
+				<p className='text-gray-400 dark:text-gray-500 text-xs font-semibold'>TgSell Скор</p>
+			</div>
 				<p className='text-gray-500 text-center py-8 text-xs'>Немає даних</p>
 			</div>
 		);
@@ -35,7 +43,10 @@ const AIRiskScore = ({ health, loading }) => {
 
 	return (
 		<div className='bg-white dark:bg-card rounded-xl border border-gray-100 dark:border-card-border shadow-sm dark:shadow-neon px-4 pt-4 pb-3 w-full'>
-				<p className='text-gray-400 text-xs mb-1'>TgSell Скор</p>
+			<div className='flex items-center gap-2 mb-1'>
+				<IcoCpu size='xs' />
+				<p className='text-gray-400 dark:text-gray-500 text-xs font-semibold'>TgSell Скор</p>
+			</div>
 			<div className='flex flex-col items-center'>
 				<svg width='160' height='85' viewBox='0 0 160 85'>
 					{/* Background arc */}

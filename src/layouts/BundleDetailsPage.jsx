@@ -1,8 +1,10 @@
 import { useEffect, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import Chart from 'react-apexcharts';
+import { Zap, Calendar, Radio, DollarSign, Target, Link2, User } from 'lucide-react';
 import { bundlesAPI, dealsAPI } from '../services/api';
 import { useAppContext } from '../context/AppContext';
+import { IcoUsers, IcoChart, IcoDollar, IcoSignal, IcoTrophy, IcoPackage, IcoWarning, IcoRocket, IcoTarget, IcoLink, IcoUser } from '../components/Icon3D';
 
 function fmt(n) {
   if (n == null) return '—';
@@ -214,7 +216,7 @@ export default function BundleDetailsPage() {
             <div className="flex-1 min-w-0">
               <div className="flex flex-wrap items-center gap-2 mb-3">
                 <span className="inline-flex items-center gap-1.5 text-xs font-bold px-3 py-1 rounded-full bg-accent/15 text-accent border border-accent/30">
-                  📡 СІТКА · {bundle.channel_count} каналів
+                  <Radio size={11} /> СІТКА · {bundle.channel_count} каналів
                 </span>
                 {bundle.category && (
                   <span className="text-xs px-2.5 py-1 rounded-full bg-card-inner text-gray-400 border border-card-border">
@@ -241,7 +243,8 @@ export default function BundleDetailsPage() {
               )}
               {roi && (
                 <div className="mt-4 inline-flex items-center gap-2 bg-accent/10 border border-accent/20 rounded-lg px-3 py-2">
-                  <span className="text-accent text-sm font-bold">⚡ Окупність ~{roi} міс.</span>
+                  <Zap size={14} className="text-accent flex-shrink-0" />
+                  <span className="text-accent text-sm font-bold">Окупність ~{roi} міс.</span>
                   {income > 0 && <span className="text-gray-500 text-xs">при {fmt(income)} USDT/міс</span>}
                 </div>
               )}
@@ -296,19 +299,26 @@ export default function BundleDetailsPage() {
         {/* ═══════════ STATS BAR ═══════════ */}
         {stats && (
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-            {[
-              { icon: '👥', label: '∑ Підписників',  value: fmt(stats.total_subscribers) },
-              { icon: '📊', label: 'Середній ER',    value: stats.avg_er != null ? stats.avg_er.toFixed(1) + '%' : '—' },
-              { icon: '💰', label: 'Дохід / міс',    value: stats.total_monthly_income > 0 ? fmt(stats.total_monthly_income) + ' USDT' : income > 0 ? fmt(income) + ' USDT' : '—' },
-              { icon: '📡', label: 'Каналів у сітці', value: stats.channel_count },
-            ].map(m => (
-              <div key={m.label}
-                className="bg-card border border-card-border rounded-xl p-4 text-center shadow-neon hover:border-accent/20 transition-colors">
-                <div className="text-2xl mb-1">{m.icon}</div>
-                <div className="text-2xl font-black text-accent">{m.value}</div>
-                <div className="text-xs text-gray-500 mt-1">{m.label}</div>
-              </div>
-            ))}
+            <div className="bg-card border border-card-border rounded-xl p-4 text-center shadow-neon hover:border-accent/20 transition-colors">
+              <div className="flex justify-center mb-2"><IcoUsers size="md" /></div>
+              <div className="text-2xl font-black text-accent">{fmt(stats.total_subscribers)}</div>
+              <div className="text-xs text-gray-500 mt-1">∑ Підписників</div>
+            </div>
+            <div className="bg-card border border-card-border rounded-xl p-4 text-center shadow-neon hover:border-accent/20 transition-colors">
+              <div className="flex justify-center mb-2"><IcoChart size="md" /></div>
+              <div className="text-2xl font-black text-accent">{stats.avg_er != null ? stats.avg_er.toFixed(1) + '%' : '—'}</div>
+              <div className="text-xs text-gray-500 mt-1">Середній ER</div>
+            </div>
+            <div className="bg-card border border-card-border rounded-xl p-4 text-center shadow-neon hover:border-accent/20 transition-colors">
+              <div className="flex justify-center mb-2"><IcoDollar size="md" /></div>
+              <div className="text-2xl font-black text-accent">{stats.total_monthly_income > 0 ? fmt(stats.total_monthly_income) + ' USDT' : income > 0 ? fmt(income) + ' USDT' : '—'}</div>
+              <div className="text-xs text-gray-500 mt-1">Дохід / міс</div>
+            </div>
+            <div className="bg-card border border-card-border rounded-xl p-4 text-center shadow-neon hover:border-accent/20 transition-colors">
+              <div className="flex justify-center mb-2"><IcoSignal size="md" /></div>
+              <div className="text-2xl font-black text-accent">{stats.channel_count}</div>
+              <div className="text-xs text-gray-500 mt-1">Каналів у сітці</div>
+            </div>
           </div>
         )}
 
@@ -322,7 +332,10 @@ export default function BundleDetailsPage() {
             {topChannel && (
               <div className="bg-card border border-accent/25 rounded-xl p-4 shadow-neon relative overflow-hidden">
                 <div className="absolute top-0 right-0 w-28 h-28 bg-accent/5 rounded-full -translate-y-1/2 translate-x-1/2 pointer-events-none" />
-                <div className="text-xs text-accent font-bold uppercase tracking-wider mb-3">🏆 Топ канал за ER</div>
+                <div className="flex items-center gap-2 mb-3">
+                  <IcoTrophy size="sm" />
+                  <span className="text-xs text-accent font-bold uppercase tracking-wider">Топ канал за ER</span>
+                </div>
                 <Link to={`/channel/${topChannel.id}`} className="flex items-center gap-3 group">
                   <div className="w-14 h-14 rounded-full bg-card-inner border-2 border-accent/30 flex-shrink-0 overflow-hidden">
                     {topChannel.avatar_url
@@ -450,7 +463,10 @@ export default function BundleDetailsPage() {
         {/* ═══════════ RESOURCES ═══════════ */}
         {bundle.resources && (
           <div className="bg-card border border-card-border rounded-xl p-5 shadow-neon">
-            <div className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-3">📦 Що входить у продаж</div>
+            <div className="flex items-center gap-2 mb-3">
+              <IcoPackage size="sm" />
+              <span className="text-xs font-bold text-gray-400 uppercase tracking-wider">Що входить у продаж</span>
+            </div>
             <p className="text-gray-300 text-sm whitespace-pre-wrap leading-relaxed">{bundle.resources}</p>
           </div>
         )}
@@ -473,7 +489,7 @@ export default function BundleDetailsPage() {
 
           {aiError && (
             <div className="flex items-start gap-3 bg-red-950/40 border border-red-900/50 rounded-xl p-4 mb-4">
-              <span className="text-red-400 text-lg flex-shrink-0">⚠️</span>
+              <IcoWarning size="sm" className="flex-shrink-0" />
               <div className="flex-1">
                 <div className="text-red-400 text-sm">{aiError}</div>
                 <button onClick={handleAiAnalysis}
@@ -514,8 +530,9 @@ export default function BundleDetailsPage() {
                       {vCfg.label}
                     </span>
                     {aiAnalysis.roi_months && (
-                      <span className="text-xs bg-card border border-card-border rounded-full px-3 py-1 text-gray-300">
-                        📅 Окупність: <strong>{aiAnalysis.roi_months} міс.</strong>
+                      <span className="inline-flex items-center gap-1.5 text-xs bg-card border border-card-border rounded-full px-3 py-1 text-gray-300">
+                        <Calendar size={11} className="text-gray-500" />
+                        Окупність: <strong>{aiAnalysis.roi_months} міс.</strong>
                       </span>
                     )}
                   </div>
@@ -536,7 +553,7 @@ export default function BundleDetailsPage() {
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                 {(aiAnalysis.total_potential_income_min || aiAnalysis.total_potential_income_max) && (
                   <div className="bg-card-inner rounded-xl border border-card-border p-4">
-                    <div className="text-[10px] text-gray-500 uppercase tracking-wide mb-1.5">💰 Потенційний дохід / міс</div>
+                    <div className="flex items-center gap-1.5 mb-2"><IcoDollar size="xs" /><span className="text-[10px] text-gray-500 uppercase tracking-wide">Потенційний дохід / міс</span></div>
                     <div className="text-accent font-black text-lg">
                       {aiAnalysis.total_potential_income_min}–{aiAnalysis.total_potential_income_max}
                     </div>
@@ -545,14 +562,15 @@ export default function BundleDetailsPage() {
                 )}
                 {aiAnalysis.fair_price_estimate && (
                   <div className="bg-card-inner rounded-xl border border-card-border p-4">
-                    <div className="text-[10px] text-gray-500 uppercase tracking-wide mb-1.5">🎯 Справедлива ціна</div>
+                    <div className="flex items-center gap-1.5 mb-2"><IcoTarget size="xs" /><span className="text-[10px] text-gray-500 uppercase tracking-wide">Справедлива ціна</span></div>
                     <div className="text-white text-sm leading-snug">{aiAnalysis.fair_price_estimate}</div>
                   </div>
                 )}
                 {(aiAnalysis.synergy || aiAnalysis.audience_quality) && (
                   <div className="bg-card-inner rounded-xl border border-card-border p-4">
-                    <div className="text-[10px] text-gray-500 uppercase tracking-wide mb-1.5">
-                      {aiAnalysis.synergy ? '🔗 Синергія' : '👤 Аудиторія'}
+                    <div className="flex items-center gap-1.5 mb-2">
+                      {aiAnalysis.synergy ? <IcoLink size="xs" /> : <IcoUser size="xs" />}
+                      <span className="text-[10px] text-gray-500 uppercase tracking-wide">{aiAnalysis.synergy ? 'Синергія' : 'Аудиторія'}</span>
                     </div>
                     <div className="text-white text-sm leading-snug">
                       {aiAnalysis.synergy || aiAnalysis.audience_quality}
@@ -564,7 +582,7 @@ export default function BundleDetailsPage() {
               {/* Audience quality */}
               {aiAnalysis.audience_quality && aiAnalysis.synergy && (
                 <div className="bg-card-inner rounded-xl border border-card-border p-4">
-                  <div className="text-[10px] text-gray-500 uppercase tracking-wide mb-1.5 font-semibold">👤 Якість аудиторії</div>
+                  <div className="flex items-center gap-1.5 mb-2"><IcoUser size="xs" /><span className="text-[10px] text-gray-500 uppercase tracking-wide font-semibold">Якість аудиторії</span></div>
                   <p className="text-gray-300 text-sm">{aiAnalysis.audience_quality}</p>
                 </div>
               )}
@@ -573,7 +591,7 @@ export default function BundleDetailsPage() {
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 {aiAnalysis.risks?.length > 0 && (
                   <div className="bg-red-950/25 border border-red-900/40 rounded-xl p-4">
-                    <div className="text-xs text-red-400 font-bold uppercase tracking-wide mb-3">⚠️ Ризики</div>
+                    <div className="flex items-center gap-2 mb-3"><IcoWarning size="sm" /><span className="text-xs text-red-400 font-bold uppercase tracking-wide">Ризики</span></div>
                     <ul className="space-y-2">
                       {aiAnalysis.risks.map((r, i) => (
                         <li key={i} className="text-xs text-gray-400 flex gap-2 leading-relaxed">
@@ -586,7 +604,7 @@ export default function BundleDetailsPage() {
                 )}
                 {aiAnalysis.opportunities?.length > 0 && (
                   <div className="bg-accent/5 border border-accent/20 rounded-xl p-4">
-                    <div className="text-xs text-accent font-bold uppercase tracking-wide mb-3">🚀 Можливості</div>
+                    <div className="flex items-center gap-2 mb-3"><IcoRocket size="sm" /><span className="text-xs text-accent font-bold uppercase tracking-wide">Можливості</span></div>
                     <ul className="space-y-2">
                       {aiAnalysis.opportunities.map((o, i) => (
                         <li key={i} className="text-xs text-gray-400 flex gap-2 leading-relaxed">

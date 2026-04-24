@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { motion } from 'framer-motion';
 import { NavLink } from 'react-router-dom';
+import { CheckCircle2 } from 'lucide-react';
 import Calculator from '../components/Main/Calculator';
 import ActivityTicker from '../components/Auction/ActivityTicker';
 
@@ -83,7 +84,7 @@ const HeroCard = () => (
         </div>
         <div className="flex-1 min-w-0">
           <div className="flex items-center justify-between mb-1">
-            <span className="text-[10px] text-gray-400">AI Score</span>
+        <span className="text-[10px] text-gray-400">TgSell Score</span>
             <span className="text-xs font-black text-accent">92/100</span>
           </div>
           <div className="h-1.5 bg-gray-100 dark:bg-card rounded-full">
@@ -511,9 +512,7 @@ const HomePage = () => {
                 <ul className="space-y-3">
                   {f.points.map(p => (
                     <li key={p} className="flex items-start gap-3 text-sm text-gray-600 dark:text-gray-300">
-                      <div className="w-5 h-5 rounded-full bg-accent/10 border border-accent/20 flex items-center justify-center flex-shrink-0 mt-0.5">
-                        <span className="w-1.5 h-1.5 rounded-full bg-accent" />
-                      </div>
+                      <CheckCircle2 size={17} className="text-accent flex-shrink-0 mt-0.5" strokeWidth={2} />
                       {p}
                     </li>
                   ))}

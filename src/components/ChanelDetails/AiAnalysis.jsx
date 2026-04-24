@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { channelsAPI } from '../../services/api';
+import { IcoCpu } from '../Icon3D';
 
 const verdictConfig = {
 	buy: { label: 'Купувати', color: 'text-emerald-600 dark:text-emerald-400', bg: 'bg-emerald-50 dark:bg-emerald-900/20', border: 'border-emerald-200 dark:border-emerald-800', icon: '🟢' },
@@ -56,11 +57,9 @@ const AiAnalysis = ({ channelId, channel }) => {
 		return (
 			<div className='bg-white dark:bg-card rounded-xl border border-gray-100 dark:border-card-border shadow-sm dark:shadow-neon p-4'>
 				<div className='flex items-center gap-3 mb-4'>
-					<div className='w-8 h-8 rounded-lg bg-indigo-100 dark:bg-card-inner flex items-center justify-center animate-pulse'>
-						<span className='text-sm'>🤖</span>
-					</div>
+					<IcoCpu size='sm' />
 					<div>
-						<p className='text-sm font-semibold text-gray-900 dark:text-white'>Аналізую...</p>
+						<p className='text-sm font-semibold text-gray-900 dark:text-white'>TgSell аналізує...</p>
 						<p className='text-[10px] text-gray-500'>TgSell аналізує дані каналу</p>
 					</div>
 				</div>
