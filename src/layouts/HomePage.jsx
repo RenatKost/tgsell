@@ -123,7 +123,7 @@ const HeroCard = () => (
 const AIMockUI = () => (
   <div className="bg-white dark:bg-card rounded-2xl border border-gray-100 dark:border-card-border p-5 shadow-sm dark:shadow-neon w-full max-w-xs">
     <div className="flex items-center justify-between mb-4">
-      <span className="text-xs font-bold text-gray-400 uppercase tracking-wider">AI-аналіз каналу</span>
+      <span className="text-xs font-bold text-gray-400 uppercase tracking-wider">TgSell Аналіз</span>
       <span className="bg-accent text-black text-xs font-black px-3 py-1 rounded-full">КУПИТИ</span>
     </div>
     <div className="flex items-center gap-4 mb-4">
@@ -149,7 +149,7 @@ const AIMockUI = () => (
       </div>
     </div>
     <div className="bg-accent/5 rounded-xl p-3 border border-accent/10">
-      <p className="text-[10px] text-gray-400 mb-1">Висновок AI (Groq Llama 3.3)</p>
+      <p className="text-[10px] text-gray-400 mb-1">Висновок TgSell</p>
       <p className="text-xs text-gray-700 dark:text-gray-300">Канал має сильну органічну аудиторію та стабільний ріст. Рекомендовано до покупки.</p>
     </div>
   </div>
@@ -321,9 +321,9 @@ const HomePage = () => {
 
   const features = [
     {
-      tag: 'AI-аналіз',
-      title: 'Штучний інтелект оцінює кожен канал',
-      desc: 'Groq Llama 3.3 аналізує останні 20 постів, 14 днів статистики і дає вердикт: купити, чекати або уникнути. Ніякого гадання.',
+      tag: 'TgSell Аналіз',
+      title: 'TgSell оцінює кожен канал',
+      desc: 'TgSell аналізує останні 20 постів, 14 днів статистики і дає вердикт: купити, чекати або уникнути. Ніякого гадання.',
       points: [
         'Оцінка якості аудиторії від 0 до 100',
         'Аналіз тематики і тональності контенту',

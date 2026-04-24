@@ -69,16 +69,16 @@ export default function BundleDetailsPage() {
     try {
       const res = await bundlesAPI.getAiAnalysis(id);
       if (res.data?.error) {
-        setAiError(res.data.detail || 'Помилка AI аналізу');
+        setAiError(res.data.detail || 'Помилка TgSell аналізу');
       } else {
         setAiAnalysis(res.data);
       }
     } catch (e) {
       if (e.code === 'ECONNABORTED' || e.message?.includes('timeout')) {
-        setAiError('AI аналіз перевищив ліміт часу. Натисніть "Спробувати ще раз".');
+        setAiError('TgSell аналіз перевищив ліміт часу. Натисніть "Спробувати ще раз".');
       } else {
         const detail = e.response?.data?.detail;
-        setAiError(typeof detail === 'string' ? detail : 'Не вдалося отримати AI аналіз. Спробуйте ще раз.');
+        setAiError(typeof detail === 'string' ? detail : 'Не вдалося отримати TgSell аналіз. Спробуйте ще раз.');
       }
     } finally {
       setAiLoading(false);

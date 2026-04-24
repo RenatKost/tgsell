@@ -290,7 +290,7 @@ const CatalogPage = () => {
 						{roi12 && <span className='text-xs bg-accent/10 text-accent px-2 py-0.5 rounded-full'>ROI &lt; 12 міс.</span>}
 						{er20 && <span className='text-xs bg-accent/10 text-accent px-2 py-0.5 rounded-full'>ER &gt; 20%</span>}
 						{verifiedData && <span className='text-xs bg-green-500/10 text-green-400 px-2 py-0.5 rounded-full'>✓ verified data</span>}
-						{aiRecommended && <span className='text-xs bg-accent/10 text-accent px-2 py-0.5 rounded-full'>🤖 AI-підбор</span>}
+						{aiRecommended && <span className='text-xs bg-accent/10 text-accent px-2 py-0.5 rounded-full'>TgSell підбір</span>}
 						{(priceRange[0] > 0 || priceRange[1] < PRICE_MAX) && (
 							<span className='text-xs bg-accent/10 text-accent px-2 py-0.5 rounded-full'>
 								{priceRange[0].toLocaleString()}–{priceRange[1] >= PRICE_MAX ? '∞' : priceRange[1].toLocaleString()} USDT

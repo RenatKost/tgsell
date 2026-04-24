@@ -2,7 +2,7 @@ const AIRiskScore = ({ health, loading }) => {
 	if (loading) {
 		return (
 			<div className='bg-white dark:bg-card rounded-xl border border-gray-100 dark:border-card-border shadow-sm dark:shadow-neon px-4 pt-4 pb-3 w-full'>
-				<p className='text-gray-400 text-xs'>AI Risk Assessment</p>
+				<p className='text-gray-400 text-xs'>TgSell Скор</p>
 				<div className='flex justify-center py-6'>
 					<div className='w-32 h-16 rounded-t-full bg-gray-100 dark:bg-card-inner animate-pulse' />
 				</div>
@@ -13,7 +13,7 @@ const AIRiskScore = ({ health, loading }) => {
 	if (!health) {
 		return (
 			<div className='bg-white dark:bg-card rounded-xl border border-gray-100 dark:border-card-border shadow-sm dark:shadow-neon px-4 pt-4 pb-3 w-full'>
-				<p className='text-gray-400 text-xs'>AI Risk Assessment</p>
+				<p className='text-gray-400 text-xs'>TgSell Скор</p>
 				<p className='text-gray-500 text-center py-8 text-xs'>Немає даних</p>
 			</div>
 		);
@@ -35,7 +35,7 @@ const AIRiskScore = ({ health, loading }) => {
 
 	return (
 		<div className='bg-white dark:bg-card rounded-xl border border-gray-100 dark:border-card-border shadow-sm dark:shadow-neon px-4 pt-4 pb-3 w-full'>
-			<p className='text-gray-400 text-xs mb-1'>AI Risk Assessment</p>
+				<p className='text-gray-400 text-xs mb-1'>TgSell Скор</p>
 			<div className='flex flex-col items-center'>
 				<svg width='160' height='85' viewBox='0 0 160 85'>
 					{/* Background arc */}
@@ -57,7 +57,7 @@ const AIRiskScore = ({ health, loading }) => {
 					)}
 				</svg>
 				<div className='text-center -mt-5'>
-					<p className='text-gray-500 dark:text-gray-400 text-[10px]'>Risk-score</p>
+					<p className='text-gray-500 dark:text-gray-400 text-[10px]'>TgSell</p>
 					<p className='font-extrabold text-2xl leading-tight'>
 						<span style={{ color }}>{score}</span>
 						<span className='text-gray-500 text-sm font-normal'>/100</span>

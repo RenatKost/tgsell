@@ -61,7 +61,7 @@ const AiAnalysis = ({ channelId, channel }) => {
 					</div>
 					<div>
 						<p className='text-sm font-semibold text-gray-900 dark:text-white'>Аналізую...</p>
-						<p className='text-[10px] text-gray-500'>AI обробляє дані каналу</p>
+						<p className='text-[10px] text-gray-500'>TgSell аналізує дані каналу</p>
 					</div>
 				</div>
 				<div className='grid grid-cols-2 gap-3'>
@@ -112,7 +112,7 @@ const AiAnalysis = ({ channelId, channel }) => {
 								<path strokeLinecap='round' strokeLinejoin='round' d='M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z' />
 							</svg>
 						</div>
-						<p className='text-sm font-bold text-gray-900 dark:text-white'>AI АНАЛІЗ І МОНЕТИЗАЦІЯ</p>
+							<p className='text-sm font-bold text-gray-900 dark:text-white'>TgSell АНАЛІЗ І МОНЕТИЗАЦІЯ</p>
 					</div>
 					<div className={`${verdict.bg} ${verdict.border} border rounded-lg px-2.5 py-1 text-center`}>
 						<p className={`text-[11px] font-bold ${verdict.color}`}>{verdict.icon} {verdict.label}</p>
@@ -144,7 +144,7 @@ const AiAnalysis = ({ channelId, channel }) => {
 
 						{/* Content Analysis */}
 						<div>
-							<p className='text-[10px] text-gray-400 font-semibold uppercase tracking-wider mb-2'>AI КОНТЕНТ АНАЛІЗ</p>
+							<p className='text-[10px] text-gray-400 font-semibold uppercase tracking-wider mb-2'>TgSell КОНТЕНТ АНАЛІЗ</p>
 
 							{/* Sentiment with bars */}
 							<div className='mb-3'>
