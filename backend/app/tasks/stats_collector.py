@@ -19,19 +19,29 @@ async def collect_stats_once():
 
     async with async_session() as db:
         result = await db.execute(
-            select(Channel).where(
+            select(Channel.id).where(
                 Channel.status.in_([ChannelStatus.approved, ChannelStatus.pending])
             )
         )
-        channels = result.scalars().all()
+        channel_ids = result.scalars().all()
 
-        total = len(channels)
-        success = 0
-        failed = 0
-        telethon_ok = True
+    total = len(channel_ids)
+    success = 0
+    failed = 0
+    telethon_ok = True
 
-        for channel in channels:
-            try:
+    # Each channel gets its own session/transaction. The full sweep can take a
+    # long time (rate-limited + Telethon flood waits), so a channel may get
+    # deleted mid-run; isolating sessions keeps that from poisoning the rest
+    # of the batch with a broken transaction.
+    for channel_id in channel_ids:
+        try:
+            async with async_session() as db:
+                channel = await db.get(Channel, channel_id)
+                if channel is None:
+                    logger.info(f"Channel #{channel_id} was deleted before stats collection, skipping")
+                    continue
+
                 stats = await collect_channel_stats(channel.telegram_link)
                 if not stats.get("daily_stats"):
                     telethon_ok = False
@@ -132,18 +142,14 @@ async def collect_stats_once():
                 # Rate limit: wait between channels
                 await asyncio.sleep(3)
 
-            except Exception as e:
-                failed += 1
-                logger.error(f"Stats collection failed for channel #{channel.id}: {e}")
-                try:
-                    await db.rollback()
-                except Exception:
-                    pass
+        except Exception as e:
+            failed += 1
+            logger.error(f"Stats collection failed for channel #{channel_id}: {e}")
 
-        # Send summary alert if there were problems
-        if total > 0:
-            from app.services.alerts import alert_stats_summary
-            await alert_stats_summary(total, success, failed, telethon_ok)
+    # Send summary alert if there were problems
+    if total > 0:
+        from app.services.alerts import alert_stats_summary
+        await alert_stats_summary(total, success, failed, telethon_ok)
 
 
 async def _upsert_channel_posts(db: AsyncSession, channel_id: int, posts_data: list):
@@ -320,6 +326,10 @@ async def update_post_views_once():
 
             except Exception as e:
                 logger.error(f"View tracking failed for channel #{channel_id}: {e}")
+                try:
+                    await db.rollback()
+                except Exception:
+                    pass
 
 
 async def run_view_tracker(interval_hours: int = 6):
