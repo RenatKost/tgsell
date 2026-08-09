@@ -76,10 +76,10 @@ class Channel(Base):
 
     # Relationships
     seller = relationship("User", back_populates="channels", foreign_keys=[seller_id])
-    stats = relationship("ChannelStats", back_populates="channel", cascade="all, delete-orphan")
-    posts = relationship("ChannelPost", back_populates="channel", cascade="all, delete-orphan")
-    deals = relationship("Deal", back_populates="channel")
-    auction = relationship("Auction", back_populates="channel", uselist=False)
+    stats = relationship("ChannelStats", back_populates="channel", cascade="all, delete-orphan", passive_deletes=True)
+    posts = relationship("ChannelPost", back_populates="channel", cascade="all, delete-orphan", passive_deletes=True)
+    deals = relationship("Deal", back_populates="channel", passive_deletes=True)
+    auction = relationship("Auction", back_populates="channel", uselist=False, passive_deletes=True)
 
 
 class ChannelStats(Base):
