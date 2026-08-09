@@ -37,7 +37,7 @@ class Deal(Base):
     __tablename__ = "deals"
 
     id: Mapped[int] = mapped_column(primary_key=True)
-    channel_id: Mapped[int | None] = mapped_column(ForeignKey("channels.id"), nullable=True)
+    channel_id: Mapped[int | None] = mapped_column(ForeignKey("channels.id", ondelete="SET NULL"), nullable=True)
     buyer_id: Mapped[int] = mapped_column(ForeignKey("users.id"))
     seller_id: Mapped[int] = mapped_column(ForeignKey("users.id"))
 
