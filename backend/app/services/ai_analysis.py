@@ -1,4 +1,4 @@
-"""AI-powered channel analysis using Groq API (free tier, Llama 3.3 70B)."""
+"""AI-powered channel analysis using Groq API (free tier, GPT-OSS 120B)."""
 import json
 import logging
 
@@ -9,7 +9,10 @@ from app.config import settings
 logger = logging.getLogger(__name__)
 
 GROQ_URL = "https://api.groq.com/openai/v1/chat/completions"
-MODEL = "llama-3.3-70b-versatile"
+# llama-3.3-70b-versatile was decommissioned by Groq; gpt-oss-120b is the
+# current closest-tier general chat model on the account (checked via
+# GET /openai/v1/models on 2026-08-28).
+MODEL = "openai/gpt-oss-120b"
 
 
 async def analyze_channel(channel_data: dict, posts_data: list[dict], stats_data: list[dict]) -> dict | None:
