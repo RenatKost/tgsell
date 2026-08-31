@@ -358,17 +358,17 @@ const AuctionPage = () => {
 							<div className='text-right'>{card.badge}</div>
 						</div>
 
-						{/* Row 2: number+label (left) + visualization (right) */}
+						{/* Row 2: number+label (left) + visualization (right, hidden on the smallest screens — cards are too narrow for a fixed 96px chart there) */}
 						<div className='flex items-center justify-between gap-2'>
 							<div className='flex-shrink-0'>
-								<p className='text-[1.85rem] font-black text-gray-900 dark:text-white leading-none tabular-nums'>
+								<p className='text-[1.5rem] xl:text-[1.85rem] font-black text-gray-900 dark:text-white leading-none tabular-nums'>
 									{card.value}
 								</p>
 								<p className='text-[11px] text-gray-500 dark:text-gray-400 mt-1 whitespace-nowrap'>
 									{card.label}
 								</p>
 							</div>
-							<div className='flex-shrink-0'>
+							<div className='hidden sm:block flex-shrink-0'>
 								{card.right}
 							</div>
 						</div>
@@ -393,9 +393,9 @@ const AuctionPage = () => {
 					</button>
 				))}
 
-				{/* Price range */}
-				<div className='ml-auto flex items-center gap-2'>
-					<div className='relative'>
+				{/* Price range — decorative label select hidden on mobile, functional Min/Max always shown */}
+				<div className='sm:ml-auto flex items-center gap-2 flex-wrap'>
+					<div className='relative hidden sm:block'>
 						<select className='appearance-none bg-white dark:bg-card border border-gray-200 dark:border-card-border text-gray-500 dark:text-gray-400 text-xs rounded-xl px-3 py-[9px] pr-7 focus:outline-none focus:border-orange-400 cursor-pointer'>
 							<option>Ціновий діапазон (USDT)</option>
 						</select>
@@ -403,11 +403,12 @@ const AuctionPage = () => {
 							<path d='M2 4l4 4 4-4' stroke='currentColor' strokeWidth='1.5' strokeLinecap='round' strokeLinejoin='round' fill='none'/>
 						</svg>
 					</div>
+					<span className='text-gray-400 text-xs font-medium sm:hidden'>USDT:</span>
 					<input type='number' placeholder='Min' value={minPrice} onChange={e => setMinPrice(e.target.value)}
-						className='w-20 bg-white dark:bg-card border border-gray-200 dark:border-card-border text-gray-900 dark:text-white text-xs rounded-xl px-3 py-2 focus:outline-none focus:border-orange-400 placeholder-gray-400' />
+						className='w-16 sm:w-20 bg-white dark:bg-card border border-gray-200 dark:border-card-border text-gray-900 dark:text-white text-xs rounded-xl px-3 py-2 focus:outline-none focus:border-orange-400 placeholder-gray-400' />
 					<span className='text-gray-400 text-xs font-medium'>~</span>
 					<input type='number' placeholder='Max' value={maxPrice} onChange={e => setMaxPrice(e.target.value)}
-						className='w-20 bg-white dark:bg-card border border-gray-200 dark:border-card-border text-gray-900 dark:text-white text-xs rounded-xl px-3 py-2 focus:outline-none focus:border-orange-400 placeholder-gray-400' />
+						className='w-16 sm:w-20 bg-white dark:bg-card border border-gray-200 dark:border-card-border text-gray-900 dark:text-white text-xs rounded-xl px-3 py-2 focus:outline-none focus:border-orange-400 placeholder-gray-400' />
 				</div>
 			</div>
 

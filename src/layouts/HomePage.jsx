@@ -103,19 +103,19 @@ const HeroCard = () => (
     </div>
     <motion.div
       animate={{ y: [-3, 3, -3] }} transition={{ repeat: Infinity, duration: 3 }}
-      className="absolute -top-3 -right-4 bg-white dark:bg-card border border-gray-100 dark:border-card-border rounded-xl px-3 py-2 shadow-lg"
+      className="absolute -top-3 right-1 sm:-right-4 bg-white dark:bg-card border border-gray-100 dark:border-card-border rounded-xl px-2.5 sm:px-3 py-1.5 sm:py-2 shadow-lg"
     >
       <div className="flex items-center gap-1.5">
         <span className="w-1.5 h-1.5 rounded-full bg-accent animate-pulse" />
-        <span className="text-xs font-bold dark:text-white">Ескроу захист</span>
+        <span className="text-[10px] sm:text-xs font-bold dark:text-white whitespace-nowrap">Ескроу захист</span>
       </div>
     </motion.div>
     <motion.div
       animate={{ y: [3, -3, 3] }} transition={{ repeat: Infinity, duration: 3, delay: 1.2 }}
-      className="absolute -bottom-3 -left-4 bg-white dark:bg-card border border-gray-100 dark:border-card-border rounded-xl px-3 py-2 shadow-lg"
+      className="absolute -bottom-3 left-1 sm:-left-4 bg-white dark:bg-card border border-gray-100 dark:border-card-border rounded-xl px-2.5 sm:px-3 py-1.5 sm:py-2 shadow-lg"
     >
-      <p className="text-[9px] text-gray-400">Обіг платформи</p>
-      <p className="text-sm font-black text-accent">$2.4M+ USDT</p>
+      <p className="text-[9px] text-gray-400 whitespace-nowrap">Обіг платформи</p>
+      <p className="text-xs sm:text-sm font-black text-accent whitespace-nowrap">$2.4M+ USDT</p>
     </motion.div>
   </div>
 );
@@ -427,7 +427,7 @@ const HomePage = () => {
             <p className="text-lg text-gray-500 dark:text-gray-300 leading-relaxed mb-8 max-w-lg">
               Ескроу-захист, AI-аналіз і аукціони в реальному часі. Більше 500 каналів для купівлі з USDT (TRC-20).
             </p>
-            <div className="flex gap-8 sm:gap-12 mb-10">
+            <div className="grid grid-cols-2 gap-y-5 gap-x-4 sm:flex sm:gap-12 mb-10">
               <StatCounter end={500} label="Каналів" suffix="+" />
               <StatCounter end={1200} label="Угод" suffix="+" />
               <StatCounter end={3400} label="Покупців" suffix="+" />

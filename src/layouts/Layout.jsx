@@ -8,7 +8,7 @@ const Layout = () => {
 		<ScrollRestoration>
 			<div className='wrapper bg-gray-50 dark:bg-transparent transition-colors duration-300'>
 				<Header />
-				<div className='max-w-7xl mx-auto px-4 md:px-8 content'>
+				<div className='w-full max-w-7xl mx-auto px-4 md:px-8 content'>
 					<Outlet></Outlet>
 				</div>
 				<Footer />
