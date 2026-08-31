@@ -11,6 +11,7 @@ import {
 	faArrowRight,
 } from '@fortawesome/free-solid-svg-icons';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
+import { useState } from 'react';
 import { NavLink } from 'react-router-dom';
 
 const statusLabels = {
@@ -22,6 +23,7 @@ const statusLabels = {
 
 const CabinetCard = ({ channel, onDelete }) => {
 	const status = statusLabels[channel.status] || statusLabels.pending;
+	const [avatarError, setAvatarError] = useState(false);
 
 	const formatAge = (months) => {
 		if (!months) return '—';
@@ -37,8 +39,8 @@ const CabinetCard = ({ channel, onDelete }) => {
 			{/* Top: Avatar + Name + Status */}
 			<div className='p-5 pb-4'>
 				<div className='flex items-start gap-4'>
-					{channel.avatar_url ? (
-						<img className='w-14 h-14 rounded-xl object-cover flex-shrink-0' src={channel.avatar_url} alt={channel.channel_name} />
+					{channel.avatar_url && !avatarError ? (
+						<img className='w-14 h-14 rounded-xl object-cover flex-shrink-0' src={channel.avatar_url} alt={channel.channel_name} onError={() => setAvatarError(true)} />
 					) : (
 						<div className='w-14 h-14 rounded-xl bg-gradient-to-br from-blue-400 to-blue-600 flex items-center justify-center text-xl font-bold text-white flex-shrink-0'>
 							{channel.channel_name?.[0] || '?'}
@@ -50,6 +52,9 @@ const CabinetCard = ({ channel, onDelete }) => {
 								{channel.channel_name}
 							</NavLink>
 							<div className='flex items-center gap-1.5 flex-shrink-0'>
+								{channel.is_closed && (
+									<span className='text-xs px-2 py-0.5 rounded-full font-medium bg-amber-50 text-amber-600 border border-amber-200'>🔒</span>
+								)}
 								{(channel.listing_type === 'auction' || channel.listing_type === 'both') && (
 									<span className='text-xs px-2 py-0.5 rounded-full font-medium bg-orange-50 text-orange-600 border border-orange-200'>🔥</span>
 								)}

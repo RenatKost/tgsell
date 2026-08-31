@@ -15,8 +15,18 @@ GROQ_URL = "https://api.groq.com/openai/v1/chat/completions"
 MODEL = "openai/gpt-oss-120b"
 
 
-async def analyze_channel(channel_data: dict, posts_data: list[dict], stats_data: list[dict]) -> dict | None:
-    """Send full channel data to Groq/Llama for deep monetization analysis."""
+async def analyze_channel(
+    channel_data: dict,
+    posts_data: list[dict],
+    stats_data: list[dict],
+    is_closed: bool = False,
+) -> dict | None:
+    """Send full channel data to Groq/Llama for deep monetization analysis.
+
+    is_closed marks a channel that requires an approved join request — the
+    bot cannot read its posts/history, so subscriber/view/ER numbers here are
+    self-reported by the seller and stats_data/posts_data will be empty.
+    """
     if not settings.groq_api_key:
         logger.warning("GROQ_API_KEY not set — skipping AI analysis")
         return None
@@ -27,8 +37,8 @@ async def analyze_channel(channel_data: dict, posts_data: list[dict], stats_data
         f"Назва: {channel_data.get('channel_name', '?')}\n"
         f"Категорія: {channel_data.get('category', '?')}\n"
         f"Підписників: {channel_data.get('subscribers_count', 0):,}\n"
-        f"Середні перегляди: {'⚠️ ВИМКНЕНІ АДМІНОМ (лічильник переглядів прихований)' if views_hidden else f'{channel_data.get('avg_views', 0):,}'}\n"
-        f"ER (engagement rate): {channel_data.get('er', 0):.2f}%\n"
+        f"Середні перегляди: {'⚠️ ВИМКНЕНІ АДМІНОМ (лічильник переглядів прихований)' if views_hidden else f'{(channel_data.get('avg_views') or 0):,}'}\n"
+        f"ER (engagement rate): {(channel_data.get('er') or 0):.2f}%\n"
         f"Ціна продажу: {channel_data.get('price', 0):,} USDT\n"
         f"Поточний прибуток/міс: {channel_data.get('monthly_income', 0) or 0:,} USDT\n"
         f"Вік каналу: {channel_data.get('age', '?')}\n"
@@ -57,11 +67,18 @@ async def analyze_channel(channel_data: dict, posts_data: list[dict], stats_data
             f"views={s.get('avg_views', 0)}, er={s.get('er', 0):.1f}%\n"
         )
 
-    prompt = f"""Ти — аналітик покупки Telegram-каналів. Дай КОНКРЕТНИЙ аналіз без загальних фраз.
+    closed_notice = (
+        "\n⚠️ ЦЕ ЗАКРИТИЙ КАНАЛ (вступ за заявкою). Дані підписників/переглядів/ER "
+        "надані продавцем вручну і НЕ перевірені автоматично ботом — став до них з "
+        "обережністю. Постів і історії статистики немає (бот не має доступу).\n"
+        if is_closed else ""
+    )
 
+    prompt = f"""Ти — аналітик покупки Telegram-каналів. Дай КОНКРЕТНИЙ аналіз без загальних фраз.
+{closed_notice}
 КАНАЛ: {channel_data.get('channel_name')} | {channel_data.get('category')} | {channel_data.get('subscribers_count', 0):,} підп.
-Перегляди: {'ПРИХОВАНІ' if views_hidden else f"{channel_data.get('avg_views', 0):,}"} | ER: {channel_data.get('er', 0):.1f}% | Ціна: {channel_data.get('price', 0):,} USDT
-Дохід/міс: {channel_data.get('monthly_income', 0) or 0:,} USDT | Вік: {channel_data.get('age', '?')} | Пости/день: {channel_data.get('post_frequency', 0):.1f}
+Перегляди: {'ПРИХОВАНІ' if views_hidden else f"{(channel_data.get('avg_views') or 0):,}"} | ER: {(channel_data.get('er') or 0):.1f}% | Ціна: {channel_data.get('price', 0):,} USDT
+Дохід/міс: {channel_data.get('monthly_income', 0) or 0:,} USDT | Вік: {channel_data.get('age', '?')} | Пости/день: {(channel_data.get('post_frequency') or 0):.1f}
 Forwards/пост: {channel_data.get('avg_forwards', 0)} | Реакції/пост: {channel_data.get('avg_reactions', 0)}
 
 ОСТАННІ 20 ПОСТІВ:
@@ -102,6 +119,7 @@ Forwards/пост: {channel_data.get('avg_forwards', 0)} | Реакції/пос
 - verdict: "buy" якщо score>=65 і ROI<=18міс, "avoid" якщо score<40 або явні боти/накрутки, інакше "hold"
 - income_min/max — реалістичні числа USDT для ЦЬОГО каналу, не загальні
 - Якщо views_hidden=true, зниж score на 10-15 балів і вкажи це в ризиках
+- Якщо канал закритий (вказано вище), обов'язково познач growth_trend і content_analysis як "недостатньо даних для оцінки" — не вигадуй конкретику, якщо ОСТАННІ 20 ПОСТІВ/СТАТИСТИКА порожні
 - Тільки валідний JSON"""
 
     try:

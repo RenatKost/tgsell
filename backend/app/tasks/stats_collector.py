@@ -8,7 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import async_session
 from app.models.channel import Channel, ChannelPost, ChannelStats, ChannelStatus
-from app.services.channel_stats import collect_channel_stats, reset_telethon_retries
+from app.services.channel_stats import collect_channel_stats, parse_telegram_link, reset_telethon_retries
 
 logger = logging.getLogger(__name__)
 
@@ -20,7 +20,8 @@ async def collect_stats_once():
     async with async_session() as db:
         result = await db.execute(
             select(Channel.id).where(
-                Channel.status.in_([ChannelStatus.approved, ChannelStatus.pending])
+                Channel.status.in_([ChannelStatus.approved, ChannelStatus.pending]),
+                Channel.is_closed.is_(False),
             )
         )
         channel_ids = result.scalars().all()
@@ -252,6 +253,7 @@ async def update_post_views_once():
             select(ChannelPost).join(Channel).where(
                 ChannelPost.date >= cutoff,
                 Channel.status.in_([ChannelStatus.approved, ChannelStatus.pending]),
+                Channel.is_closed.is_(False),
             )
         )
         posts = result.scalars().all()
@@ -277,11 +279,9 @@ async def update_post_views_once():
                 if not link:
                     continue
 
-                username = link.strip()
-                for prefix in ("https://t.me/", "http://t.me/", "t.me/", "@"):
-                    if username.startswith(prefix):
-                        username = username[len(prefix):]
-                        break
+                username, link_kind = parse_telegram_link(link)
+                if link_kind == "invite":
+                    continue
 
                 entity = await client.get_entity(username)
 

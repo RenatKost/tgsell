@@ -29,6 +29,7 @@ const CatalogCard = ({ channel }) => {
 	const navigate = useNavigate();
 	const { isAuthenticated, favoriteIds, toggleFavorite } = useAuth();
 	const isFav = favoriteIds.has(channel.id);
+	const [avatarError, setAvatarError] = useState(false);
 
 	const formatAge = (months) => {
 		if (!months) return '—';
@@ -81,8 +82,8 @@ const CatalogCard = ({ channel }) => {
 			{/* ── Header ── */}
 			<div className='p-4 pb-3'>
 				<div className='flex items-center gap-3'>
-					{channel.avatar_url ? (
-						<img className='w-11 h-11 rounded-lg object-cover flex-shrink-0' src={channel.avatar_url} alt={channel.channel_name} />
+					{channel.avatar_url && !avatarError ? (
+						<img className='w-11 h-11 rounded-lg object-cover flex-shrink-0' src={channel.avatar_url} alt={channel.channel_name} onError={() => setAvatarError(true)} />
 					) : (
 						<div className='w-11 h-11 rounded-lg bg-gradient-to-br from-accent to-emerald-700 flex items-center justify-center text-black text-sm font-black flex-shrink-0'>
 							{channel.channel_name?.[0] || 'T'}
@@ -118,6 +119,11 @@ const CatalogCard = ({ channel }) => {
 						>
 							↗ Відкрити
 						</a>
+					)}
+					{channel.is_closed && (
+						<span className='bg-amber-50 dark:bg-amber-900/20 text-amber-600 dark:text-amber-400 text-[11px] font-semibold px-2.5 py-1 rounded-lg border border-amber-200 dark:border-amber-800/40'>
+							🔒 Закритий
+						</span>
 					)}
 					{channel.bundle_id ? (
 						<span className='bg-accent/15 text-accent text-[11px] font-bold px-2.5 py-1 rounded-lg border border-accent/30'>
@@ -160,6 +166,9 @@ const CatalogCard = ({ channel }) => {
 						</p>
 					</div>
 				</div>
+				{channel.is_closed && (
+					<p className='text-[9px] text-amber-500 mt-1.5'>🔒 Дані за словами продавця, не перевірені автоматично</p>
+				)}
 			</div>
 
 			{/* ── Activity badges ── */}

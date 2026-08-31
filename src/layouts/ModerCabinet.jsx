@@ -758,6 +758,9 @@ const ModerCabinet = () => {
 														{(!channel.listing_type || channel.listing_type === 'sale') && (
 															<span className='text-xs px-2 py-0.5 rounded-full bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400 font-medium'>🏷️ Каталог</span>
 														)}
+														{channel.is_closed && (
+															<span className='text-xs px-2 py-0.5 rounded-full bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400 font-medium'>🔒 Закритий (дані продавця)</span>
+														)}
 													</div>
 												</div>
 											</div>
@@ -957,7 +960,12 @@ const ModerCabinet = () => {
 													</div>
 												)}
 												<div>
-													<h3 className='font-bold text-gray-800 dark:text-white'>{channel.channel_name}</h3>
+													<div className='flex items-center gap-2'>
+														<h3 className='font-bold text-gray-800 dark:text-white'>{channel.channel_name}</h3>
+														{channel.is_closed && (
+															<span className='text-xs px-2 py-0.5 rounded-full bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400 font-medium'>🔒 Закритий</span>
+														)}
+													</div>
 													<a href={channel.telegram_link} target='_blank' rel='noopener noreferrer' className='text-blue-500 text-sm hover:underline'>
 														{channel.telegram_link} <FontAwesomeIcon icon={faExternalLinkAlt} size='xs' />
 													</a>

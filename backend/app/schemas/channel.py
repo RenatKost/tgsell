@@ -16,6 +16,13 @@ class ChannelCreate(BaseModel):
     auction_start_price: float | None = None
     auction_bid_step: float | None = None
     auction_duration_hours: int | None = None
+    # Closed (join-request) channels: bot can't auto-read these, so the
+    # seller reports stats manually. Only applied server-side when
+    # is_closed=True — ignored for normal open channels.
+    is_closed: bool = False
+    subscribers_count: int | None = None
+    avg_views: int | None = None
+    er: float | None = None
 
 
 class ChannelUpdate(BaseModel):
@@ -26,6 +33,10 @@ class ChannelUpdate(BaseModel):
     monthly_income: float | None = None
     description: str | None = None
     resources: str | None = None
+    is_closed: bool | None = None
+    subscribers_count: int | None = None
+    avg_views: int | None = None
+    er: float | None = None
 
 
 class ChannelResponse(BaseModel):
@@ -54,6 +65,7 @@ class ChannelResponse(BaseModel):
     avg_forwards: int | None = None
     avg_reactions: int | None = None
     views_hidden: bool = False
+    is_closed: bool = False
     listing_type: str = "sale"
     auction_start_price: float | None = None
     auction_bid_step: float | None = None

@@ -52,6 +52,7 @@ class Channel(Base):
     avg_forwards: Mapped[int | None] = mapped_column(Integer, nullable=True)
     avg_reactions: Mapped[int | None] = mapped_column(Integer, nullable=True)
     views_hidden: Mapped[bool] = mapped_column(Boolean, server_default="false", default=False)
+    is_closed: Mapped[bool] = mapped_column(Boolean, server_default="false", default=False)
 
     # AI analysis cache
     ai_cache: Mapped[str | None] = mapped_column(Text, nullable=True)

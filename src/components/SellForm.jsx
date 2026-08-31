@@ -128,6 +128,10 @@ const SellForm = ({ onBack }) => {
 			auction_start_price: '',
 			auction_bid_step: '',
 			auction_duration_hours: '48',
+			is_closed: false,
+			subscribers_count: '',
+			avg_views: '',
+			er: '',
 		},
 		validationSchema: Yup.object({
 			telegram_link: Yup.string()
@@ -155,6 +159,13 @@ const SellForm = ({ onBack }) => {
 					is: (val) => val === 'auction' || val === 'both',
 					then: (schema) => schema.required('Вкажіть крок ставки'),
 				}),
+			subscribers_count: Yup.number()
+				.typeError('Введіть число')
+				.positive('Має бути більше 0')
+				.when('is_closed', {
+					is: true,
+					then: (schema) => schema.required('Вкажіть кількість підписників'),
+				}),
 		}),
 		onSubmit: async (vals, { resetForm }) => {
 			if (!isAuthenticated) {
@@ -178,6 +189,12 @@ const SellForm = ({ onBack }) => {
 					payload.auction_start_price = parseFloat(vals.auction_start_price);
 					payload.auction_bid_step = parseFloat(vals.auction_bid_step);
 					payload.auction_duration_hours = parseInt(vals.auction_duration_hours);
+				}
+				payload.is_closed = vals.is_closed;
+				if (vals.is_closed) {
+					if (vals.subscribers_count) payload.subscribers_count = parseInt(vals.subscribers_count, 10);
+					if (vals.avg_views) payload.avg_views = parseInt(vals.avg_views, 10);
+					if (vals.er) payload.er = parseFloat(vals.er);
 				}
 				await channelsAPI.create(payload);
 				setSubmittedListingType(vals.listing_type);
@@ -238,7 +255,12 @@ const SellForm = ({ onBack }) => {
 										name='telegram_link'
 										value={values.telegram_link}
 										onChange={handleChange}
-										onBlur={handleBlur}
+										onBlur={(e) => {
+											handleBlur(e);
+											if (/^(https?:\/\/)?t\.me\/(\+|joinchat\/)/i.test(e.target.value) && !values.is_closed) {
+												setFieldValue('is_closed', true);
+											}
+										}}
 										type='text'
 										placeholder='@username або https://t.me/...'
 									/>
@@ -330,6 +352,60 @@ const SellForm = ({ onBack }) => {
 								<p className='text-xs text-gray-500 mt-2'>
 									💡 Можна обрати обидва варіанти — канал буде і в каталозі, і на аукціоні
 								</p>
+							</div>
+
+							{/* Closed (join-request) channel toggle */}
+							<div className='mt-5'>
+								<label className='flex items-center gap-3 cursor-pointer'>
+									<input
+										type='checkbox'
+										name='is_closed'
+										checked={values.is_closed}
+										onChange={handleChange}
+										className='w-4 h-4 rounded accent-accent'
+									/>
+									<span className='text-sm text-white font-medium'>🔒 Закритий канал (вступ за заявкою)</span>
+								</label>
+								<p className='text-xs text-gray-500 mt-1 ml-7'>
+									Бот не може автоматично зчитати статистику закритих каналів — вкажіть дані вручну
+								</p>
+								{values.is_closed && (
+									<div className='mt-3 ml-7 grid md:grid-cols-3 gap-4 p-4 bg-card-inner border border-card-border rounded-xl'>
+										<InputField label='Підписників' error={errors.subscribers_count} touched={touched.subscribers_count}>
+											<input
+												className={inputClass}
+												name='subscribers_count'
+												value={values.subscribers_count}
+												onChange={handleChange}
+												onBlur={handleBlur}
+												type='text'
+												placeholder='10000'
+											/>
+										</InputField>
+										<InputField label='Середні перегляди'>
+											<input
+												className={inputClass}
+												name='avg_views'
+												value={values.avg_views}
+												onChange={handleChange}
+												onBlur={handleBlur}
+												type='text'
+												placeholder='2000'
+											/>
+										</InputField>
+										<InputField label='ER %'>
+											<input
+												className={inputClass}
+												name='er'
+												value={values.er}
+												onChange={handleChange}
+												onBlur={handleBlur}
+												type='text'
+												placeholder='5.5'
+											/>
+										</InputField>
+									</div>
+								)}
 							</div>
 
 							{(values.listing_type === 'auction' || values.listing_type === 'both') && (

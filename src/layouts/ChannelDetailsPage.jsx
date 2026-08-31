@@ -164,6 +164,11 @@ const ChannelDetailsPage = () => {
 					</div>
 
 					{/* AI Analysis full right-column width */}
+					{channel.is_closed && (
+						<div className='flex items-center gap-2 px-3 py-2 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800/40 rounded-lg text-xs text-amber-600 dark:text-amber-400'>
+							⚠️ Обмежені дані — закритий канал, аналіз ґрунтується на даних продавця
+						</div>
+					)}
 					<AiAnalysis channelId={channel.id} channel={channel} />
 				</div>
 			</div>

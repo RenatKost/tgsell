@@ -393,17 +393,37 @@ async def get_channel_stats_telethon(channel_username: str, message_limit: int =
         return None
 
 
+def parse_telegram_link(telegram_link: str) -> tuple[str, str]:
+    """Parse a Telegram link/handle into (identifier, kind).
+
+    kind is "invite" for private join-request links (t.me/+hash,
+    t.me/joinchat/hash) which cannot be resolved via username-based
+    lookups (Bot API / Telethon get_entity both fail on these), or
+    "username" for anything else (public @handle or t.me/handle).
+    """
+    raw = telegram_link.strip()
+    for prefix in ("https://", "http://"):
+        if raw.startswith(prefix):
+            raw = raw[len(prefix):]
+            break
+    if raw.startswith("t.me/"):
+        raw = raw[len("t.me/"):]
+    elif raw.startswith("@"):
+        raw = raw[1:]
+
+    if raw.startswith("+") or raw.startswith("joinchat/"):
+        identifier = raw[1:] if raw.startswith("+") else raw[len("joinchat/"):]
+        return identifier, "invite"
+
+    return raw.strip("/"), "username"
+
+
 async def collect_channel_stats(telegram_link: str, message_limit: int = 5000) -> dict:
     """Collect stats using hybrid approach: Bot API + Telethon.
 
     Returns combined info dict.
     """
-    # Extract username from link
-    username = telegram_link.strip()
-    for prefix in ("https://t.me/", "http://t.me/", "t.me/", "@"):
-        if username.startswith(prefix):
-            username = username[len(prefix):]
-            break
+    username, link_kind = parse_telegram_link(telegram_link)
 
     result = {
         "channel_name": username,
@@ -423,6 +443,14 @@ async def collect_channel_stats(telegram_link: str, message_limit: int = 5000) -
         "avg_reactions": 0,
         "posts": [],
     }
+
+    if link_kind == "invite":
+        # Private join-request invite link — Bot API and Telethon both need a
+        # resolvable username, so there's nothing to fetch here. Seller
+        # provides stats manually for these (see is_closed handling in the
+        # channels router).
+        logger.info(f"[STATS] {username} is a private invite-link (closed) channel — skipping auto-collection")
+        return result
 
     # Step 1: Bot API (safe, always works)
     bot_info = await get_channel_info_bot_api(username)

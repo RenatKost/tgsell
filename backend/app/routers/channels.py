@@ -104,7 +104,11 @@ async def list_channels(
         query = query.where(Channel.monthly_income > 0)
         query = query.where(Channel.price / Channel.monthly_income <= roi_max)
     if verified_data:
-        query = query.where(Channel.avg_views.is_not(None), Channel.er.is_not(None))
+        query = query.where(
+            Channel.avg_views.is_not(None),
+            Channel.er.is_not(None),
+            Channel.is_closed.is_(False),
+        )
     if ai_recommended:
         # Channels AI recommends: good ER + reasonable ROI + has income data
         query = query.where(
@@ -455,7 +459,7 @@ async def get_ai_analysis(channel_id: int, db: AsyncSession = Depends(get_db)):
         for s in stats
     ]
 
-    analysis = await analyze_channel(channel_data, posts_data, stats_data)
+    analysis = await analyze_channel(channel_data, posts_data, stats_data, is_closed=channel.is_closed)
     if analysis is None:
         raise HTTPException(status_code=503, detail="AI analysis unavailable")
     if isinstance(analysis, dict) and analysis.get("error"):
@@ -481,8 +485,8 @@ async def create_channel(
 ):
     """Create a new channel listing (goes to moderation)."""
     # Normalize link and check for duplicates
-    import re
-    clean_link = re.sub(r'^(https?://)?(t\.me/|@)', '', body.telegram_link.strip()).strip('/')
+    from app.services.channel_stats import parse_telegram_link
+    clean_link, _link_kind = parse_telegram_link(body.telegram_link)
     logger.info(f"[CHANNEL] Create request from user={user.id}: link='{body.telegram_link}', clean='{clean_link}'")
     if clean_link:
         existing = await db.execute(
@@ -510,6 +514,7 @@ async def create_channel(
             auction_start_price=body.auction_start_price,
             auction_bid_step=body.auction_bid_step,
             auction_duration_hours=body.auction_duration_hours,
+            is_closed=body.is_closed,
             status=ChannelStatus.pending,
         )
         db.add(channel)
@@ -557,6 +562,18 @@ async def create_channel(
             channel.avg_forwards = stats["avg_forwards"]
         if stats.get("avg_reactions"):
             channel.avg_reactions = stats["avg_reactions"]
+
+        # Manual seller-reported overrides — closed channels only. These
+        # always win over (or fill gaps in) whatever auto-collection
+        # produced, since auto-collection cannot reliably read closed
+        # channels. Ignored entirely for normal open channels.
+        if body.is_closed:
+            if body.subscribers_count is not None:
+                channel.subscribers_count = body.subscribers_count
+            if body.avg_views is not None:
+                channel.avg_views = body.avg_views
+            if body.er is not None:
+                channel.er = body.er
 
         # Save historical daily stats for graphs
         daily_stats = stats.get("daily_stats", [])
@@ -653,6 +670,16 @@ async def update_channel(
         raise HTTPException(status_code=403, detail="Not your channel")
 
     update_data = body.model_dump(exclude_unset=True)
+
+    # Manual stat overrides (subscribers_count/avg_views/er) are only
+    # trusted for closed channels — drop them here if the channel is not
+    # (and isn't becoming) closed, so a seller can't use this endpoint to
+    # overwrite auto-collected "verified" stats on an open channel.
+    effective_is_closed = update_data.get("is_closed", channel.is_closed)
+    if not effective_is_closed:
+        for stat_field in ("subscribers_count", "avg_views", "er"):
+            update_data.pop(stat_field, None)
+
     for field, value in update_data.items():
         setattr(channel, field, value)
 

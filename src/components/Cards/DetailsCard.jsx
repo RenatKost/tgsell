@@ -24,6 +24,7 @@ const Tooltip = ({ children, text, desc }) => {
 const DetailsCard = ({ channel, onBuy, onAuction, stats = [] }) => {
 	const { isAuthenticated, favoriteIds, toggleFavorite } = useAuth();
 	const isFav = favoriteIds.has(channel.id);
+	const [avatarError, setAvatarError] = useState(false);
 
 	const formatAge = (months) => {
 		if (!months) return '—';
@@ -73,8 +74,8 @@ const DetailsCard = ({ channel, onBuy, onAuction, stats = [] }) => {
 			{/* Channel header */}
 			<div className='p-4'>
 				<div className='flex items-center gap-3'>
-					{channel.avatar_url ? (
-						<img className='w-10 h-10 rounded-lg object-cover flex-shrink-0' src={channel.avatar_url} alt={channel.channel_name} />
+					{channel.avatar_url && !avatarError ? (
+						<img className='w-10 h-10 rounded-lg object-cover flex-shrink-0' src={channel.avatar_url} alt={channel.channel_name} onError={() => setAvatarError(true)} />
 					) : (
 						<div className='w-10 h-10 rounded-lg bg-gradient-to-br from-accent to-emerald-700 flex items-center justify-center text-white text-sm font-bold flex-shrink-0'>
 							{channel.channel_name?.[0] || '?'}
@@ -117,6 +118,11 @@ const DetailsCard = ({ channel, onBuy, onAuction, stats = [] }) => {
 							{channel.category}
 						</span>
 					)}
+					{channel.is_closed && (
+						<span className='bg-amber-50 dark:bg-amber-900/20 text-amber-600 dark:text-amber-400 text-[11px] font-semibold px-2.5 py-1.5 rounded-lg border border-amber-200 dark:border-amber-800/40'>
+							🔒 Закритий
+						</span>
+					)}
 				</div>
 			</div>
 
@@ -145,6 +151,9 @@ const DetailsCard = ({ channel, onBuy, onAuction, stats = [] }) => {
 						</p>
 					</div>
 				</div>
+				{channel.is_closed && (
+					<p className='text-[9px] text-amber-500 mt-1.5'>🔒 Дані за словами продавця, не перевірені автоматично</p>
+				)}
 			</div>
 
 			{/* Activity - icons with tooltips */}
