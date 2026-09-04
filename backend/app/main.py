@@ -55,6 +55,9 @@ async def lifespan(app: FastAPI):
         task.cancel()
     await asyncio.gather(*background_tasks, return_exceptions=True)
 
+    from app.services.channel_stats import disconnect_telethon_client
+    await disconnect_telethon_client()
+
 
 app = FastAPI(
     title="TgSell API",

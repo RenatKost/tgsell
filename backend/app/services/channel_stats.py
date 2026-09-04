@@ -102,6 +102,25 @@ def reset_telethon_client():
     _telethon_client = None
 
 
+async def disconnect_telethon_client():
+    """Disconnect the live client on process shutdown.
+
+    Telegram invalidates a user session ("used under two different IP
+    addresses simultaneously") if the outgoing container keeps holding an
+    idle connection open while the incoming container from the next deploy
+    connects with the same DB-stored session string. Releasing it here
+    shrinks that overlap window instead of leaving it connected until the
+    process is killed.
+    """
+    global _telethon_client
+    if _telethon_client is not None:
+        try:
+            await _telethon_client.disconnect()
+        except Exception as e:
+            logger.warning(f"Telethon disconnect on shutdown failed: {e}")
+        _telethon_client = None
+
+
 async def _load_session_from_db() -> str | None:
     """Load the latest Telethon session string from the database.
 
