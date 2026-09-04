@@ -36,9 +36,9 @@ const StepProgress = ({ status }) => {
 				const active = i === currentIdx;
 				const IconCmp = step.LIcon;
 				return (
-					<div key={step.key} className='flex items-center flex-1 last:flex-none'>
-						<div className='flex flex-col items-center'>
-							<div className={`w-10 h-10 rounded-full flex items-center justify-center transition-all duration-500 ${
+					<div key={step.key} className='flex items-center flex-1 min-w-0 last:flex-none'>
+						<div className='flex flex-col items-center min-w-0 w-full'>
+							<div className={`w-8 h-8 sm:w-10 sm:h-10 rounded-full flex items-center justify-center transition-all duration-500 flex-shrink-0 ${
 								done   ? 'shadow-md' :
 								active ? 'scale-110 shadow-lg' :
 								'bg-gray-100 dark:bg-card-inner'
@@ -48,14 +48,14 @@ const StepProgress = ({ status }) => {
 									: <IconCmp size={18} color={active ? '#fff' : '#9CA3AF'} strokeWidth={1.8} />
 								}
 							</div>
-							<span className={`text-xs mt-1.5 font-medium whitespace-nowrap ${
+							<span className={`text-[10px] sm:text-xs mt-1.5 font-medium text-center leading-tight break-words px-0.5 ${
 								active ? 'text-sky-400' : done ? 'text-emerald-500' : 'text-gray-400'
 							}`}>
 								{step.label}
 							</span>
 						</div>
 						{i < STEPS.length - 1 && (
-							<div className={`flex-1 h-0.5 mx-2 mt-[-16px] rounded-full transition-all duration-500 ${
+							<div className={`flex-1 h-0.5 mx-1 sm:mx-2 mt-[-14px] sm:mt-[-16px] rounded-full transition-all duration-500 ${
 								i < currentIdx ? 'bg-green-400' : 'bg-gray-200'
 							}`} />
 						)}

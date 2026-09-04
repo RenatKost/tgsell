@@ -201,12 +201,12 @@ const CabinetPage = () => {
 			</div>
 
 			{/* Tabs */}
-			<div className='flex gap-2 mb-6 border-b border-gray-200 dark:border-slate-700'>
+			<div className='flex gap-2 mb-6 border-b border-gray-200 dark:border-slate-700 overflow-x-auto'>
 				{TABS.map(tab => (
 					<button
 						key={tab.value}
 						onClick={() => setActiveTab(tab)}
-						className={`flex items-center gap-2 px-5 py-3 font-semibold text-sm duration-300 border-b-2 -mb-px ${
+						className={`flex items-center gap-2 px-5 py-3 font-semibold text-sm duration-300 border-b-2 -mb-px flex-shrink-0 ${
 							activeTab.value === tab.value
 								? 'border-[#3498db] text-[#3498db]'
 							: 'border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300 hover:border-gray-300 dark:hover:border-slate-600'
