@@ -1,3 +1,5 @@
+import os
+
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import select, or_
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -30,7 +32,17 @@ async def telegram_login(data: TelegramAuthData, db: AsyncSession = Depends(get_
     logger = logging.getLogger(__name__)
 
     auth_dict = data.model_dump()
-    is_demo = data.hash == "demo"
+    # Demo login bypasses Telegram signature verification — it exists only
+    # for local frontend development (see the import.meta.env.DEV-gated
+    # button in AuthModal.jsx, which always sends this fixed id). It must
+    # never work in production, and even then only for that exact id —
+    # otherwise anyone could hijack an arbitrary real account by POSTing
+    # hash="demo" with that account's telegram_id directly to this endpoint.
+    is_demo = (
+        data.hash == "demo"
+        and data.id == 123456789
+        and not os.getenv("RAILWAY_ENVIRONMENT")
+    )
 
     logger.info(f"[AUTH] Telegram login attempt: tg_id={data.id}, username={data.username}, first_name={data.first_name}, auth_date={data.auth_date}, has_photo={'yes' if data.photo_url else 'no'}, has_last_name={'yes' if data.last_name else 'no'}")
 
