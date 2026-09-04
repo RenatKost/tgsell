@@ -5,6 +5,7 @@ import logging
 import httpx
 
 from app.config import settings
+from app.services.alerts import alert_service_down
 
 logger = logging.getLogger(__name__)
 
@@ -166,12 +167,15 @@ Forwards/пост: {channel_data.get('avg_forwards', 0)} | Реакції/пос
         logger.error(f"Groq API error {e.response.status_code}: {body}")
         if e.response.status_code == 429:
             return {"error": "rate_limit", "detail": "API ліміт вичерпано. Спробуйте через хвилину."}
+        if e.response.status_code in (401, 403):
+            await alert_service_down("Groq AI Analysis", f"{e.response.status_code}: {body}")
         return {"error": "api_error", "detail": f"Groq API помилка {e.response.status_code}"}
     except json.JSONDecodeError as e:
         logger.error(f"Failed to parse Groq response as JSON: {e}")
         return {"error": "parse_error", "detail": "AI повернув невалідну відповідь. Спробуйте ще раз."}
     except Exception as e:
         logger.error(f"AI analysis failed: {e}")
+        await alert_service_down("Groq AI Analysis", str(e))
         return None
 
 
