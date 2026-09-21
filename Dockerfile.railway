@@ -28,6 +28,7 @@ COPY backend/requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
 COPY backend/ .
+COPY automation/ ./automation/
 COPY --from=frontend-build /frontend/dist ./static
 
 EXPOSE 8000

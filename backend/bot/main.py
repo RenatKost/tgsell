@@ -583,6 +583,43 @@ async def process_reauth_2fa(message: Message, state: FSMContext):
         await message.answer(f"❌ Невірний 2FA пароль: {e}")
 
 
+# ── Interactive developer-agent chat (admin only) ─────────────────────
+#
+# Any plain-text (non-command) DM from the admin, sent when they're not
+# mid-way through another flow (e.g. /reauth — aiogram's default state
+# filter already keeps this handler from firing then), is treated as a
+# message to the developer agent. Runs entirely on Railway via the Claude
+# API (app/services/dev_agent.py) — works from a phone with the owner's
+# laptop off, same as everything else in this bot.
+
+@router.message(F.text & ~F.text.startswith("/"))
+async def handle_dev_agent_chat(message: Message):
+    if not _is_admin(message.from_user.id):
+        return
+
+    ack = await message.answer("🛠️ Думаю над задачею…")
+    try:
+        from app.services.dev_agent import run_dev_agent_chat
+        from app.database import async_session
+        from app.services.audit import log_admin_action
+
+        reply = await run_dev_agent_chat(message.text)
+        async with async_session() as db:
+            await log_admin_action(
+                db, "agent:developer", "chat.message",
+                payload={"request": message.text[:500], "reply": reply[:500]},
+            )
+    except Exception as e:
+        logger.error(f"[DEV_AGENT] Chat turn failed: {e}", exc_info=True)
+        reply = f"❌ Помилка: {e}"
+
+    try:
+        await ack.delete()
+    except Exception:
+        pass
+    await message.answer(reply, disable_web_page_preview=True)
+
+
 # ── Auth bot router (separate bot for login) ─────────────────────────
 
 auth_router = Router()

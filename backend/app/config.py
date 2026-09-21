@@ -62,6 +62,11 @@ class Settings(BaseSettings):
     # unchanged from before.
     github_token: str = ""
     github_repo: str = "RenatKost/tgsell"
+    # Anthropic API key the backend uses to power the interactive developer-
+    # agent chat (bot/main.py) — separate from any Claude Code session, this
+    # is the backend calling the Claude API directly so the chat works 24/7
+    # on Railway regardless of whether anyone's laptop is on.
+    anthropic_api_key: str = ""
 
     model_config = {"env_file": ".env", "extra": "ignore"}
 
