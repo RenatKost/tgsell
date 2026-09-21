@@ -14,6 +14,7 @@ from app.models.deal import Deal, DealStatus
 from app.models.user import User, UserRole
 from app.schemas.channel import ChannelResponse, ChannelUpdate
 from app.schemas.deal import DealResolveRequest, DealResponse
+from app.services.audit import log_admin_action
 from app.utils.security import get_admin_user
 
 logger = logging.getLogger(__name__)
@@ -79,6 +80,7 @@ async def approve_channel(
         channel.moderated_at = datetime.utcnow()
         await db.commit()
         await db.refresh(channel)
+        await log_admin_action(db, str(admin.id), "channel.approve", "channel", channel_id)
 
         # Refresh stats from Telegram on approve
         try:
@@ -187,6 +189,7 @@ async def reject_channel(
         channel.rejection_reason = reason
         await db.commit()
         await db.refresh(channel)
+        await log_admin_action(db, str(admin.id), "channel.reject", "channel", channel_id, {"reason": reason})
         return ChannelResponse.model_validate(channel)
     except Exception as e:
         logger.error(f"Reject channel #{channel_id} failed: {e}", exc_info=True)
@@ -259,6 +262,7 @@ async def resolve_deal(
 
     await db.commit()
     await db.refresh(deal)
+    await log_admin_action(db, str(admin.id), f"deal.resolve.{body.resolution}", "deal", deal_id)
 
     return DealResponse(
         id=deal.id, channel_id=deal.channel_id, buyer_id=deal.buyer_id, seller_id=deal.seller_id,
@@ -332,6 +336,7 @@ async def set_user_role(
     target.role = UserRole(role)
     await db.commit()
     await db.refresh(target)
+    await log_admin_action(db, str(admin.id), "user.set_role", "user", user_id, {"role": role})
 
     return {"id": target.id, "username": target.username, "role": target.role.value}
 
@@ -587,6 +592,11 @@ async def sweep_escrow_wallet(
     # 5. Wait for USDT transfer to confirm, then sweep leftover TRX back to master
     await asyncio.sleep(6)
     trx_sweep_tx = sweep_trx_to_master(encrypted_key)
+
+    await log_admin_action(
+        db, str(admin.id), "escrow.sweep", "deal", deal_id,
+        {"to": to_address, "amount_usdt": balance, "usdt_tx": tx_hash},
+    )
 
     return {
         "ok": True,
@@ -1289,6 +1299,7 @@ async def approve_bundle(
     bundle.moderated_at = datetime.utcnow()
     await db.commit()
     await db.refresh(bundle)
+    await log_admin_action(db, str(admin.id), "bundle.approve", "bundle", bundle_id)
 
     # Notify seller
     try:
@@ -1329,6 +1340,7 @@ async def reject_bundle(
     bundle.moderated_at = datetime.utcnow()
     bundle.rejection_reason = reason
     await db.commit()
+    await log_admin_action(db, str(admin.id), "bundle.reject", "bundle", bundle_id, {"reason": reason})
 
     # Notify seller
     try:

@@ -417,6 +417,26 @@ async def notify_new_bundle_deal(bot: Bot, deal, bundle, buyer: User, seller: Us
             logger.warning(f"[NOTIFY] Cannot send bundle deal to admin group: {e}")
 
 
+# ── Autonomous agent reports (see automation/agents/*.md) ────────────
+
+async def notify_agent_report(bot: Bot, role: str, summary: str, links: list[str] | None = None):
+    """Post an autonomous agent's run summary to the admin group.
+
+    Called from POST /agent/report (app/routers/agent.py), which is the
+    only thing an agent's cloud routine talks to directly — the routine
+    itself never holds a bot token.
+    """
+    if not settings.admin_group_id:
+        logger.warning(f"[NOTIFY] admin_group_id not set, skipping agent report for role={role}")
+        return
+    role_icons = {"developer": "🛠️", "analyst": "📊", "support": "🎧", "marketer": "📣"}
+    icon = role_icons.get(role, "🤖")
+    text = f"{icon} <b>Агент «{role}» — звіт</b>\n\n{summary}"
+    if links:
+        text += "\n\n" + "\n".join(links)
+    await bot.send_message(settings.admin_group_id, text, parse_mode=ParseMode.HTML)
+
+
 # ── Telethon re-auth flow (admin only) ───────────────────────────────
 
 class ReauthStates(StatesGroup):

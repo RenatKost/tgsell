@@ -53,6 +53,16 @@ class Settings(BaseSettings):
     # AI Analysis (Groq — free Llama 3.3 70B)
     groq_api_key: str = ""
 
+    # Autonomous agents (see automation/agents/*.md) — shared secret an agent's
+    # cloud routine presents when calling POST /agent/report to relay its
+    # summary into the admin Telegram group. Unset = endpoint stays disabled.
+    agent_report_secret: str = ""
+    # Fine-grained GitHub PAT (Issues: write) used by alert_service_down() to
+    # open a triage issue for the developer agent. Unset = Telegram-only alerts,
+    # unchanged from before.
+    github_token: str = ""
+    github_repo: str = "RenatKost/tgsell"
+
     model_config = {"env_file": ".env", "extra": "ignore"}
 
 

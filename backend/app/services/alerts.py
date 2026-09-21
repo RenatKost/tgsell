@@ -2,6 +2,7 @@
 import logging
 from datetime import datetime, timezone
 
+import httpx
 from aiogram import Bot
 from aiogram.enums import ParseMode
 
@@ -12,6 +13,28 @@ logger = logging.getLogger(__name__)
 # Throttle: don't spam the same alert type more than once per interval
 _last_alerts: dict[str, datetime] = {}
 _THROTTLE_MINUTES = 30
+
+
+async def _create_github_issue(title: str, body: str, labels: list[str]) -> None:
+    """Open a GitHub issue so the developer agent (automation/agents/developer.md)
+    has something concrete to triage. No-op if GITHUB_TOKEN isn't configured —
+    Telegram alerting keeps working exactly as before either way.
+    """
+    if not settings.github_token:
+        return
+    try:
+        async with httpx.AsyncClient(timeout=15.0) as client:
+            resp = await client.post(
+                f"https://api.github.com/repos/{settings.github_repo}/issues",
+                headers={
+                    "Authorization": f"Bearer {settings.github_token}",
+                    "Accept": "application/vnd.github+json",
+                },
+                json={"title": title[:250], "body": body, "labels": labels},
+            )
+            resp.raise_for_status()
+    except Exception as e:
+        logger.error(f"[ALERT] Failed to create GitHub issue: {e}")
 
 
 async def send_admin_alert(text: str, alert_key: str | None = None, throttle_minutes: int = _THROTTLE_MINUTES):
@@ -55,6 +78,11 @@ async def alert_service_down(service_name: str, error: str):
         f"<code>{safe_error}</code>\n\n"
         f"Потрібна увага адміна.",
         alert_key=f"down_{service_name}",
+    )
+    await _create_github_issue(
+        title=f"[alert] {service_name} down",
+        body=f"Automated alert from `alert_service_down`.\n\n```\n{error[:2000]}\n```",
+        labels=["bug", "agent-review"],
     )
 
 
