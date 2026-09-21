@@ -54,6 +54,13 @@ jobs:
         run: python -m compileall -q app bot alembic
       - name: Migration cycle (upgrade -> downgrade -> upgrade)
         working-directory: backend
+        # alembic's console-script entry point doesn't add cwd to sys.path,
+        # so env.py's `from app.config import settings` needs PYTHONPATH set
+        # explicitly here (Railway's runtime resolves this some other way,
+        # since its own `alembic upgrade head` at container start works
+        # without it — not touching that, this is CI-only).
+        env:
+          PYTHONPATH: "."
         run: |
           alembic upgrade head
           alembic downgrade -1
