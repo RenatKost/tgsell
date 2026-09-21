@@ -11,7 +11,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 
 from app.config import settings
-from app.routers import auth, channels, deals, admin, users, favorites, auctions, activity, agent
+from app.routers import auth, channels, deals, admin, users, favorites, auctions, activity
 from app.routers import bundles as bundles_router
 from app.tasks.payment_checker import run_payment_checker
 from app.tasks.stats_collector import run_stats_collector, run_view_tracker
@@ -88,7 +88,6 @@ app.include_router(favorites.router, prefix="/api")
 app.include_router(auctions.router, prefix="/api")
 app.include_router(activity.router, prefix="/api")
 app.include_router(bundles_router.router, prefix="/api")
-app.include_router(agent.router, prefix="/api")
 
 @app.get("/api/health")
 async def health():
