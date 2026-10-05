@@ -33,6 +33,7 @@ DEAL_STATUS_LABELS = {
     DealStatus.paid: "✅ Оплачено — передайте канал",
     DealStatus.channel_transferring: "🔄 Передача каналу",
     DealStatus.awaiting_payout: "💰 Очікування виплати — продавець вказує гаманець на сайті",
+    DealStatus.payout_in_progress: "⏳ Виплата в процесі",
     DealStatus.completed: "🎉 Завершено",
     DealStatus.disputed: "⚠️ Спір відкрито",
     DealStatus.cancelled: "❌ Скасовано",

@@ -270,20 +270,49 @@ async def resolve_deal(
     admin: User = Depends(get_admin_user),
     db: AsyncSession = Depends(get_db),
 ):
-    """Resolve a disputed deal: on-chain refund to buyer or release to seller."""
-    from app.services.deal_lifecycle import mark_deal_completed
+    """Resolve a disputed deal: on-chain refund to buyer or release to seller.
 
+    Money-safety: FOR UPDATE claim → payout_in_progress + commit BEFORE broadcast.
+    """
+    from app.services.deal_lifecycle import (
+        claim_deal_for_transfer,
+        has_payout_tx,
+        mark_deal_completed,
+        PayoutClaimError,
+        release_payout_claim,
+    )
+
+    if body.resolution not in ("refund_buyer", "release_seller"):
+        raise HTTPException(status_code=400, detail="Invalid resolution")
+
+    # 1) Lock row
     result = await db.execute(
         select(Deal)
         .options(selectinload(Deal.channel), selectinload(Deal.buyer), selectinload(Deal.seller))
         .where(Deal.id == deal_id)
+        .with_for_update()
     )
     deal = result.scalar_one_or_none()
     if not deal:
         raise HTTPException(status_code=404, detail="Deal not found")
-    if deal.status != DealStatus.disputed:
-        raise HTTPException(status_code=400, detail="Deal is not disputed")
 
+    # 2) Idempotency: already resolved with an on-chain tx — do not send again.
+    if has_payout_tx(deal) or deal.status in (DealStatus.completed, DealStatus.cancelled):
+        await db.commit()
+        return DealResponse(
+            id=deal.id, channel_id=deal.channel_id, buyer_id=deal.buyer_id, seller_id=deal.seller_id,
+            channel_name=deal.channel.channel_name if deal.channel else None,
+            buyer_name=deal.buyer.first_name if deal.buyer else None,
+            seller_name=deal.seller.first_name if deal.seller else None,
+            status=deal.status.value, escrow_wallet_address=deal.escrow_wallet_address,
+            amount_usdt=deal.amount_usdt, service_fee=deal.service_fee,
+            deal_group_chat_id=deal.deal_group_chat_id, dispute_reason=deal.dispute_reason,
+            created_at=deal.created_at, paid_at=deal.paid_at, completed_at=deal.completed_at,
+            seller_payout_address=deal.seller_payout_address,
+            payout_tx_hash=deal.payout_tx_hash,
+        )
+
+    # 3) Validate wallet / amount BEFORE claim (still under row lock).
     if body.resolution == "refund_buyer":
         wallet = _resolve_wallet(
             None,
@@ -291,18 +320,65 @@ async def resolve_deal(
             body.wallet_address,
         )
         if not wallet:
+            await db.rollback()
             raise HTTPException(
                 status_code=400,
                 detail="Немає адреси гаманця покупця для refund. Вкажіть wallet_address або збережіть usdt_wallet у профілі покупця.",
             )
-        amount = deal.amount_usdt  # full escrow amount back to buyer
-        tx_hash = await _escrow_transfer_usdt(deal, wallet, amount)
-        if not tx_hash:
+        amount = deal.amount_usdt
+    else:  # release_seller
+        wallet = _resolve_wallet(
+            deal.seller_payout_address,
+            deal.seller.usdt_wallet if deal.seller else None,
+            body.wallet_address,
+        )
+        if not wallet:
+            await db.rollback()
             raise HTTPException(
-                status_code=502,
-                detail="Ончейн-refund не вдався. Статус угоди не змінено (залишається disputed).",
+                status_code=400,
+                detail="Немає адреси гаманця продавця для release. Вкажіть wallet_address, seller_payout_address або usdt_wallet продавця.",
             )
-        refund_tx = Transaction(
+        amount = deal.amount_usdt - deal.service_fee
+        if amount <= 0:
+            await db.rollback()
+            raise HTTPException(status_code=400, detail="Некоректна сума виплати")
+
+    # 4) Claim: must still be disputed → payout_in_progress, then COMMIT.
+    try:
+        claim_deal_for_transfer(deal, expected_status=DealStatus.disputed)
+    except PayoutClaimError as e:
+        await db.rollback()
+        raise HTTPException(status_code=e.http_status, detail=e.message)
+
+    await db.commit()  # claim visible — second double-click gets 409
+    logger.info(f"[ADMIN] Deal #{deal.id}: CLAIMED payout_in_progress for {body.resolution}")
+
+    # 5) On-chain transfer AFTER claim.
+    tx_hash = await _escrow_transfer_usdt(deal, wallet, amount)
+    if not tx_hash:
+        release_payout_claim(deal, restore_status=DealStatus.disputed)
+        await db.commit()
+        try:
+            from app.services.alerts import send_admin_alert
+            await send_admin_alert(
+                f"🔴 <b>Admin {body.resolution} FAILED</b> — deal #{deal.id}\n"
+                f"Статус повернуто до disputed.",
+                alert_key=f"admin_resolve_fail_{deal.id}",
+                throttle_minutes=5,
+            )
+        except Exception:
+            pass
+        raise HTTPException(
+            status_code=502,
+            detail=(
+                "Ончейн-refund не вдався. Статус угоди не змінено (залишається disputed)."
+                if body.resolution == "refund_buyer"
+                else "Ончейн-release не вдався. Статус угоди не змінено (залишається disputed)."
+            ),
+        )
+
+    if body.resolution == "refund_buyer":
+        db.add(Transaction(
             deal_id=deal.id,
             tx_hash=tx_hash,
             from_address=deal.escrow_wallet_address,
@@ -310,36 +386,16 @@ async def resolve_deal(
             amount=amount,
             type=TransactionType.refund,
             status=TransactionStatus.confirmed,
-        )
-        db.add(refund_tx)
+        ))
+        deal.payout_tx_hash = tx_hash  # idempotency marker for refunds too
         deal.status = DealStatus.cancelled
         if deal.channel:
             deal.channel.status = ChannelStatus.approved
         logger.info(f"[ADMIN] Deal #{deal.id}: refund_buyer OK tx={tx_hash}")
-
-    elif body.resolution == "release_seller":
-        wallet = _resolve_wallet(
-            deal.seller_payout_address,
-            deal.seller.usdt_wallet if deal.seller else None,
-            body.wallet_address,
-        )
-        if not wallet:
-            raise HTTPException(
-                status_code=400,
-                detail="Немає адреси гаманця продавця для release. Вкажіть wallet_address, seller_payout_address або usdt_wallet продавця.",
-            )
-        amount = deal.amount_usdt - deal.service_fee
-        if amount <= 0:
-            raise HTTPException(status_code=400, detail="Некоректна сума виплати")
-        tx_hash = await _escrow_transfer_usdt(deal, wallet, amount)
-        if not tx_hash:
-            raise HTTPException(
-                status_code=502,
-                detail="Ончейн-release не вдався. Статус угоди не змінено (залишається disputed).",
-            )
+    else:
         deal.seller_payout_address = wallet
         mark_deal_completed(deal, tx_hash)
-        release_tx = Transaction(
+        db.add(Transaction(
             deal_id=deal.id,
             tx_hash=tx_hash,
             from_address=deal.escrow_wallet_address,
@@ -347,14 +403,10 @@ async def resolve_deal(
             amount=amount,
             type=TransactionType.release,
             status=TransactionStatus.confirmed,
-        )
-        db.add(release_tx)
+        ))
         if deal.channel:
             deal.channel.status = ChannelStatus.sold
         logger.info(f"[ADMIN] Deal #{deal.id}: release_seller OK tx={tx_hash}")
-
-    else:
-        raise HTTPException(status_code=400, detail="Invalid resolution")
 
     await db.commit()
     await db.refresh(deal)
@@ -378,6 +430,7 @@ _FUNDED_DEAL_STATUSES = (
     DealStatus.paid,
     DealStatus.channel_transferring,
     DealStatus.awaiting_payout,
+    DealStatus.payout_in_progress,
     DealStatus.disputed,
 )
 
