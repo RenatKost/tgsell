@@ -1,6 +1,6 @@
 import { faUser, faSignOutAlt } from '@fortawesome/free-solid-svg-icons';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { NavLink } from 'react-router-dom';
 import { useAuth } from '../../context/AppContext';
 import AuthModal from './AuthModal';
@@ -8,19 +8,8 @@ import MobileNav from './MobileNav';
 
 const Navigation = () => {
 	const [showModal, setShowModal] = useState(false);
-	const [scrollToBottom, setScrollToBottom] = useState(false);
 	const [showMenu, setShowMenu] = useState(false);
 	const { user, isAuthenticated, logout } = useAuth();
-
-	useEffect(() => {
-		if (scrollToBottom) {
-			window.scrollTo({
-				top: document.documentElement.scrollHeight,
-				behavior: 'smooth',
-			});
-			setScrollToBottom(false);
-		}
-	}, [scrollToBottom]);
 
 	return (
 		<>
@@ -56,16 +45,18 @@ const Navigation = () => {
 						</NavLink>
 					</li>
 					<li>
-						<a
-							className='px-4 py-2 rounded-xl text-sm font-semibold text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-white/5 transition-all duration-200 block cursor-pointer'
-							href='#footer'
-							onClick={e => {
-								e.preventDefault();
-								setScrollToBottom(true);
-							}}
+						<NavLink
+							to='/contacts'
+							className={({ isActive }) =>
+								`px-4 py-2 rounded-xl text-sm font-semibold transition-all duration-200 ${
+									isActive
+										? 'bg-cyan-500/10 text-cyan-500 dark:bg-cyan-500/20 dark:text-cyan-400'
+										: 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-white/5'
+								}`
+							}
 						>
 							Контакти
-						</a>
+						</NavLink>
 					</li>
 					{isAuthenticated && user && (user.role === 'admin' || user.role === 'moderator') && (
 						<li>
@@ -168,7 +159,6 @@ const Navigation = () => {
 				)}
 
 				<MobileNav
-					scroll={setScrollToBottom}
 					showMenu={showMenu}
 					setShowMenu={setShowMenu}
 				/>

@@ -41,6 +41,8 @@ const cols = [
   {
     title: 'Компанія',
     links: [
+      { to: '/faq', label: 'FAQ' },
+      { to: '/contacts', label: 'Контакти' },
       { to: '/privacy', label: 'Політика конфіденційності' },
       { to: '/oferta', label: 'Публічна оферта' },
       { to: '/cabinet', label: 'Особистий кабінет' },
@@ -142,6 +144,8 @@ const Footer = () => {
             <span className="text-xs text-gray-400">Угоди захищені ескроу USDT (TRC-20)</span>
           </div>
           <div className="flex gap-4">
+            <NavLink to="/faq" className="text-xs text-gray-400 hover:text-accent transition-colors">FAQ</NavLink>
+            <NavLink to="/contacts" className="text-xs text-gray-400 hover:text-accent transition-colors">Контакти</NavLink>
             <NavLink to="/privacy" className="text-xs text-gray-400 hover:text-accent transition-colors">Конфіденційність</NavLink>
             <NavLink to="/oferta" className="text-xs text-gray-400 hover:text-accent transition-colors">Оферта</NavLink>
           </div>

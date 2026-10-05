@@ -1,4 +1,4 @@
-import { createBrowserRouter } from 'react-router-dom';
+import { createBrowserRouter, Navigate } from 'react-router-dom';
 import CabinetPage from './layouts/CabinetPage';
 import CatalogPage from './layouts/CatalogPage';
 import HomePage from './layouts/HomePage';
@@ -6,12 +6,15 @@ import Layout from './layouts/Layout';
 import ModerCabinet from './layouts/ModerCabinet';
 import SellPage from './layouts/SellPage';
 import ErrorsPage from './layouts/ErrorsPage';
+import NotFoundPage from './layouts/NotFoundPage';
 import ChannelDetailsPage from './layouts/ChannelDetailsPage';
 import DealPage from './layouts/DealPage';
 import ProfilePage from './layouts/ProfilePage';
 import AuctionPage from './layouts/AuctionPage';
 import PrivacyPage from './layouts/PrivacyPage';
 import OfertaPage from './layouts/OfertaPage';
+import FaqPage from './layouts/FaqPage';
+import ContactsPage from './layouts/ContactsPage';
 import PrivateRoute from './components/PrivateRoute';
 import BundleSellPage from './layouts/BundleSellPage';
 import BundleDetailsPage from './layouts/BundleDetailsPage';
@@ -98,9 +101,24 @@ export const router = createBrowserRouter([
 				path: '/oferta',
 				element: <OfertaPage />,
 			},
+			{
+				path: '/faq',
+				element: <FaqPage />,
+			},
+			{
+				path: '/contacts',
+				element: <ContactsPage />,
+			},
+			{
+				path: '/terms',
+				element: <Navigate to="/oferta" replace />,
+			},
+			{
+				path: '*',
+				element: <NotFoundPage />,
+			},
 		],
 	},
 ]);
 
 export default router;
-

@@ -1,6 +1,6 @@
 import { NavLink } from 'react-router-dom';
 
-const MobileNav = ({ scroll, showMenu, setShowMenu }) => {
+const MobileNav = ({ showMenu, setShowMenu }) => {
 	return (
 		<>
 			<div
@@ -52,17 +52,13 @@ const MobileNav = ({ scroll, showMenu, setShowMenu }) => {
 						</NavLink>
 					</li>
 					<li>
-						<a
-							className='text-gray-800 dark:text-gray-200 font-bold text-lg hover:text-blue-500 transition-colors duration-200 block py-2 cursor-pointer'
-							href='#footer'
-							onClick={e => {
-								e.preventDefault();
-								scroll(true);
-								setShowMenu(false);
-							}}
+						<NavLink
+							to='/contacts'
+							className='text-gray-800 dark:text-gray-200 font-bold text-lg hover:text-cyan-500 transition-colors duration-200 block py-2'
+							onClick={() => setShowMenu(false)}
 						>
 							Контакти
-						</a>
+						</NavLink>
 					</li>
 				</ul>
 				<div className='grid mt-8 space-y-3 w-full max-w-xs'>
