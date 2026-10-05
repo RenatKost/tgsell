@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from pydantic import BaseModel
+from pydantic import BaseModel, model_validator
 
 
 class ChannelCreate(BaseModel):
@@ -79,6 +79,12 @@ class ChannelResponse(BaseModel):
     # Bundle info (populated at runtime if channel is part of a bundle)
     bundle_id: int | None = None
     bundle_name: str | None = None
+
+    @model_validator(mode="after")
+    def _sanitize_avatar(self):
+        from app.utils.avatars import public_channel_avatar_url
+        self.avatar_url = public_channel_avatar_url(self.id, self.avatar_url)
+        return self
 
     model_config = {"from_attributes": True}
 

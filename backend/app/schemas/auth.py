@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from pydantic import BaseModel
+from pydantic import BaseModel, model_validator
 
 
 class TelegramAuthData(BaseModel):
@@ -32,6 +32,12 @@ class UserResponse(BaseModel):
     role: str
     usdt_wallet: str | None
     created_at: datetime
+
+    @model_validator(mode="after")
+    def _sanitize_avatar(self):
+        from app.utils.avatars import scrub_leaked_avatar_url
+        self.avatar_url = scrub_leaked_avatar_url(self.avatar_url)
+        return self
 
     model_config = {"from_attributes": True}
 

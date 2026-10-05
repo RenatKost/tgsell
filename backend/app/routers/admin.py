@@ -8,6 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.database import get_db
+from app.utils.avatars import public_channel_avatar_url
 from app.models.auction import Auction, AuctionBid
 from app.models.channel import Channel, ChannelStatus
 from app.models.deal import Deal, DealStatus
@@ -659,7 +660,7 @@ async def admin_list_auctions(
             "id": a.id,
             "channel_id": a.channel_id,
             "channel_name": a.channel.channel_name if a.channel else None,
-            "channel_avatar": a.channel.avatar_url if a.channel else None,
+            "channel_avatar": public_channel_avatar_url(a.channel.id, a.channel.avatar_url) if a.channel else None,
             "seller_name": a.seller.first_name if a.seller else None,
             "seller_id": a.seller_id,
             "start_price": a.start_price,
@@ -923,7 +924,8 @@ async def admin_telegram_diagnostics(
                 if not bot_api_ok:
                     bot_api_error = f"HTTP {resp.status_code}"
         except Exception as e:
-            bot_api_error = str(e)
+            from app.utils.log_redact import redact
+            bot_api_error = redact(e)
     else:
         bot_api_error = "BOT_TOKEN_STATS not configured"
 

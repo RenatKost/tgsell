@@ -20,6 +20,7 @@ from app.schemas.bundle import (
     BundleChannelInfo,
 )
 from app.utils.security import get_current_user
+from app.utils.avatars import public_channel_avatar_url
 from app.models.user import User
 from app.services.ai_analysis import analyze_bundle
 
@@ -33,7 +34,7 @@ def _channel_to_info(channel: Channel) -> BundleChannelInfo:
         id=channel.id,
         channel_name=channel.channel_name,
         telegram_link=channel.telegram_link,
-        avatar_url=channel.avatar_url,
+        avatar_url=public_channel_avatar_url(channel.id, channel.avatar_url),
         subscribers_count=channel.subscribers_count or 0,
         avg_views=channel.avg_views,
         er=channel.er,

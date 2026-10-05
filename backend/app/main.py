@@ -11,7 +11,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 
 from app.config import settings
-from app.routers import auth, channels, deals, admin, users, favorites, auctions, activity
+from app.routers import auth, channels, deals, admin, users, favorites, auctions, activity, media
 from app.routers import bundles as bundles_router
 from app.tasks.payment_checker import run_payment_checker
 from app.tasks.stats_collector import run_stats_collector, run_view_tracker
@@ -23,10 +23,42 @@ logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
 )
+from app.utils.log_redact import setup_log_hygiene  # noqa: E402
+setup_log_hygiene()  # no bot tokens in logs (httpx logs full request URLs at INFO)
 logger = logging.getLogger(__name__)
 
 background_tasks: list[asyncio.Task] = []
 
+
+
+async def _scrub_leaked_avatar_urls() -> None:
+    """Idempotent: NULL out any avatar_url that still embeds a Bot API token."""
+    from sqlalchemy import text as sa_text
+    from app.database import async_session
+
+    try:
+        async with async_session() as db:
+            ch = await db.execute(
+                sa_text(
+                    "UPDATE channels SET avatar_url = NULL "
+                    "WHERE avatar_url LIKE '%api.telegram.org/file/bot%'"
+                )
+            )
+            us = await db.execute(
+                sa_text(
+                    "UPDATE users SET avatar_url = NULL "
+                    "WHERE avatar_url LIKE '%api.telegram.org/file/bot%'"
+                )
+            )
+            await db.commit()
+            logger.info(
+                "Scrubbed leaked avatar URLs: channels=%s users=%s",
+                ch.rowcount,
+                us.rowcount,
+            )
+    except Exception as e:
+        from app.utils.log_redact import redact
+        logger.error("Avatar URL scrub failed: %s", redact(e))
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -40,6 +72,8 @@ async def lifespan(app: FastAPI):
     logger.info(f"  TELETHON_SESSION_STRING: {'✓ set' if cfg.telethon_session_string else '✗ MISSING — no deep analytics'}")
     if not cfg.telethon_session_string:
         logger.warning("Channel analytics (views, ER, posts) require TELETHON_SESSION_STRING!")
+
+    await _scrub_leaked_avatar_urls()
 
     logger.info("Starting background tasks…")
     loop = asyncio.get_event_loop()
@@ -91,6 +125,7 @@ app.include_router(favorites.router, prefix="/api")
 app.include_router(auctions.router, prefix="/api")
 app.include_router(activity.router, prefix="/api")
 app.include_router(bundles_router.router, prefix="/api")
+app.include_router(media.router, prefix="/api")
 
 @app.get("/api/health")
 async def health():

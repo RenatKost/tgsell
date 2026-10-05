@@ -313,7 +313,7 @@ async def _save_session_to_db(session_string: str) -> None:
 async def get_channel_info_bot_api(channel_username: str) -> dict | None:
     """Get basic channel info using Bot API (safe, no user account needed).
 
-    Returns: {name, description, subscribers_count, photo_url}
+    Returns: {name, description, subscribers_count, photo_url} where photo_url is tg:<file_id> or None
     """
     import httpx
 
@@ -334,16 +334,13 @@ async def get_channel_info_bot_api(channel_username: str) -> dict | None:
             )
             members = count_resp.json().get("result", 0) if count_resp.status_code == 200 else 0
 
-            # Get photo URL (if available)
+            # Store token-free file_id ref (public URL built at response time)
             photo_url = None
             if chat_data.get("photo"):
                 file_id = chat_data["photo"].get("big_file_id")
                 if file_id:
-                    file_resp = await http.get(f"{base_url}/getFile", params={"file_id": file_id})
-                    if file_resp.status_code == 200:
-                        file_path = file_resp.json().get("result", {}).get("file_path")
-                        if file_path:
-                            photo_url = f"https://api.telegram.org/file/bot{settings.bot_token_stats}/{file_path}"
+                    from app.utils.avatars import store_avatar_ref
+                    photo_url = store_avatar_ref(file_id)
 
             return {
                 "name": chat_data.get("title", ""),
@@ -353,7 +350,8 @@ async def get_channel_info_bot_api(channel_username: str) -> dict | None:
                 "username": chat_data.get("username", channel_username),
             }
     except Exception as e:
-        logger.error(f"Bot API channel info failed for @{channel_username}: {e}")
+        from app.utils.log_redact import redact
+        logger.error(f"Bot API channel info failed for @{channel_username}: {redact(e)}")
         return None
 
 
