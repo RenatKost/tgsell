@@ -585,9 +585,13 @@ const ModerCabinet = () => {
 												{reauthStatus
 													? reauthStatus.live_client_ok
 														? '✅ Підключено і авторизовано'
-														: reauthStatus.db_session_exists
-															? '⚠️ Сесія є в БД, але клієнт не підключений'
-															: '❌ Сесія відсутня — потрібна авторизація'
+														: reauthStatus.authkey_duplicated || reauthStatus.telethon_status === 'authkey_duplicated'
+															? '🔴 AuthKeyDuplicatedError — потрібна повторна авторизація'
+															: reauthStatus.telethon_status === 'waiting' || reauthStatus.telethon_status === 'connecting'
+																? `⏳ Telethon ${reauthStatus.telethon_status}${reauthStatus.live_client_error ? ': ' + reauthStatus.live_client_error : ''}`
+																: reauthStatus.db_session_exists
+																	? `⚠️ Сесія є в БД, але клієнт не підключений${reauthStatus.live_client_error ? ': ' + reauthStatus.live_client_error : ''}`
+																	: '❌ Сесія відсутня — потрібна авторизація'
 													: 'Статус невідомий'}
 											</p>
 										</div>
@@ -596,11 +600,23 @@ const ModerCabinet = () => {
 												onClick={async () => {
 													setReauthLoading(true); setReauthMsg('');
 													try {
-														await adminAPI.reauthStart();
+														const { data } = await adminAPI.reauthStart();
 														setReauthStep('confirm');
-														setReauthMsg('Код відправлено на телефон. Введіть його нижче.');
+														const typeLabels = {
+															app: 'додаток Telegram',
+															sms: 'SMS',
+															call: 'дзвінок',
+															flash_call: 'flash-call',
+															missed_call: 'пропущений дзвінок',
+															email: 'email',
+															firebase_sms: 'Firebase SMS',
+															fragment_sms: 'Fragment SMS',
+														};
+														const where = typeLabels[data.code_type] || data.code_type || 'невідомий канал';
+														setReauthMsg(`Код відправлено (${where}). Введіть його нижче.`);
 													} catch (e) {
-														setReauthMsg('Помилка: ' + (e.response?.data?.detail || e.message));
+														const d = e.response?.data?.detail;
+														setReauthMsg('Помилка: ' + (typeof d === 'string' ? d : (d ? JSON.stringify(d) : e.message)));
 													} finally { setReauthLoading(false); }
 												}}
 												disabled={reauthLoading}
@@ -622,7 +638,7 @@ const ModerCabinet = () => {
 												<input
 													value={reauthCode}
 													onChange={e => setReauthCode(e.target.value)}
-													placeholder='Код з SMS / Telegram'
+													placeholder='Код (SMS / додаток / дзвінок)'
 													className='flex-1 border border-gray-200 dark:border-slate-600 rounded-xl px-4 py-2 text-sm bg-white dark:bg-slate-700 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500'
 												/>
 												<button
@@ -640,7 +656,8 @@ const ModerCabinet = () => {
 																setReauthStatus(rs);
 															}
 														} catch (e) {
-															setReauthMsg('Помилка: ' + (e.response?.data?.detail || e.message));
+															const d = e.response?.data?.detail;
+															setReauthMsg('Помилка: ' + (typeof d === 'string' ? d : (d ? JSON.stringify(d) : e.message)));
 														} finally { setReauthLoading(false); }
 													}}
 													disabled={reauthLoading || !reauthCode}
@@ -671,7 +688,8 @@ const ModerCabinet = () => {
 														const { data: rs } = await adminAPI.getReauthStatus();
 														setReauthStatus(rs);
 													} catch (e) {
-														setReauthMsg('Помилка: ' + (e.response?.data?.detail || e.message));
+														const d = e.response?.data?.detail;
+														setReauthMsg('Помилка: ' + (typeof d === 'string' ? d : (d ? JSON.stringify(d) : e.message)));
 													} finally { setReauthLoading(false); }
 												}}
 												disabled={reauthLoading || !reauthPassword}
@@ -697,10 +715,15 @@ const ModerCabinet = () => {
 													setReauthLoading(true);
 													setReauthMsg('');
 													try {
-														await adminAPI.runStatsNow();
-														setReauthMsg('✅ Збір статистики запущено! Дані з\'являться через ~1-2 хв.');
+														const { data } = await adminAPI.runStatsNow();
+														if (data?.ok === false) {
+															setReauthMsg('Помилка: ' + (data.detail || data.message || 'Telethon недоступний'));
+														} else {
+															setReauthMsg('✅ Збір статистики запущено! Дані з\'являться через ~1-2 хв.');
+														}
 													} catch (e) {
-														setReauthMsg('Помилка: ' + (e.response?.data?.detail || e.message));
+														const d = e.response?.data?.detail;
+														setReauthMsg('Помилка: ' + (typeof d === 'string' ? d : (d ? JSON.stringify(d) : e.message)));
 													} finally { setReauthLoading(false); }
 												}}
 												disabled={reauthLoading}

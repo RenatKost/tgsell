@@ -933,18 +933,30 @@ async def admin_telegram_diagnostics(
     # Test Telethon — session can come from env var OR from DB (DB-first storage)
     telethon_ok = False
     telethon_error = None
+    telethon_status = None
     if cfg.telegram_api_id and cfg.telegram_api_hash:
-        # Check whether a session exists (env var OR DB)
-        from app.services.channel_stats import _load_session_from_db
+        from app.services.channel_stats import _load_session_from_db, get_telethon_health
+        health = get_telethon_health()
+        telethon_status = health.get("status")
         db_session = await _load_session_from_db()
         has_session = bool(cfg.telethon_session_string or db_session)
-        if has_session:
+        if health.get("authkey_duplicated") or telethon_status == "authkey_duplicated":
+            telethon_error = health.get("detail") or "AuthKeyDuplicatedError — re-auth required"
+        elif telethon_status in ("waiting", "connecting"):
+            telethon_error = health.get("detail") or f"Telethon {telethon_status} (startup delay)"
+        elif has_session:
             try:
                 from app.services.channel_stats import _get_telethon_client
                 client = await _get_telethon_client()
                 telethon_ok = client is not None and client.is_connected()
-                if not telethon_ok:
-                    telethon_error = "Client not connected or not authorized"
+                if telethon_ok:
+                    try:
+                        telethon_ok = await client.is_user_authorized()
+                    except Exception as e:
+                        telethon_ok = False
+                        telethon_error = str(e)
+                if not telethon_ok and not telethon_error:
+                    telethon_error = health.get("detail") or "Client not connected or not authorized"
             except Exception as e:
                 telethon_error = str(e)
         else:
@@ -959,6 +971,7 @@ async def admin_telegram_diagnostics(
 
     diagnostics["telethon_ok"] = telethon_ok
     diagnostics["telethon_error"] = telethon_error
+    diagnostics["telethon_status"] = telethon_status
 
     # Overall status
     diagnostics["analytics_available"] = bot_api_ok and telethon_ok
@@ -1090,6 +1103,35 @@ async def admin_dashboard_stats(
 _reauth_sessions: dict[int, dict] = {}
 
 
+def _sent_code_delivery_type(sent) -> str:
+    """Map Telethon sent_code.type to a short label: app / sms / call / etc."""
+    t = getattr(sent, "type", None)
+    if t is None:
+        return "unknown"
+    name = type(t).__name__  # e.g. SentCodeTypeApp
+    if name.startswith("SentCodeType"):
+        raw = name[len("SentCodeType"):]
+    else:
+        raw = name
+    # CamelCase → snake_case then simplify common ones
+    import re
+    snake = re.sub(r"(?<!^)(?=[A-Z])", "_", raw).lower()
+    aliases = {
+        "app": "app",
+        "sms": "sms",
+        "call": "call",
+        "flash_call": "flash_call",
+        "missed_call": "missed_call",
+        "email_code": "email",
+        "firebase_sms": "firebase_sms",
+        "fragment_sms": "fragment_sms",
+        "sms_word": "sms_word",
+        "sms_phrase": "sms_phrase",
+        "set_up_email_required": "email_setup",
+    }
+    return aliases.get(snake, snake or "unknown")
+
+
 @router.post("/reauth/start")
 async def reauth_start(
     admin: User = Depends(get_admin_user),
@@ -1097,7 +1139,8 @@ async def reauth_start(
     """Step 1 — request OTP from Telegram.
 
     Connects a fresh Telethon client and calls send_code_request().
-    Returns immediately; the OTP arrives on the registered phone.
+    Returns immediately; the OTP arrives on the registered phone / app.
+    Includes code_type (app / sms / call / …) so the admin UI can show where to look.
     """
     from app.config import settings as cfg
 
@@ -1107,6 +1150,7 @@ async def reauth_start(
     if not cfg.telegram_api_id or not cfg.telegram_api_hash:
         raise HTTPException(status_code=400, detail="TELEGRAM_API_ID / TELEGRAM_API_HASH not set")
 
+    client = None
     try:
         from telethon import TelegramClient
         from telethon.sessions import StringSession
@@ -1118,13 +1162,25 @@ async def reauth_start(
         )
         await client.connect()
         sent = await client.send_code_request(phone)
+        code_type = _sent_code_delivery_type(sent)
         _reauth_sessions[admin.id] = {
             "client": client,
             "phone": phone,
             "phone_code_hash": sent.phone_code_hash,
+            "code_type": code_type,
         }
-        return {"ok": True, "phone": phone, "message": "Code sent. Call /reauth/confirm with the code."}
+        return {
+            "ok": True,
+            "phone": phone,
+            "code_type": code_type,
+            "message": f"Code sent via {code_type}. Call /reauth/confirm with the code.",
+        }
     except Exception as e:
+        if client is not None:
+            try:
+                await client.disconnect()
+            except Exception:
+                pass
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -1188,21 +1244,28 @@ async def reauth_status(
     admin: User = Depends(get_admin_user),
 ):
     """Check current Telethon session status (DB + live client)."""
-    from app.services.channel_stats import _load_session_from_db, _telethon_client
+    from app.services.channel_stats import _load_session_from_db, _telethon_client, get_telethon_health
 
     db_session = await _load_session_from_db()
+    health = get_telethon_health()
     live_ok = False
-    live_error = None
+    live_error = health.get("detail")
     if _telethon_client is not None:
         try:
             live_ok = _telethon_client.is_connected() and await _telethon_client.is_user_authorized()
+            if live_ok:
+                live_error = None
         except Exception as e:
             live_error = str(e)
+    elif health.get("status") in ("waiting", "connecting"):
+        live_error = health.get("detail") or f"Telethon status: {health.get('status')}"
 
     return {
         "db_session_exists": bool(db_session),
         "live_client_ok": live_ok,
         "live_client_error": live_error,
+        "telethon_status": health.get("status"),
+        "authkey_duplicated": health.get("authkey_duplicated", False),
         "pending_reauth": admin.id in _reauth_sessions,
     }
 
@@ -1211,9 +1274,52 @@ async def reauth_status(
 async def run_stats_now(
     admin: User = Depends(get_admin_user),
 ):
-    """Immediately trigger one stats-collection cycle for all channels (runs in background)."""
+    """Immediately trigger one stats-collection cycle for all channels (runs in background).
+
+    Refuses with an error if Telethon is not connected+authorized (so the admin UI
+    does not show a false green OK).
+    """
     import asyncio
+    from app.services.channel_stats import (
+        _get_telethon_client,
+        get_telethon_health,
+    )
     from app.tasks.stats_collector import collect_stats_once
+
+    health = get_telethon_health()
+    status = health.get("status")
+
+    if health.get("authkey_duplicated") or status == "authkey_duplicated":
+        raise HTTPException(
+            status_code=503,
+            detail=(
+                "AuthKeyDuplicatedError: сесію інвалідовано (два IP одночасно). "
+                "Потрібна повторна авторизація (Telethon сесія → Запросити код)."
+            ),
+        )
+    if status in ("waiting", "connecting"):
+        delay = health.get("startup_delay_sec", 150)
+        raise HTTPException(
+            status_code=503,
+            detail=(
+                f"Telethon ще не готовий (status={status}). "
+                f"Після деплою перше підключення відкладається на ~{delay}s — зачекайте і спробуйте знову."
+            ),
+        )
+
+    client = await _get_telethon_client()
+    if client is None or not client.is_connected():
+        reason = health.get("detail") or f"Telethon не підключений (status={status})"
+        raise HTTPException(status_code=503, detail=reason)
+    try:
+        authorized = await client.is_user_authorized()
+    except Exception as e:
+        raise HTTPException(status_code=503, detail=f"Telethon auth check failed: {e}")
+    if not authorized:
+        raise HTTPException(
+            status_code=503,
+            detail="Telethon сесія не авторизована — потрібна повторна авторизація.",
+        )
 
     asyncio.create_task(collect_stats_once())
     return {"ok": True, "message": "Stats collection started in background. Check channel pages in ~1-2 minutes."}

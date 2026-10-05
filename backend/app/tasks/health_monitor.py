@@ -17,10 +17,19 @@ _prev_bot_api_ok: bool | None = None
 
 
 async def _check_telethon():
-    """Check if Telethon is alive and authorized."""
+    """Check if Telethon is alive and authorized.
+
+    During the startup delay (status waiting/connecting) we skip alerts so
+    a fresh deploy does not look like an outage.
+    """
     global _prev_telethon_ok
+    from app.services.channel_stats import get_telethon_health, _get_telethon_client
+
+    health = get_telethon_health()
+    if health.get("status") in ("waiting", "connecting"):
+        return False  # not ready yet; don't flip prev / alert
+
     try:
-        from app.services.channel_stats import _get_telethon_client
         client = await _get_telethon_client()
         ok = client is not None and client.is_connected()
         if ok:
@@ -28,14 +37,15 @@ async def _check_telethon():
     except Exception:
         ok = False
 
+    if health.get("authkey_duplicated"):
+        ok = False
+
     if _prev_telethon_ok is not None and ok != _prev_telethon_ok:
         if ok:
             await alert_service_recovered("Telethon (аналітика каналів)")
         else:
-            await alert_service_down(
-                "Telethon (аналітика каналів)",
-                "Клієнт відключений або сесія протухла"
-            )
+            detail = health.get("detail") or "Клієнт відключений або сесія протухла"
+            await alert_service_down("Telethon (аналітика каналів)", detail)
     _prev_telethon_ok = ok
     return ok
 

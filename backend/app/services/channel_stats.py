@@ -13,23 +13,106 @@ _telethon_was_ok = False  # Track state for recovery alerts
 _telethon_retries = 0
 _MAX_RETRIES = 3
 
+# Startup delay gate: do not open MTProto until the previous container is gone.
+# Railway healthcheckTimeout is 120s; default delay is 150s (configurable).
+_startup_connect_allowed = False
+_authkey_duplicated = False  # Permanent fail — never reconnect until re-auth / restart
+# waiting | connecting | connected | unauthorized | failed | authkey_duplicated
+_telethon_status = "waiting"
+_telethon_status_detail: str | None = None
+
+
+def get_telethon_health() -> dict:
+    """Snapshot for /api/health and admin UI. ok is True only when connected+authorized."""
+    ok = (
+        _telethon_status == "connected"
+        and _telethon_client is not None
+        and _telethon_client.is_connected()
+    )
+    return {
+        "status": _telethon_status,
+        "ok": bool(ok),
+        "detail": _telethon_status_detail,
+        "startup_delay_sec": settings.telethon_startup_delay_sec,
+        "startup_connect_allowed": _startup_connect_allowed,
+        "authkey_duplicated": _authkey_duplicated,
+    }
+
+
+def allow_telethon_connect_now():
+    """Bypass remaining startup delay (e.g. right after a successful re-auth)."""
+    global _startup_connect_allowed, _authkey_duplicated, _telethon_retries
+    _startup_connect_allowed = True
+    _authkey_duplicated = False
+    _telethon_retries = 0
+
+
+async def _safe_disconnect(client) -> None:
+    """Disconnect a client and cancel lingering reconnect tasks; never raise."""
+    if client is None:
+        return
+    try:
+        await client.disconnect()
+    except Exception as e:
+        logger.warning(f"Telethon disconnect failed: {e}")
+
+
+async def delayed_telethon_startup() -> None:
+    """Background: wait TELETHON_STARTUP_DELAY_SEC, then attempt first connect.
+
+    Keeps /api/health and the web app up immediately while avoiding AuthKey
+    duplication when Railway overlaps old and new containers during deploy.
+    """
+    global _startup_connect_allowed, _telethon_status, _telethon_status_detail
+
+    delay = max(0, int(settings.telethon_startup_delay_sec))
+    _telethon_status = "waiting"
+    _telethon_status_detail = f"Waiting {delay}s before first Telethon connect (deploy overlap safety)"
+    logger.info(f"Telethon: delaying first connect by {delay}s (TELETHON_STARTUP_DELAY_SEC)")
+    try:
+        await asyncio.sleep(delay)
+    except asyncio.CancelledError:
+        logger.info("Telethon: startup delay cancelled (shutdown)")
+        raise
+
+    _startup_connect_allowed = True
+    _telethon_status = "connecting"
+    _telethon_status_detail = "Connecting after startup delay…"
+    logger.info("Telethon: startup delay done — connecting…")
+    await _get_telethon_client()
+
 
 async def _get_telethon_client():
     """Get or create a Telethon client (singleton) with auto-reconnect."""
     global _telethon_client, _telethon_was_ok, _telethon_retries
+    global _telethon_status, _telethon_status_detail, _authkey_duplicated
+
+    # Permanent lockout after AuthKeyDuplicatedError until re-auth / process restart
+    if _authkey_duplicated:
+        return None
 
     # Fast path — already connected
     if _telethon_client is not None and _telethon_client.is_connected():
         try:
             if await _telethon_client.is_user_authorized():
+                _telethon_status = "connected"
+                _telethon_status_detail = None
                 return _telethon_client
         except Exception:
             pass
         logger.warning("Telethon: connected but session invalid, reconnecting…")
+        await _safe_disconnect(_telethon_client)
         _telethon_client = None
+
+    # Hold off until startup delay elapses (or re-auth calls allow_telethon_connect_now)
+    if not _startup_connect_allowed:
+        _telethon_status = "waiting"
+        return None
 
     if not settings.telegram_api_id or not settings.telegram_api_hash:
         logger.warning("Telethon: TELEGRAM_API_ID or TELEGRAM_API_HASH not set — skipping")
+        _telethon_status = "failed"
+        _telethon_status_detail = "TELEGRAM_API_ID or TELEGRAM_API_HASH not set"
         return None
 
     # Retry limit per cycle
@@ -43,10 +126,15 @@ async def _get_telethon_client():
         session_string = settings.telethon_session_string
         if not session_string:
             logger.warning("Telethon: no session in DB and TELETHON_SESSION_STRING not set — skipping")
+            _telethon_status = "unauthorized"
+            _telethon_status_detail = "No session in DB and TELETHON_SESSION_STRING not set"
             return None
 
+    client = None
+    _telethon_status = "connecting"
     try:
         from telethon import TelegramClient
+        from telethon.errors import AuthKeyDuplicatedError
         from telethon.sessions import StringSession
 
         session = StringSession(session_string)
@@ -57,18 +145,24 @@ async def _get_telethon_client():
         )
         await client.connect()
         if not await client.is_user_authorized():
-            logger.warning("Telethon session not authorized (expired?). Update TELETHON_SESSION_STRING.")
+            logger.warning("Telethon session not authorized (expired?). Re-auth required.")
             _telethon_retries += 1
+            _telethon_status = "unauthorized"
+            _telethon_status_detail = "Session not authorized — re-auth required"
+            await _safe_disconnect(client)
+            client = None
             from app.services.alerts import alert_service_down
             await alert_service_down(
                 "Telethon (аналітика каналів)",
-                "Сесія не авторизована — потрібно оновити TELETHON_SESSION_STRING"
+                "Сесія не авторизована — потрібна повторна авторизація (admin → Telethon сесія)"
             )
             return None
 
         logger.info("Telethon client connected and authorized ✓")
         _telethon_client = client
         _telethon_retries = 0
+        _telethon_status = "connected"
+        _telethon_status_detail = None
 
         # Persist updated session data (captures DC migrations and key refreshes)
         await _save_session_to_db(client.session.save())
@@ -81,8 +175,42 @@ async def _get_telethon_client():
         _telethon_was_ok = True
         return client
     except Exception as e:
+        # Always tear down the client so no reconnect loops linger
+        await _safe_disconnect(client)
+        client = None
+        _telethon_client = None
+
+        # AuthKeyDuplicatedError: two IPs used the same auth key — session is dead.
+        # Stop all retries; require admin re-auth.
+        try:
+            from telethon.errors import AuthKeyDuplicatedError
+        except ImportError:
+            AuthKeyDuplicatedError = type(None)  # type: ignore[misc,assignment]
+
+        if isinstance(e, AuthKeyDuplicatedError):
+            _authkey_duplicated = True
+            _telethon_retries = _MAX_RETRIES
+            _telethon_status = "authkey_duplicated"
+            _telethon_status_detail = (
+                "AuthKeyDuplicatedError: session used from two IPs simultaneously — "
+                "re-auth required (admin → Telethon сесія)"
+            )
+            logger.error(
+                "Telethon AuthKeyDuplicatedError — stopping reconnects; admin re-auth required"
+            )
+            _telethon_was_ok = False
+            from app.services.alerts import alert_service_down
+            await alert_service_down(
+                "Telethon (аналітика каналів)",
+                "AuthKeyDuplicatedError: сесію використано з двох IP одночасно. "
+                "Потрібна повторна авторизація в адмін-панелі (Telethon сесія).",
+            )
+            return None
+
         logger.error(f"Failed to init Telethon client: {e}")
         _telethon_retries += 1
+        _telethon_status = "failed"
+        _telethon_status_detail = str(e)[:500]
         if _telethon_was_ok:
             _telethon_was_ok = False
             from app.services.alerts import alert_service_down
@@ -91,15 +219,25 @@ async def _get_telethon_client():
 
 
 def reset_telethon_retries():
-    """Reset retry counter — called at start of each stats cycle."""
+    """Reset retry counter — called at start of each stats cycle.
+
+    Does nothing after AuthKeyDuplicatedError (permanent lockout until re-auth).
+    """
     global _telethon_retries
+    if _authkey_duplicated:
+        return
     _telethon_retries = 0
 
 
 def reset_telethon_client():
     """Force the global client to None — call after re-auth to pick up new session."""
-    global _telethon_client
+    global _telethon_client, _authkey_duplicated, _telethon_retries
+    global _telethon_status, _telethon_status_detail
     _telethon_client = None
+    # Fresh session after re-auth — clear lockout and allow immediate connect
+    allow_telethon_connect_now()
+    _telethon_status = "connecting"
+    _telethon_status_detail = "Reset after re-auth — will reconnect on next use"
 
 
 async def disconnect_telethon_client():
@@ -112,13 +250,12 @@ async def disconnect_telethon_client():
     shrinks that overlap window instead of leaving it connected until the
     process is killed.
     """
-    global _telethon_client
+    global _telethon_client, _telethon_status
     if _telethon_client is not None:
-        try:
-            await _telethon_client.disconnect()
-        except Exception as e:
-            logger.warning(f"Telethon disconnect on shutdown failed: {e}")
+        await _safe_disconnect(_telethon_client)
         _telethon_client = None
+    if _telethon_status == "connected":
+        _telethon_status = "failed"
 
 
 async def _load_session_from_db() -> str | None:

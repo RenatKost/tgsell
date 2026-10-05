@@ -53,6 +53,10 @@ class Settings(BaseSettings):
     # AI Analysis (Groq — free Llama 3.3 70B)
     groq_api_key: str = ""
 
+    # Telethon: delay first MTProto connect after process start so a previous
+    # Railway container can fully exit (healthcheckTimeout=120s). Non-blocking.
+    telethon_startup_delay_sec: int = 150
+
     model_config = {"env_file": ".env", "extra": "ignore"}
 
 
