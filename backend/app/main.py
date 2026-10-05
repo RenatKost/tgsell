@@ -8,7 +8,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, Response
 
 from app.config import settings
 from app.routers import auth, channels, deals, admin, users, favorites, auctions, activity, media
@@ -147,10 +147,50 @@ STATIC_DIR = Path(__file__).resolve().parent.parent / "static"
 if STATIC_DIR.exists():
     app.mount("/assets", StaticFiles(directory=STATIC_DIR / "assets"), name="assets")
 
+    # Exact SPA paths and dynamic prefixes matching React Router
+    SPA_EXACT = {
+        "",
+        "sell",
+        "catalog",
+        "auction",
+        "cabinet",
+        "admin",
+        "sell-bundle",
+        "profile",
+        "privacy",
+        "oferta",
+        "faq",
+        "contacts",
+        "terms",
+    }
+    SPA_PREFIXES = (
+        "channel/",
+        "bundle/",
+        "deal/",
+    )
+
+    _NOT_FOUND_HTML = """<!DOCTYPE html>
+<html lang="uk"><head><meta charset="UTF-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>404 — TgSell</title>
+<style>body{margin:0;font-family:system-ui,sans-serif;background:#0f172a;color:#e2e8f0;display:flex;min-height:100vh;align-items:center;justify-content:center;text-align:center;padding:1.5rem}
+h1{font-size:4rem;margin:0;color:#334155}h2{margin:.5rem 0;font-size:1.5rem}p{color:#94a3b8}a{color:#00FF88;font-weight:600;text-decoration:none}</style>
+</head><body><div><h1>404</h1><h2>Сторінку не знайдено</h2><p>Такої адреси на TgSell немає.</p><a href="/">На головну</a></div></body></html>"""
+
+    def _is_spa_path(full_path: str) -> bool:
+        path = (full_path or "").strip("/")
+        if path in SPA_EXACT:
+            return True
+        return any(path.startswith(prefix) for prefix in SPA_PREFIXES)
+
     @app.get("/{full_path:path}")
     async def serve_spa(full_path: str):
-        """Serve React SPA — all non-API routes return index.html."""
+        """Serve React SPA for known routes; real HTTP 404 for unknown paths."""
         file_path = STATIC_DIR / full_path
-        if file_path.is_file():
+        if full_path and file_path.is_file():
             return FileResponse(file_path)
-        return FileResponse(STATIC_DIR / "index.html")
+        if _is_spa_path(full_path):
+            return FileResponse(STATIC_DIR / "index.html")
+        not_found = STATIC_DIR / "404.html"
+        if not_found.is_file():
+            return FileResponse(not_found, status_code=404)
+        return Response(content=_NOT_FOUND_HTML, status_code=404, media_type="text/html; charset=utf-8")
