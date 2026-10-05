@@ -20,6 +20,8 @@ _authkey_duplicated = False  # Permanent fail — never reconnect until re-auth 
 # waiting | connecting | connected | unauthorized | failed | authkey_duplicated
 _telethon_status = "waiting"
 _telethon_status_detail: str | None = None
+_intentional_disconnect = False  # True during process shutdown — suppress mid-session alerts
+_disconnect_watch_task: asyncio.Task | None = None
 
 
 def get_telethon_health() -> dict:
@@ -45,6 +47,76 @@ def allow_telethon_connect_now():
     _startup_connect_allowed = True
     _authkey_duplicated = False
     _telethon_retries = 0
+
+
+def _should_suppress_telethon_alerts() -> bool:
+    """No admin spam during TELETHON_STARTUP_DELAY / waiting / connecting."""
+    if not _startup_connect_allowed:
+        return True
+    if _telethon_status in ("waiting", "connecting"):
+        return True
+    return False
+
+
+async def _notify_telethon_down(reason: str, detail: str = "") -> None:
+    """Fire immediate Telethon-down alert unless still in startup/waiting/connecting."""
+    if _should_suppress_telethon_alerts():
+        logger.info(
+            "Telethon down suppressed (status=%s, startup_allowed=%s, reason=%s)",
+            _telethon_status,
+            _startup_connect_allowed,
+            reason,
+        )
+        return
+    from app.services.alerts import alert_telethon_session_down
+    await alert_telethon_session_down(reason, detail)
+
+
+async def _notify_telethon_recovered() -> None:
+    """Fire recovery alert only if a prior down was latched."""
+    from app.services.alerts import alert_telethon_session_recovered
+    await alert_telethon_session_recovered()
+
+
+def _cancel_disconnect_watcher() -> None:
+    """Cancel mid-session disconnect watcher (reconnect / shutdown / reset)."""
+    global _disconnect_watch_task
+    if _disconnect_watch_task is not None and not _disconnect_watch_task.done():
+        _disconnect_watch_task.cancel()
+    _disconnect_watch_task = None
+
+
+def _attach_disconnect_watcher(client) -> None:
+    """Watch Telethon client.disconnected for mid-session drops (event-driven)."""
+    global _disconnect_watch_task
+    _cancel_disconnect_watcher()
+
+    async def _watch():
+        global _telethon_client, _telethon_status, _telethon_status_detail, _telethon_was_ok
+        try:
+            # Resolves when the connection is fully gone (reconnects exhausted / logout / disconnect)
+            await client.disconnected
+        except asyncio.CancelledError:
+            raise
+        except Exception as e:
+            logger.warning(f"Telethon disconnected with error: {e}")
+
+        if _intentional_disconnect:
+            return
+        if _telethon_client is not client:
+            return  # replaced or already cleared
+        _telethon_client = None
+        if _telethon_status == "connected":
+            _telethon_status = "failed"
+            _telethon_status_detail = "Disconnected mid-session"
+            _telethon_was_ok = False
+            logger.error("Telethon: mid-session disconnect detected")
+            await _notify_telethon_down(
+                "disconnect",
+                "З'єднання обірвано під час роботи",
+            )
+
+    _disconnect_watch_task = asyncio.create_task(_watch())
 
 
 async def _safe_disconnect(client) -> None:
@@ -101,6 +173,7 @@ async def _get_telethon_client():
         except Exception:
             pass
         logger.warning("Telethon: connected but session invalid, reconnecting…")
+        _cancel_disconnect_watcher()  # intentional reconnect — not a mid-session death alert
         await _safe_disconnect(_telethon_client)
         _telethon_client = None
 
@@ -151,10 +224,10 @@ async def _get_telethon_client():
             _telethon_status_detail = "Session not authorized — re-auth required"
             await _safe_disconnect(client)
             client = None
-            from app.services.alerts import alert_service_down
-            await alert_service_down(
-                "Telethon (аналітика каналів)",
-                "Сесія не авторизована — потрібна повторна авторизація (admin → Telethon сесія)"
+            _telethon_was_ok = False
+            await _notify_telethon_down(
+                "unauthorized",
+                "Сесія не авторизована — потрібна повторна авторизація",
             )
             return None
 
@@ -167,10 +240,11 @@ async def _get_telethon_client():
         # Persist updated session data (captures DC migrations and key refreshes)
         await _save_session_to_db(client.session.save())
 
-        # Send recovery alert if was previously down
-        if _telethon_was_ok is False:
-            from app.services.alerts import alert_service_recovered
-            await alert_service_recovered("Telethon (аналітика каналів)")
+        # Watch for mid-session drops (do not wait for health_monitor)
+        _attach_disconnect_watcher(client)
+
+        # Recovery only if a prior down alert was latched (not on first boot)
+        await _notify_telethon_recovered()
 
         _telethon_was_ok = True
         return client
@@ -199,11 +273,9 @@ async def _get_telethon_client():
                 "Telethon AuthKeyDuplicatedError — stopping reconnects; admin re-auth required"
             )
             _telethon_was_ok = False
-            from app.services.alerts import alert_service_down
-            await alert_service_down(
-                "Telethon (аналітика каналів)",
-                "AuthKeyDuplicatedError: сесію використано з двох IP одночасно. "
-                "Потрібна повторна авторизація в адмін-панелі (Telethon сесія).",
+            await _notify_telethon_down(
+                "authkey_duplicated",
+                "Сесію анульовано — reconnect марний, потрібен новий логін",
             )
             return None
 
@@ -211,10 +283,10 @@ async def _get_telethon_client():
         _telethon_retries += 1
         _telethon_status = "failed"
         _telethon_status_detail = str(e)[:500]
-        if _telethon_was_ok:
+        # Alert immediately if previously OK, or after retries exhausted
+        if _telethon_was_ok or _telethon_retries >= _MAX_RETRIES:
             _telethon_was_ok = False
-            from app.services.alerts import alert_service_down
-            await alert_service_down("Telethon (аналітика каналів)", str(e))
+            await _notify_telethon_down("connect_failed", str(e)[:500])
         return None
 
 
@@ -233,6 +305,7 @@ def reset_telethon_client():
     """Force the global client to None — call after re-auth to pick up new session."""
     global _telethon_client, _authkey_duplicated, _telethon_retries
     global _telethon_status, _telethon_status_detail
+    _cancel_disconnect_watcher()  # do not treat re-auth reset as mid-session death
     _telethon_client = None
     # Fresh session after re-auth — clear lockout and allow immediate connect
     allow_telethon_connect_now()
@@ -250,7 +323,9 @@ async def disconnect_telethon_client():
     shrinks that overlap window instead of leaving it connected until the
     process is killed.
     """
-    global _telethon_client, _telethon_status
+    global _telethon_client, _telethon_status, _intentional_disconnect
+    _intentional_disconnect = True  # suppress mid-session disconnect alert on shutdown
+    _cancel_disconnect_watcher()
     if _telethon_client is not None:
         await _safe_disconnect(_telethon_client)
         _telethon_client = None
