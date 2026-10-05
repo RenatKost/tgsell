@@ -43,6 +43,9 @@ async def lifespan(app: FastAPI):
 
     logger.info("Starting background tasks…")
     loop = asyncio.get_event_loop()
+    # Delay first Telethon connect past Railway healthcheck so old container is gone
+    from app.services.channel_stats import delayed_telethon_startup
+    background_tasks.append(loop.create_task(delayed_telethon_startup()))
     background_tasks.append(loop.create_task(run_payment_checker(interval_seconds=30)))
     background_tasks.append(loop.create_task(run_stats_collector(interval_hours=3)))
     background_tasks.append(loop.create_task(run_view_tracker(interval_hours=3)))
@@ -91,7 +94,17 @@ app.include_router(bundles_router.router, prefix="/api")
 
 @app.get("/api/health")
 async def health():
-    return {"status": "ok"}
+    """Liveness for Railway. Always 200 once the web app is up.
+
+    Telethon may still be in 'waiting'/'connecting' during the startup delay
+    (TELETHON_STARTUP_DELAY_SEC, default 150 > healthcheckTimeout 120).
+    telethon.ok is True only when connected and authorized.
+    """
+    from app.services.channel_stats import get_telethon_health
+    return {
+        "status": "ok",
+        "telethon": get_telethon_health(),
+    }
 
 
 # Serve frontend static files in production

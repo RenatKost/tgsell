@@ -228,6 +228,11 @@ async def run_stats_collector(interval_hours: int = 24):
     """Run stats collector loop."""
     interval_seconds = interval_hours * 3600
     logger.info(f"Stats collector started (interval: {interval_hours}h)")
+    # Wait past Telethon startup delay so the first cycle can use MTProto
+    from app.config import settings as cfg
+    delay = max(0, int(cfg.telethon_startup_delay_sec)) + 5
+    logger.info(f"Stats collector: waiting {delay}s for Telethon startup delay…")
+    await asyncio.sleep(delay)
     while True:
         try:
             await collect_stats_once()
