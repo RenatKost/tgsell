@@ -16,6 +16,7 @@ class DealStatus(str, enum.Enum):
     paid = "paid"
     channel_transferring = "channel_transferring"
     awaiting_payout = "awaiting_payout"
+    payout_in_progress = "payout_in_progress"
     completed = "completed"
     disputed = "disputed"
     cancelled = "cancelled"
