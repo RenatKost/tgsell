@@ -2,8 +2,8 @@ import enum
 from datetime import datetime
 
 from sqlalchemy import (
-    BigInteger, Boolean, DateTime, Enum, Float, ForeignKey,
-    Integer, String, Text, func,
+    BigInteger, Boolean, CheckConstraint, DateTime, Enum, Float, ForeignKey,
+    Integer, String, Text, UniqueConstraint, func,
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -68,6 +68,15 @@ class Deal(Base):
         Integer, ForeignKey("channel_bundles.id"), nullable=True
     )
 
+    # Transfer checklist + reminder dedup (migration 0022).
+    # Dedup fields are reset on every checklist activity (tick/confirm), so each
+    # idle period gets at most one 6h reminder, one 24h reminder, one 48h admin alert.
+    checklist_started_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    last_checklist_activity_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    reminder_6h_sent_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    reminder_24h_sent_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    admin_alert_48h_sent_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+
     # Relationships
     channel = relationship("Channel", back_populates="deals")
     bundle = relationship("ChannelBundle", back_populates="deals", foreign_keys=[bundle_id])
@@ -75,6 +84,10 @@ class Deal(Base):
     seller = relationship("User", back_populates="deals_as_seller", foreign_keys=[seller_id])
     transactions = relationship("Transaction", back_populates="deal", cascade="all, delete-orphan")
     messages = relationship("DealMessage", back_populates="deal", cascade="all, delete-orphan", order_by="DealMessage.created_at")
+    checklist_items = relationship(
+        "DealChecklistItem", back_populates="deal", cascade="all, delete-orphan",
+        order_by="DealChecklistItem.id",
+    )
 
 
 class Transaction(Base):
@@ -107,3 +120,31 @@ class DealMessage(Base):
 
     deal = relationship("Deal", back_populates="messages")
     sender = relationship("User")
+
+
+class DealChecklistItem(Base):
+    """One transfer-checklist item for a deal side (seller|buyer).
+
+    side is a plain VARCHAR + CHECK (not a PG enum) to keep migrations simple.
+    Keys/labels are defined in app.services.deal_checklist.CHECKLIST_ITEMS.
+    """
+    __tablename__ = "deal_checklist_items"
+    __table_args__ = (
+        UniqueConstraint("deal_id", "key", name="uq_deal_checklist_deal_key"),
+        CheckConstraint("side IN ('seller', 'buyer')", name="ck_deal_checklist_side"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    deal_id: Mapped[int] = mapped_column(ForeignKey("deals.id", ondelete="CASCADE"), index=True)
+    side: Mapped[str] = mapped_column(String(10))
+    key: Mapped[str] = mapped_column(String(64))
+    required: Mapped[bool] = mapped_column(Boolean, default=True)
+    done: Mapped[bool] = mapped_column(Boolean, default=False)
+    done_by: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+    done_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    auto_verified: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
+    auto_note: Mapped[str | None] = mapped_column(Text, nullable=True)
+    auto_checked_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+
+    deal = relationship("Deal", back_populates="checklist_items")

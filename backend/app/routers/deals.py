@@ -1,6 +1,6 @@
 from datetime import datetime, timezone
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Body, Depends, HTTPException, status
 from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
@@ -11,9 +11,11 @@ from app.models.channel import Channel, ChannelStatus
 from app.models.deal import Deal, DealMessage, DealStatus, Transaction, TransactionStatus, TransactionType
 from app.models.user import User
 from app.schemas.deal import (
-    DealCreate, DealDisputeRequest, DealMessageCreate,
+    ChecklistItemResponse, ChecklistSideResponse, ChecklistToggleRequest,
+    DealChecklistResponse, DealCreate, DealDisputeRequest, DealMessageCreate,
     DealMessageResponse, DealResponse, SellerWalletRequest,
 )
+from app.services import deal_checklist as checklist_svc
 from app.services.escrow import generate_escrow_wallet
 from app.services.deal_lifecycle import (
     claim_deal_for_transfer,
@@ -294,40 +296,8 @@ async def confirm_transfer(
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    """Legacy endpoint — redirects to confirm-channel-transfer."""
-    result = await db.execute(
-        select(Deal)
-        .options(selectinload(Deal.channel), selectinload(Deal.buyer), selectinload(Deal.seller))
-        .where(Deal.id == deal_id)
-    )
-    deal = result.scalar_one_or_none()
-    if not deal:
-        raise HTTPException(status_code=404, detail="Deal not found")
-    if deal.buyer_id != user.id and deal.seller_id != user.id:
-        raise HTTPException(status_code=403, detail="Access denied")
-    if deal.status != DealStatus.paid:
-        raise HTTPException(status_code=400, detail="Deal is not in paid status")
-
-    if deal.buyer_id == user.id:
-        deal.buyer_confirmed_transfer = True
-        await _add_system_message(db, deal.id, user.id, "Покупець підтвердив отримання каналу")
-    else:
-        deal.seller_confirmed_transfer = True
-        await _add_system_message(db, deal.id, user.id, "Продавець підтвердив передачу каналу")
-
-    if deal.buyer_confirmed_transfer and deal.seller_confirmed_transfer:
-        deal.status = DealStatus.awaiting_payout
-        deal.channel.status = ChannelStatus.sold
-        payout_amount = deal.amount_usdt - deal.service_fee
-        payout_msg = (
-            f"Канал успішно передано!\n"
-            f"Продавець, вкажіть гаманець для отримання {payout_amount:.2f} USDT."
-        )
-        await _add_system_message(db, deal.id, user.id, payout_msg)
-
-    await db.commit()
-    await db.refresh(deal)
-    return _deal_to_response(deal, deal.channel, deal.buyer, deal.seller)
+    """Legacy endpoint — same logic as confirm-channel-transfer (checklist-gated)."""
+    return await _confirm_transfer_impl(deal_id, user, db)
 
 
 @router.post("/{deal_id}/dispute", response_model=DealResponse)
@@ -418,64 +388,251 @@ async def confirm_channel_transfer(
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    """Buyer or seller confirms channel has been transferred."""
+    """Buyer or seller confirms channel has been transferred (checklist-gated)."""
+    return await _confirm_transfer_impl(deal_id, user, db)
+
+
+async def _confirm_transfer_impl(deal_id: int, user: User, db: AsyncSession) -> DealResponse:
+    """Confirm transfer for the caller's side.
+
+    Rejects (400) while the caller's required checklist items are open.
+    → awaiting_payout ONLY when both sides confirmed AND all required items
+    of both sides are done (checklist_svc.can_advance_to_awaiting_payout).
+    """
     result = await db.execute(
         select(Deal)
         .options(selectinload(Deal.channel), selectinload(Deal.buyer), selectinload(Deal.seller))
         .where(Deal.id == deal_id)
+        .with_for_update(of=Deal)
     )
     deal = result.scalar_one_or_none()
     if not deal:
         raise HTTPException(status_code=404, detail="Deal not found")
-    if deal.buyer_id != user.id and deal.seller_id != user.id:
+    if checklist_svc.side_for_user(deal, user.id) is None:
         raise HTTPException(status_code=403, detail="Access denied")
-    if deal.status != DealStatus.paid:
-        raise HTTPException(status_code=400, detail="Deal is not in paid status")
+    if deal.status not in checklist_svc.TRANSFER_STATUSES:
+        raise HTTPException(status_code=400, detail="Угода не в статусі передачі каналу")
 
-    if deal.buyer_id == user.id:
+    now = datetime.utcnow()
+    items = await checklist_svc.ensure_checklist(db, deal, now)
+    try:
+        side = checklist_svc.check_confirm_allowed(deal, user.id, items)
+    except checklist_svc.ChecklistError as e:
+        await db.commit()  # keep lazily-created checklist rows; releases row lock
+        raise HTTPException(status_code=e.http_status, detail=e.message)
+
+    if side == checklist_svc.SIDE_BUYER:
         deal.buyer_confirmed_transfer = True
         logger.info(f"[DEAL] Deal #{deal.id}: BUYER CONFIRMED TRANSFER (user={user.id})")
-        await _add_system_message(db, deal.id, user.id, f"Покупець підтвердив отримання каналу")
+        await _add_system_message(db, deal.id, user.id, "Покупець підтвердив отримання каналу")
     else:
         deal.seller_confirmed_transfer = True
         logger.info(f"[DEAL] Deal #{deal.id}: SELLER CONFIRMED TRANSFER (user={user.id})")
-        await _add_system_message(db, deal.id, user.id, f"Продавець підтвердив передачу каналу")
+        await _add_system_message(db, deal.id, user.id, "Продавець підтвердив передачу каналу")
+    checklist_svc.mark_transferring(deal)
+    checklist_svc.record_checklist_activity(deal, now)
 
-    # Both confirmed → awaiting payout
-    if deal.buyer_confirmed_transfer and deal.seller_confirmed_transfer:
-        deal.status = DealStatus.awaiting_payout
-        if deal.channel:
-            deal.channel.status = ChannelStatus.sold
-            logger.info(f"[DEAL] Deal #{deal.id}: STATUS → awaiting_payout, channel #{deal.channel_id} SOLD, payout={deal.amount_usdt - deal.service_fee:.2f} USDT")
-        elif deal.bundle_id:
-            # Mark all channels in the bundle as sold
-            from app.models.bundle import ChannelBundle, BundleChannel, BundleStatus
-            bc_rows = (await db.execute(
-                select(BundleChannel).where(BundleChannel.bundle_id == deal.bundle_id)
-            )).scalars().all()
-            for bc in bc_rows:
-                ch_res = await db.execute(select(Channel).where(Channel.id == bc.channel_id))
-                ch = ch_res.scalar_one_or_none()
-                if ch:
-                    ch.status = ChannelStatus.sold
-            bundle_res = await db.execute(select(ChannelBundle).where(ChannelBundle.id == deal.bundle_id))
-            bundle = bundle_res.scalar_one_or_none()
-            if bundle:
-                bundle.status = BundleStatus.sold
-            logger.info(f"[DEAL] Bundle deal #{deal.id}: STATUS → awaiting_payout, bundle #{deal.bundle_id} SOLD")
-        payout_amount = deal.amount_usdt - deal.service_fee
-        payout_msg = (
-            f"🎉 Канал успішно передано!\n\n"
-            f"Продавець, вкажіть свій USDT (TRC-20) гаманець для отримання коштів:\n"
-            f"💰 Вартість каналу: {deal.amount_usdt} USDT\n"
-            f"📊 Комісія сервісу (3%): {deal.service_fee:.2f} USDT\n"
-            f"💵 До виплати: {payout_amount:.2f} USDT"
-        )
-        await _add_system_message(db, deal.id, user.id, payout_msg)
+    if checklist_svc.can_advance_to_awaiting_payout(deal, items):
+        await checklist_svc.advance_to_awaiting_payout(db, deal)
+        await _add_system_message(db, deal.id, user.id, checklist_svc.payout_request_message(deal))
 
     await db.commit()
     await db.refresh(deal)
     return _deal_to_response(deal, deal.channel, deal.buyer, deal.seller)
+
+
+# ===== Transfer checklist =====
+
+def _checklist_response(
+    deal: Deal,
+    items: list,
+    user: User,
+    *,
+    auto_verify_message: str | None = None,
+) -> DealChecklistResponse:
+    from app.services.channel_stats import get_telethon_health
+
+    by_key = {i.key: i for i in items}
+    my_side = checklist_svc.side_for_user(deal, user.id)
+    active = deal.status in checklist_svc.TRANSFER_STATUSES
+
+    def _side(side: str) -> ChecklistSideResponse:
+        out = []
+        for d in checklist_svc.defs_for_side(side):
+            row = by_key.get(d.key)
+            out.append(ChecklistItemResponse(
+                key=d.key, side=d.side, label=d.label, hint=d.hint,
+                required=d.required,
+                done=bool(row and row.done),
+                done_by=row.done_by if row else None,
+                done_at=row.done_at if row else None,
+                auto_verified=row.auto_verified if row else None,
+                auto_note=row.auto_note if row else None,
+                auto_checked_at=row.auto_checked_at if row else None,
+            ))
+        req = [i for i in out if i.required]
+        return ChecklistSideResponse(
+            side=side,
+            label=checklist_svc.SIDE_LABELS[side],
+            items=out,
+            required_total=len(req),
+            required_done=sum(1 for i in req if i.done),
+            confirmed=checklist_svc.side_confirmed(deal, side),
+        )
+
+    try:
+        telethon_ok = bool(get_telethon_health().get("ok"))
+    except Exception:
+        telethon_ok = False
+
+    return DealChecklistResponse(
+        deal_id=deal.id,
+        status=deal.status.value,
+        active=active,
+        my_side=my_side,
+        can_edit=active and my_side is not None,
+        seller=_side(checklist_svc.SIDE_SELLER),
+        buyer=_side(checklist_svc.SIDE_BUYER),
+        all_required_done=checklist_svc.all_required_done(items),
+        last_activity_at=deal.last_checklist_activity_at,
+        telethon_available=telethon_ok,
+        auto_verify_message=auto_verify_message,
+    )
+
+
+def _can_view_checklist(deal: Deal, user: User) -> bool:
+    return (
+        deal.buyer_id == user.id
+        or deal.seller_id == user.id
+        or user.role in ("admin", "moderator")
+    )
+
+
+@router.get("/{deal_id}/checklist", response_model=DealChecklistResponse)
+async def get_deal_checklist(
+    deal_id: int,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Transfer checklist (buyer, seller, admin/moderator). Lazily created for paid deals."""
+    deal = (await db.execute(select(Deal).where(Deal.id == deal_id))).scalar_one_or_none()
+    if not deal:
+        raise HTTPException(status_code=404, detail="Deal not found")
+    if not _can_view_checklist(deal, user):
+        raise HTTPException(status_code=403, detail="Access denied")
+
+    if deal.status in checklist_svc.TRANSFER_STATUSES:
+        items = await checklist_svc.ensure_checklist(db, deal)
+        await db.commit()
+        await db.refresh(deal)
+    else:
+        items = await checklist_svc.load_items(db, deal.id)
+    return _checklist_response(deal, items, user)
+
+
+# NOTE: declared before /checklist/{key} so "auto-verify" is not captured as a key.
+@router.post("/{deal_id}/checklist/auto-verify", response_model=DealChecklistResponse)
+async def auto_verify_deal_checklist(
+    deal_id: int,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Best-effort Telethon check (owner / admins / subscribers).
+
+    Stores auto_verified + auto_note only. Never ticks items, never changes
+    deal status, never moves money. Degrades gracefully when Telethon is down.
+    """
+    from app.services.checklist_autoverify import run_auto_verify
+
+    deal = (
+        await db.execute(
+            select(Deal)
+            .options(selectinload(Deal.channel), selectinload(Deal.buyer), selectinload(Deal.seller))
+            .where(Deal.id == deal_id)
+        )
+    ).scalar_one_or_none()
+    if not deal:
+        raise HTTPException(status_code=404, detail="Deal not found")
+    if not _can_view_checklist(deal, user):
+        raise HTTPException(status_code=403, detail="Access denied")
+    if deal.status not in checklist_svc.TRANSFER_STATUSES:
+        raise HTTPException(status_code=400, detail="Автоперевірка доступна лише під час передачі каналу")
+
+    items = await checklist_svc.ensure_checklist(db, deal)
+    message = await run_auto_verify(db, deal, items)
+    await db.commit()
+    await db.refresh(deal)
+    items = await checklist_svc.load_items(db, deal.id)
+    return _checklist_response(deal, items, user, auto_verify_message=message)
+
+
+@router.post("/{deal_id}/checklist/{key}", response_model=DealChecklistResponse)
+async def toggle_deal_checklist_item(
+    deal_id: int,
+    key: str,
+    body: ChecklistToggleRequest | None = Body(default=None),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Tick/untick a checklist item. Only the owning side may change its items."""
+    if key not in checklist_svc.ITEMS_BY_KEY:
+        raise HTTPException(status_code=404, detail="Невідомий пункт чек-листа")
+
+    deal = (
+        await db.execute(
+            select(Deal)
+            .options(selectinload(Deal.channel), selectinload(Deal.buyer), selectinload(Deal.seller))
+            .where(Deal.id == deal_id)
+            .with_for_update(of=Deal)
+        )
+    ).scalar_one_or_none()
+    if not deal:
+        raise HTTPException(status_code=404, detail="Deal not found")
+    try:
+        _item_def, side = checklist_svc.check_toggle_allowed(deal, user.id, key)
+    except checklist_svc.ChecklistError as e:
+        await db.rollback()
+        raise HTTPException(status_code=e.http_status, detail=e.message)
+
+    now = datetime.utcnow()
+    items = await checklist_svc.ensure_checklist(db, deal, now)
+    row = next((i for i in items if i.key == key), None)
+    if row is None:  # should not happen after ensure
+        raise HTTPException(status_code=500, detail="Checklist item missing")
+
+    new_done = (not row.done) if body is None or body.done is None else bool(body.done)
+    try:
+        checklist_svc.check_untick_allowed(deal, side, bool(row.done), new_done)
+    except checklist_svc.ChecklistError as e:
+        await db.rollback()
+        raise HTTPException(status_code=e.http_status, detail=e.message)
+
+    if new_done != bool(row.done):
+        was_side_complete = not checklist_svc.open_required_defs(items, side)
+        row.done = new_done
+        row.done_by = user.id if new_done else None
+        row.done_at = now if new_done else None
+        checklist_svc.mark_transferring(deal)
+        checklist_svc.record_checklist_activity(deal, now)
+        logger.info(
+            f"[CHECKLIST] deal #{deal.id} {side} {'✓' if new_done else '✗'} {key} (user={user.id})"
+        )
+        if not was_side_complete and not checklist_svc.open_required_defs(items, side):
+            label = checklist_svc.SIDE_LABELS[side]
+            await _add_system_message(
+                db, deal.id, user.id,
+                f"{label} виконав усі обов’язкові пункти чек-листа передачі ✅",
+            )
+
+        # Legacy/edge: both already confirmed earlier → last tick completes the gate.
+        if checklist_svc.can_advance_to_awaiting_payout(deal, items):
+            await checklist_svc.advance_to_awaiting_payout(db, deal)
+            await _add_system_message(db, deal.id, user.id, checklist_svc.payout_request_message(deal))
+
+    await db.commit()
+    await db.refresh(deal)
+    items = await checklist_svc.load_items(db, deal.id)
+    return _checklist_response(deal, items, user)
 
 
 @router.post("/{deal_id}/seller-wallet", response_model=DealResponse)

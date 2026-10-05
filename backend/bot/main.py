@@ -183,9 +183,17 @@ async def cb_deal_status(callback: CallbackQuery):
 
 @router.callback_query(F.data.startswith("deal_confirm:"))
 async def cb_deal_confirm(callback: CallbackQuery):
-    """Buyer confirms channel receipt → awaiting_payout (completed ONLY after on-chain payout)."""
+    """Buyer confirms channel receipt (checklist-gated).
+
+    → awaiting_payout only when both sides confirmed AND all required checklist
+    items are done. Completed happens ONLY after on-chain payout (seller wallet on site).
+    """
+    from datetime import datetime as _dt
+    from app.services import deal_checklist as checklist_svc
+
     deal_id = int(callback.data.split(":")[1])
     tg_id = callback.from_user.id
+    advanced = False
 
     async with async_session() as db:
         user = (await db.execute(select(User).where(User.telegram_id == tg_id))).scalar_one_or_none()
@@ -195,32 +203,50 @@ async def cb_deal_confirm(callback: CallbackQuery):
 
         deal = (
             await db.execute(
-                select(Deal).options(selectinload(Deal.channel)).where(Deal.id == deal_id)
+                select(Deal).where(Deal.id == deal_id).with_for_update()
             )
         ).scalar_one_or_none()
         if not deal or deal.buyer_id != user.id:
             await callback.answer("Тільки покупець може підтвердити.", show_alert=True)
             return
 
-        if deal.status not in (DealStatus.paid, DealStatus.channel_transferring):
+        if deal.status not in checklist_svc.TRANSFER_STATUSES:
             await callback.answer("Угоду неможливо підтвердити в поточному статусі.", show_alert=True)
+            return
+
+        now = _dt.utcnow()
+        items = await checklist_svc.ensure_checklist(db, deal, now)
+        open_own = checklist_svc.open_required_defs(items, checklist_svc.SIDE_BUYER)
+        if open_own:
+            await db.commit()
+            await callback.answer(
+                "Спершу відмітьте пункти чек-листа покупця на сторінці угоди.",
+                show_alert=True,
+            )
             return
 
         # Money-safety: never mark completed here. Seller must enter wallet on site
         # (POST /deals/{id}/seller-wallet) which performs transfer_usdt then completed.
         deal.buyer_confirmed_transfer = True
-        deal.status = DealStatus.awaiting_payout
-        if deal.channel:
-            from app.models.channel import ChannelStatus
-            deal.channel.status = ChannelStatus.sold
+        checklist_svc.mark_transferring(deal)
+        checklist_svc.record_checklist_activity(deal, now)
+        if checklist_svc.can_advance_to_awaiting_payout(deal, items):
+            await checklist_svc.advance_to_awaiting_payout(db, deal)  # → DealStatus.awaiting_payout
+            advanced = True
         await db.commit()
 
-    await callback.message.answer(
-        f"✅ Отримання каналу підтверджено (угода #{deal_id}).\n"
-        f"Статус: очікування виплати.\n\n"
-        f"Продавець: вкажіть USDT-гаманець на сайті в картці угоди — "
-        f"кошти будуть переведені з escrow лише після успішного on-chain переказу."
-    )
+    if advanced:
+        await callback.message.answer(
+            f"✅ Отримання каналу підтверджено (угода #{deal_id}).\n"
+            f"Статус: очікування виплати.\n\n"
+            f"Продавець: вкажіть USDT-гаманець на сайті в картці угоди — "
+            f"кошти будуть переведені з escrow лише після успішного on-chain переказу."
+        )
+    else:
+        await callback.message.answer(
+            f"✅ Отримання каналу підтверджено (угода #{deal_id}).\n"
+            f"Очікуємо, поки продавець виконає свій чек-лист і підтвердить передачу."
+        )
     await callback.answer()
 
 
@@ -312,8 +338,14 @@ async def notify_payment_received(bot: Bot, deal: Deal, buyer: User, seller: Use
     """Notify that USDT payment arrived."""
     logger.info(f"[NOTIFY] notify_payment_received called: deal={deal.id}")
     text = f"✅ <b>Угода #{deal.id}</b>: оплата {deal.amount_usdt} USDT отримана!\n\n"
-    buyer_text = text + "Очікуйте передачу каналу від продавця."
-    seller_text = text + "Будь ласка, передайте канал покупцю та очікуйте підтвердження."
+    buyer_text = text + (
+        "Очікуйте передачу каналу від продавця. На сторінці угоди відмічайте пункти "
+        "чек-листа покупця (власник, адміни, підписники)."
+    )
+    seller_text = text + (
+        "Будь ласка, передайте канал покупцю та відмічайте пункти чек-листа продавця "
+        "на сторінці угоди (2FA, адмін, Transfer Ownership, сторонні адміни)."
+    )
 
     for user, msg in [(buyer, buyer_text), (seller, seller_text)]:
         if user.telegram_id:
@@ -330,6 +362,16 @@ async def notify_payment_received(bot: Bot, deal: Deal, buyer: User, seller: Use
             await bot.send_message(settings.admin_group_id, admin_text, parse_mode=ParseMode.HTML)
         except Exception as e:
             logger.error(f"[NOTIFY] Failed to notify admin group about payment: {e}")
+
+
+async def notify_checklist_reminder(bot: Bot, telegram_id: int, text: str) -> bool:
+    """Send a transfer-checklist reminder to one deal participant. Never raises."""
+    try:
+        await bot.send_message(telegram_id, text, parse_mode=ParseMode.HTML, disable_web_page_preview=True)
+        return True
+    except Exception as e:
+        logger.warning(f"[NOTIFY] checklist reminder to {telegram_id} failed: {e}")
+        return False
 
 
 async def notify_deal_completed(bot: Bot, deal: Deal, buyer: User, seller: User):

@@ -148,6 +148,16 @@ export const dealsAPI = {
 
 	sendMessage: (id, text) =>
 		api.post(`/deals/${id}/messages`, { text }),
+
+	// Transfer checklist
+	getChecklist: (id) =>
+		api.get(`/deals/${id}/checklist`),
+
+	toggleChecklistItem: (id, key, done) =>
+		api.post(`/deals/${id}/checklist/${key}`, typeof done === 'boolean' ? { done } : {}),
+
+	autoVerifyChecklist: (id) =>
+		api.post(`/deals/${id}/checklist/auto-verify`, null, { timeout: 40000 }),
 };
 
 // ===== Admin =====

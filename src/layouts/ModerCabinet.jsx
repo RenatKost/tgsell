@@ -58,6 +58,7 @@ const DEAL_STATUS_FILTERS = [
 	{ text: 'Всі', value: '', dot: 'bg-gray-400' },
 	{ text: 'Активні', value: 'active', dot: 'bg-blue-500' },
 	{ text: 'Оплачені', value: 'paid', dot: 'bg-indigo-500' },
+	{ text: 'Передача каналу', value: 'channel_transferring', dot: 'bg-indigo-400' },
 	{ text: 'Завершені', value: 'completed', dot: 'bg-green-500' },
 	{ text: 'Спірні', value: 'disputed', dot: 'bg-red-500' },
 	{ text: 'Скасовані', value: 'cancelled', dot: 'bg-gray-500' },
