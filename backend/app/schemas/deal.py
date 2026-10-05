@@ -79,3 +79,46 @@ class DealMessageResponse(BaseModel):
     created_at: datetime
 
     model_config = {"from_attributes": True}
+
+
+# ── Transfer checklist ───────────────────────────────────────────────
+
+class ChecklistItemResponse(BaseModel):
+    key: str
+    side: str
+    label: str
+    hint: str | None = None
+    required: bool = True
+    done: bool = False
+    done_by: int | None = None
+    done_at: datetime | None = None
+    auto_verified: bool | None = None
+    auto_note: str | None = None
+    auto_checked_at: datetime | None = None
+
+
+class ChecklistSideResponse(BaseModel):
+    side: str
+    label: str
+    items: list[ChecklistItemResponse]
+    required_total: int
+    required_done: int
+    confirmed: bool
+
+
+class DealChecklistResponse(BaseModel):
+    deal_id: int
+    status: str
+    active: bool  # True while status is paid/channel_transferring
+    my_side: str | None = None
+    can_edit: bool = False
+    seller: ChecklistSideResponse
+    buyer: ChecklistSideResponse
+    all_required_done: bool
+    last_activity_at: datetime | None = None
+    telethon_available: bool = False
+    auto_verify_message: str | None = None
+
+
+class ChecklistToggleRequest(BaseModel):
+    done: bool | None = None  # None → toggle

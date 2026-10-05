@@ -3,6 +3,7 @@ import { useParams } from 'react-router-dom';
 import { Handshake, DollarSign, Send, CreditCard, CheckCircle2, Check } from 'lucide-react';
 import { dealsAPI } from '../services/api';
 import { useAuth } from '../context/AppContext';
+import TransferChecklist from '../components/Deal/TransferChecklist';
 
 const STEPS = [
 	{ key: 'created',         label: 'Готовність', LIcon: Handshake,    preset: 'blue'   },
@@ -265,6 +266,7 @@ const DealPage = () => {
 	const [actionLoading, setActionLoading] = useState(false);
 	const [walletAddress, setWalletAddress] = useState('');
 	const [copied, setCopied] = useState(false);
+	const [checklist, setChecklist] = useState(null);
 
 	const refreshDeal = async () => {
 		try {
@@ -339,6 +341,14 @@ const DealPage = () => {
 	const isBuyer = user?.id === deal.buyer_id;
 	const isSeller = user?.id === deal.seller_id;
 	const isSpecialStatus = ['disputed', 'cancelled'].includes(deal.status);
+	const isTransferStatus = ['paid', 'channel_transferring'].includes(deal.status);
+	const mySideKey = isBuyer ? 'buyer' : isSeller ? 'seller' : null;
+	const mySideChecklist = checklist && mySideKey ? checklist[mySideKey] : null;
+	const myChecklistOpen = mySideChecklist ? mySideChecklist.required_total - mySideChecklist.required_done : null;
+	const showError = (msg) => {
+		setError(msg);
+		setTimeout(() => setError(null), 5000);
+	};
 
 	return (
 		<section className='my-28 max-w-3xl mx-auto px-4'>
@@ -527,20 +537,27 @@ const DealPage = () => {
 			)}
 
 			{/* Step 3: Channel Transfer */}
-			{deal.status === 'paid' && (
+			{isTransferStatus && (
 				<div className='bg-white dark:bg-slate-800 rounded-2xl shadow-lg border border-gray-100 dark:border-slate-700 p-6 mb-6'>
 					<h3 className='font-bold text-lg mb-2'>Передача каналу</h3>
 					{isSeller && (
 						<p className='text-gray-500 text-sm mb-5'>
-							Кошти отримані! Передайте канал через Telegram:
+							Кошти отримані! Передайте канал через Telegram і відмічайте пункти чек-листа:
 							<span className='block text-gray-400 text-xs mt-1'>Settings → Channel → Administrators → Transfer Ownership</span>
 						</p>
 					)}
 					{isBuyer && (
 						<p className='text-gray-500 text-sm mb-5'>
-							Кошти на рахунку. Перевірте, чи ви отримали права на канал.
+							Кошти на рахунку. Перевірте, чи ви отримали права на канал, і відмітьте свої пункти чек-листа.
 						</p>
 					)}
+					<TransferChecklist
+						dealId={deal.id}
+						dealStatus={deal.status}
+						onLoaded={setChecklist}
+						onChange={refreshDeal}
+						onError={showError}
+					/>
 					<div className='flex gap-3 mb-5'>
 						<div className={`flex-1 flex items-center gap-3 p-4 rounded-xl border-2 transition-all duration-300 ${
 							deal.buyer_confirmed_transfer ? 'border-green-400 bg-green-50' : 'border-gray-200 bg-gray-50 dark:bg-slate-700'
@@ -574,10 +591,16 @@ const DealPage = () => {
 						</div>
 					</div>
 					{((isBuyer && !deal.buyer_confirmed_transfer) || (isSeller && !deal.seller_confirmed_transfer)) ? (
+						<>
+						{myChecklistOpen > 0 && (
+							<p className='text-xs text-amber-600 dark:text-amber-400 mb-2'>
+								Щоб підтвердити, виконайте ще {myChecklistOpen} обов’язков{myChecklistOpen === 1 ? 'ий пункт' : myChecklistOpen < 5 ? 'і пункти' : 'их пунктів'} вашого чек-листа.
+							</p>
+						)}
 						<div className='flex gap-3'>
 							<button
 								onClick={handleConfirmTransfer}
-								disabled={actionLoading}
+								disabled={actionLoading || myChecklistOpen > 0}
 								className='flex-1 font-bold bg-[#27ae60] text-white py-3.5 rounded-xl shadow-lg shadow-green-100 hover:bg-green-600 transition-all duration-300 disabled:opacity-50'
 							>
 								{actionLoading ? 'Зачекайте...' : isBuyer ? 'Підтвердити отримання' : 'Підтвердити передачу'}
@@ -592,6 +615,7 @@ const DealPage = () => {
 								</button>
 							)}
 						</div>
+						</>
 					) : (
 						<div className='bg-blue-50 dark:bg-blue-900/20 text-blue-600 text-sm font-medium px-4 py-3 rounded-xl text-center'>
 							Ви підтвердили. Очікуйте іншу сторону

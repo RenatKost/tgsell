@@ -60,14 +60,29 @@ async def check_payments_once():
 
                     logger.info(f"[PAYMENT] Deal #{deal.id}: deposit transaction recorded")
 
+                    # Transfer checklist starts now (idempotent; GET /checklist also creates lazily)
+                    # Separate session: a failure here must not expire/roll back the paid deal.
+                    paid_deal_id = deal.id
+                    try:
+                        from app.services.deal_checklist import ensure_checklist
+                        async with async_session() as cdb:
+                            cdeal = await cdb.get(Deal, paid_deal_id)
+                            if cdeal is not None:
+                                await ensure_checklist(cdb, cdeal)
+                                await cdb.commit()
+                    except Exception as e:
+                        logger.error(f"[CHECKLIST] deal #{paid_deal_id}: checklist init failed: {e}")
+
                     # Add system message to deal chat
                     sys_msg = DealMessage(
                         deal_id=deal.id,
                         sender_id=deal.buyer_id,
                         text=(
                             f"Оплата {balance} USDT отримана!\n"
-                            f"Продавець, передайте канал покупцю через Telegram.\n"
-                            f"Покупець, після отримання натисніть «Підтвердити отримання»."
+                            f"Продавець, передайте канал покупцю через Telegram і відмічайте "
+                            f"пункти чек-листа передачі нижче.\n"
+                            f"Покупець, після отримання перевірте канал, відмітьте свої пункти "
+                            f"чек-листа та натисніть «Підтвердити отримання»."
                         ),
                         is_system=True,
                     )
