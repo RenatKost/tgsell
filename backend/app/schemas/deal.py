@@ -58,6 +58,7 @@ class DealDisputeRequest(BaseModel):
 class DealResolveRequest(BaseModel):
     resolution: str  # "refund_buyer" or "release_seller"
     comment: str | None = None
+    wallet_address: str | None = None  # optional override if user wallet missing
 
 
 class SellerWalletRequest(BaseModel):
