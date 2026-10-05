@@ -16,6 +16,7 @@ from app.schemas.deal import (
 )
 from app.services.escrow import generate_escrow_wallet
 from app.utils.security import get_current_user
+from app.utils.avatars import public_channel_avatar_url
 
 import logging
 logger = logging.getLogger(__name__)
@@ -31,7 +32,7 @@ def _deal_to_response(deal: Deal, channel: Channel | None = None, buyer: User | 
         buyer_id=deal.buyer_id,
         seller_id=deal.seller_id,
         channel_name=channel.channel_name if channel else (bundle.name if bundle else None),
-        channel_avatar_url=channel.avatar_url if channel else None,
+        channel_avatar_url=public_channel_avatar_url(channel.id, channel.avatar_url) if channel else None,
         channel_link=channel.telegram_link if channel else None,
         bundle_name=bundle.name if bundle else None,
         bundle_channel_count=len(bundle.bundle_channels) if bundle and bundle.bundle_channels else None,

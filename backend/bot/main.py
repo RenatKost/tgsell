@@ -692,4 +692,6 @@ async def start_bot():
 
 if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO)
+    from app.utils.log_redact import setup_log_hygiene
+    setup_log_hygiene()
     asyncio.run(start_bot())

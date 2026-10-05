@@ -1,5 +1,5 @@
 from datetime import datetime
-from pydantic import BaseModel, field_validator
+from pydantic import BaseModel, field_validator, model_validator
 
 
 class BundleChannelInfo(BaseModel):
@@ -11,6 +11,12 @@ class BundleChannelInfo(BaseModel):
     avg_views: int | None = None
     er: float | None = None
     category: str = ""
+
+    @model_validator(mode="after")
+    def _sanitize_avatar(self):
+        from app.utils.avatars import public_channel_avatar_url
+        self.avatar_url = public_channel_avatar_url(self.id, self.avatar_url)
+        return self
 
     model_config = {"from_attributes": True}
 

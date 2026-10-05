@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from pydantic import BaseModel
+from pydantic import BaseModel, model_validator
 
 
 class AuctionBidCreate(BaseModel):
@@ -43,6 +43,12 @@ class AuctionResponse(BaseModel):
     monthly_income: float | None = None
     age: str | None = None
     views_hidden: bool = False
+
+    @model_validator(mode="after")
+    def _sanitize_avatar(self):
+        from app.utils.avatars import public_channel_avatar_url
+        self.channel_avatar = public_channel_avatar_url(self.channel_id, self.channel_avatar)
+        return self
 
     model_config = {"from_attributes": True}
 

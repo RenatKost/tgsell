@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from pydantic import BaseModel
+from pydantic import BaseModel, model_validator
 
 
 class DealCreate(BaseModel):
@@ -36,6 +36,17 @@ class DealResponse(BaseModel):
     created_at: datetime
     paid_at: datetime | None
     completed_at: datetime | None
+
+    @model_validator(mode="after")
+    def _sanitize_avatar(self):
+        from app.utils.avatars import public_channel_avatar_url, scrub_leaked_avatar_url
+        if self.channel_id is not None:
+            self.channel_avatar_url = public_channel_avatar_url(
+                self.channel_id, self.channel_avatar_url
+            )
+        else:
+            self.channel_avatar_url = scrub_leaked_avatar_url(self.channel_avatar_url)
+        return self
 
     model_config = {"from_attributes": True}
 

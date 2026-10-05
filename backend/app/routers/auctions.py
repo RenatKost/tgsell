@@ -23,6 +23,7 @@ from app.schemas.auction import (
     AuctionResponse,
 )
 from app.utils.security import get_current_user
+from app.utils.avatars import public_channel_avatar_url
 
 logger = logging.getLogger(__name__)
 
@@ -46,7 +47,7 @@ def _auction_to_response(auction: Auction) -> AuctionResponse:
         bid_count=auction.bid_count,
         created_at=auction.created_at,
         channel_name=channel.channel_name if channel else None,
-        channel_avatar=channel.avatar_url if channel else None,
+        channel_avatar=public_channel_avatar_url(channel.id, channel.avatar_url) if channel else None,
         subscribers_count=channel.subscribers_count if channel else None,
         category=channel.category if channel else None,
         avg_views=channel.avg_views if channel else None,
