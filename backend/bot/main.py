@@ -32,6 +32,7 @@ DEAL_STATUS_LABELS = {
     DealStatus.payment_pending: "💸 Часткова оплата",
     DealStatus.paid: "✅ Оплачено — передайте канал",
     DealStatus.channel_transferring: "🔄 Передача каналу",
+    DealStatus.awaiting_payout: "💰 Очікування виплати — продавець вказує гаманець на сайті",
     DealStatus.completed: "🎉 Завершено",
     DealStatus.disputed: "⚠️ Спір відкрито",
     DealStatus.cancelled: "❌ Скасовано",
@@ -181,6 +182,7 @@ async def cb_deal_status(callback: CallbackQuery):
 
 @router.callback_query(F.data.startswith("deal_confirm:"))
 async def cb_deal_confirm(callback: CallbackQuery):
+    """Buyer confirms channel receipt → awaiting_payout (completed ONLY after on-chain payout)."""
     deal_id = int(callback.data.split(":")[1])
     tg_id = callback.from_user.id
 
@@ -190,23 +192,35 @@ async def cb_deal_confirm(callback: CallbackQuery):
             await callback.answer("Ви не зареєстровані.", show_alert=True)
             return
 
-        deal = (await db.execute(select(Deal).where(Deal.id == deal_id))).scalar_one_or_none()
+        deal = (
+            await db.execute(
+                select(Deal).options(selectinload(Deal.channel)).where(Deal.id == deal_id)
+            )
+        ).scalar_one_or_none()
         if not deal or deal.buyer_id != user.id:
             await callback.answer("Тільки покупець може підтвердити.", show_alert=True)
             return
 
-        if deal.status != DealStatus.paid:
+        if deal.status not in (DealStatus.paid, DealStatus.channel_transferring):
             await callback.answer("Угоду неможливо підтвердити в поточному статусі.", show_alert=True)
             return
 
-        deal.status = DealStatus.completed
-        from datetime import datetime, timezone
-        deal.completed_at = datetime.now(timezone.utc)
+        # Money-safety: never mark completed here. Seller must enter wallet on site
+        # (POST /deals/{id}/seller-wallet) which performs transfer_usdt then completed.
+        deal.buyer_confirmed_transfer = True
+        deal.status = DealStatus.awaiting_payout
+        if deal.channel:
+            from app.models.channel import ChannelStatus
+            deal.channel.status = ChannelStatus.sold
         await db.commit()
 
-    await callback.message.answer(f"🎉 Угода #{deal_id} завершена! Кошти будуть переведені продавцю.")
+    await callback.message.answer(
+        f"✅ Отримання каналу підтверджено (угода #{deal_id}).\n"
+        f"Статус: очікування виплати.\n\n"
+        f"Продавець: вкажіть USDT-гаманець на сайті в картці угоди — "
+        f"кошти будуть переведені з escrow лише після успішного on-chain переказу."
+    )
     await callback.answer()
-    # TODO: Trigger USDT release to seller via escrow service
 
 
 @router.callback_query(F.data.startswith("deal_dispute:"))

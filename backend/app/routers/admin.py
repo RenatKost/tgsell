@@ -11,7 +11,7 @@ from app.database import get_db
 from app.utils.avatars import public_channel_avatar_url
 from app.models.auction import Auction, AuctionBid
 from app.models.channel import Channel, ChannelStatus
-from app.models.deal import Deal, DealStatus
+from app.models.deal import Deal, DealStatus, Transaction, TransactionStatus, TransactionType
 from app.models.user import User, UserRole
 from app.schemas.channel import ChannelResponse, ChannelUpdate
 from app.schemas.deal import DealResolveRequest, DealResponse
@@ -226,6 +226,43 @@ async def get_all_deals(
     return responses
 
 
+async def _escrow_transfer_usdt(deal: Deal, to_address: str, amount: float) -> str | None:
+    """Send gas TRX then transfer USDT from deal escrow. Returns tx_hash or None."""
+    import asyncio
+    from app.services.escrow import send_trx_for_gas, transfer_usdt, sweep_trx_to_master
+
+    logger.info(
+        f"[ADMIN-ESCROW] Deal #{deal.id}: transfer {amount:.2f} USDT → {to_address}"
+    )
+    gas_tx = send_trx_for_gas(deal.escrow_wallet_address, amount_trx=7)
+    logger.info(f"[ADMIN-ESCROW] Deal #{deal.id}: gas tx={gas_tx or 'FAILED'}")
+    if gas_tx:
+        await asyncio.sleep(6)
+
+    tx_hash = None
+    for attempt in range(2):
+        tx_hash = transfer_usdt(deal.escrow_private_key_encrypted, to_address, amount)
+        if tx_hash:
+            break
+        if attempt == 0:
+            await asyncio.sleep(10)
+
+    if tx_hash:
+        try:
+            await asyncio.sleep(6)
+            sweep_trx_to_master(deal.escrow_private_key_encrypted)
+        except Exception as sweep_err:
+            logger.warning(f"[ADMIN-ESCROW] Deal #{deal.id}: TRX sweep failed: {sweep_err}")
+    return tx_hash
+
+
+def _resolve_wallet(preferred: str | None, user_wallet: str | None, override: str | None) -> str | None:
+    for candidate in (override, preferred, user_wallet):
+        if candidate and str(candidate).strip() and len(str(candidate).strip()) >= 20:
+            return str(candidate).strip()
+    return None
+
+
 @router.post("/deals/{deal_id}/resolve", response_model=DealResponse)
 async def resolve_deal(
     deal_id: int,
@@ -233,7 +270,9 @@ async def resolve_deal(
     admin: User = Depends(get_admin_user),
     db: AsyncSession = Depends(get_db),
 ):
-    """Resolve a disputed deal: refund buyer or release to seller."""
+    """Resolve a disputed deal: on-chain refund to buyer or release to seller."""
+    from app.services.deal_lifecycle import mark_deal_completed
+
     result = await db.execute(
         select(Deal)
         .options(selectinload(Deal.channel), selectinload(Deal.buyer), selectinload(Deal.seller))
@@ -246,15 +285,74 @@ async def resolve_deal(
         raise HTTPException(status_code=400, detail="Deal is not disputed")
 
     if body.resolution == "refund_buyer":
+        wallet = _resolve_wallet(
+            None,
+            deal.buyer.usdt_wallet if deal.buyer else None,
+            body.wallet_address,
+        )
+        if not wallet:
+            raise HTTPException(
+                status_code=400,
+                detail="Немає адреси гаманця покупця для refund. Вкажіть wallet_address або збережіть usdt_wallet у профілі покупця.",
+            )
+        amount = deal.amount_usdt  # full escrow amount back to buyer
+        tx_hash = await _escrow_transfer_usdt(deal, wallet, amount)
+        if not tx_hash:
+            raise HTTPException(
+                status_code=502,
+                detail="Ончейн-refund не вдався. Статус угоди не змінено (залишається disputed).",
+            )
+        refund_tx = Transaction(
+            deal_id=deal.id,
+            tx_hash=tx_hash,
+            from_address=deal.escrow_wallet_address,
+            to_address=wallet,
+            amount=amount,
+            type=TransactionType.refund,
+            status=TransactionStatus.confirmed,
+        )
+        db.add(refund_tx)
         deal.status = DealStatus.cancelled
-        # TODO: refund USDT to buyer
-        # Restore channel to approved
-        deal.channel.status = ChannelStatus.approved
+        if deal.channel:
+            deal.channel.status = ChannelStatus.approved
+        logger.info(f"[ADMIN] Deal #{deal.id}: refund_buyer OK tx={tx_hash}")
+
     elif body.resolution == "release_seller":
-        deal.status = DealStatus.completed
-        deal.completed_at = datetime.utcnow()
-        deal.channel.status = ChannelStatus.sold
-        # TODO: release USDT to seller
+        wallet = _resolve_wallet(
+            deal.seller_payout_address,
+            deal.seller.usdt_wallet if deal.seller else None,
+            body.wallet_address,
+        )
+        if not wallet:
+            raise HTTPException(
+                status_code=400,
+                detail="Немає адреси гаманця продавця для release. Вкажіть wallet_address, seller_payout_address або usdt_wallet продавця.",
+            )
+        amount = deal.amount_usdt - deal.service_fee
+        if amount <= 0:
+            raise HTTPException(status_code=400, detail="Некоректна сума виплати")
+        tx_hash = await _escrow_transfer_usdt(deal, wallet, amount)
+        if not tx_hash:
+            raise HTTPException(
+                status_code=502,
+                detail="Ончейн-release не вдався. Статус угоди не змінено (залишається disputed).",
+            )
+        deal.seller_payout_address = wallet
+        mark_deal_completed(deal, tx_hash)
+        release_tx = Transaction(
+            deal_id=deal.id,
+            tx_hash=tx_hash,
+            from_address=deal.escrow_wallet_address,
+            to_address=wallet,
+            amount=amount,
+            type=TransactionType.release,
+            status=TransactionStatus.confirmed,
+        )
+        db.add(release_tx)
+        if deal.channel:
+            deal.channel.status = ChannelStatus.sold
+        logger.info(f"[ADMIN] Deal #{deal.id}: release_seller OK tx={tx_hash}")
+
     else:
         raise HTTPException(status_code=400, detail="Invalid resolution")
 
@@ -270,7 +368,18 @@ async def resolve_deal(
         amount_usdt=deal.amount_usdt, service_fee=deal.service_fee,
         deal_group_chat_id=deal.deal_group_chat_id, dispute_reason=deal.dispute_reason,
         created_at=deal.created_at, paid_at=deal.paid_at, completed_at=deal.completed_at,
+        seller_payout_address=deal.seller_payout_address,
+        payout_tx_hash=deal.payout_tx_hash,
     )
+
+
+# Statuses where USDT is (or may be) sitting in escrow after payment
+_FUNDED_DEAL_STATUSES = (
+    DealStatus.paid,
+    DealStatus.channel_transferring,
+    DealStatus.awaiting_payout,
+    DealStatus.disputed,
+)
 
 
 @router.post("/deals/{deal_id}/cancel", response_model=DealResponse)
@@ -279,7 +388,7 @@ async def admin_cancel_deal(
     admin: User = Depends(get_admin_user),
     db: AsyncSession = Depends(get_db),
 ):
-    """Admin force-cancel a deal (any non-completed status)."""
+    """Admin cancel a deal. Paid/escrowed deals require on-chain refund (or refuse)."""
     result = await db.execute(
         select(Deal)
         .options(selectinload(Deal.channel), selectinload(Deal.buyer), selectinload(Deal.seller))
@@ -291,8 +400,44 @@ async def admin_cancel_deal(
     if deal.status in (DealStatus.completed, DealStatus.cancelled):
         raise HTTPException(status_code=400, detail="Deal is already completed or cancelled")
 
+    if deal.status in _FUNDED_DEAL_STATUSES:
+        # Never silently cancel funded deals — refund on-chain if possible, else refuse.
+        wallet = _resolve_wallet(
+            None,
+            deal.buyer.usdt_wallet if deal.buyer else None,
+            None,
+        )
+        if not wallet:
+            raise HTTPException(
+                status_code=400,
+                detail=(
+                    "Кошти в escrow. Скасування без refund заборонено. "
+                    "Використайте POST /admin/deals/{id}/resolve з resolution=refund_buyer "
+                    "(і wallet_address покупця) або release_seller."
+                ),
+            )
+        amount = deal.amount_usdt
+        tx_hash = await _escrow_transfer_usdt(deal, wallet, amount)
+        if not tx_hash:
+            raise HTTPException(
+                status_code=502,
+                detail=(
+                    "Ончейн-refund не вдався — угоду НЕ скасовано. "
+                    "Кошти лишаються в escrow; використайте resolve_deal."
+                ),
+            )
+        db.add(Transaction(
+            deal_id=deal.id,
+            tx_hash=tx_hash,
+            from_address=deal.escrow_wallet_address,
+            to_address=wallet,
+            amount=amount,
+            type=TransactionType.refund,
+            status=TransactionStatus.confirmed,
+        ))
+        logger.info(f"[ADMIN] Deal #{deal.id}: cancel-with-refund OK tx={tx_hash}")
+
     deal.status = DealStatus.cancelled
-    # Restore channel availability
     if deal.channel:
         deal.channel.status = ChannelStatus.approved
 
@@ -308,6 +453,8 @@ async def admin_cancel_deal(
         amount_usdt=deal.amount_usdt, service_fee=deal.service_fee,
         deal_group_chat_id=deal.deal_group_chat_id, dispute_reason=deal.dispute_reason,
         created_at=deal.created_at, paid_at=deal.paid_at, completed_at=deal.completed_at,
+        seller_payout_address=deal.seller_payout_address,
+        payout_tx_hash=deal.payout_tx_hash,
     )
 
 

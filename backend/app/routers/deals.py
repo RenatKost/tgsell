@@ -15,6 +15,7 @@ from app.schemas.deal import (
     DealMessageResponse, DealResponse, SellerWalletRequest,
 )
 from app.services.escrow import generate_escrow_wallet
+from app.services.deal_lifecycle import mark_deal_completed
 from app.utils.security import get_current_user
 from app.utils.avatars import public_channel_avatar_url
 
@@ -527,9 +528,8 @@ async def set_seller_wallet(
                 await asyncio.sleep(10)
 
         if tx_hash:
-            deal.payout_tx_hash = tx_hash
-            deal.status = DealStatus.completed
-            deal.completed_at = datetime.utcnow()
+            # Invariant: completed ONLY via mark_deal_completed with real tx hash
+            mark_deal_completed(deal, tx_hash)
             # Record payout transaction
             payout_tx = Transaction(
                 deal_id=deal.id,
