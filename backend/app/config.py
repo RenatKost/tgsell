@@ -6,6 +6,8 @@ class Settings(BaseSettings):
     bot_token_auth: str = ""      # tgsell_auth_bot — Login Widget
     bot_token_alerts: str = ""     # tgsell_alert_bot — deal notifications (aiogram)
     bot_token_stats: str = ""      # tgsell_stats_bot — Bot API stats (getChat, etc.)
+    bot_token_support: str = ""    # tgsell_support_bot — user support inbox (aiogram)
+    support_queue_secret: str = ""  # x-support-secret for Support TgSell agent queue API
     telegram_api_id: int = 0
     telegram_api_hash: str = ""
     telegram_phone: str = ""

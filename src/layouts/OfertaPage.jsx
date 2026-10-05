@@ -92,7 +92,7 @@ const OfertaPage = () => (
 
       <Section title="8. Вирішення спорів">
         <p>У разі виникнення суперечок між Покупцем і Продавцем Платформа надає адмін-модерацію.</p>
-        <p>Для звернення: <a href="https://t.me/renat_kos" className="text-accent hover:underline" target="_blank" rel="noopener noreferrer">@renat_kos</a></p>
+        <p>Для звернення: <a href="https://t.me/tgsell_support_bot" className="text-accent hover:underline" target="_blank" rel="noopener noreferrer">@tgsell_support_bot</a></p>
         <p>Рішення адміністратора є остаточним у рамках Платформи.</p>
       </Section>
 
@@ -102,7 +102,7 @@ const OfertaPage = () => (
       </Section>
 
       <Section title="10. Контакти">
-        <p>З питань щодо умов оферти звертайтесь: <a href="https://t.me/renat_kos" className="text-accent hover:underline" target="_blank" rel="noopener noreferrer">@renat_kos</a></p>
+        <p>З питань щодо умов оферти звертайтесь: <a href="https://t.me/tgsell_support_bot" className="text-accent hover:underline" target="_blank" rel="noopener noreferrer">@tgsell_support_bot</a></p>
       </Section>
     </div>
   </motion.div>

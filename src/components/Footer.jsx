@@ -77,7 +77,7 @@ const Footer = () => {
             </p>
             <div className="flex flex-col gap-2.5">
               <a
-                href="https://t.me/renat_kos"
+                href="https://t.me/tgsell_support_bot"
                 target="_blank"
                 rel="noopener noreferrer"
                 className="flex items-center gap-2.5 group w-fit"
@@ -85,7 +85,7 @@ const Footer = () => {
                 <span className="w-7 h-7 rounded-lg bg-cyan-400/10 flex items-center justify-center group-hover:bg-cyan-400/20 transition-colors">
                   <TgIcon />
                 </span>
-                <span className="text-sm text-gray-500 dark:text-gray-400 group-hover:text-cyan-400 transition-colors">@renat_kos</span>
+                <span className="text-sm text-gray-500 dark:text-gray-400 group-hover:text-cyan-400 transition-colors">@tgsell_support_bot</span>
               </a>
               <a
                 href="mailto:tgsell.support@gmail.com"
