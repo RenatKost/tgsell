@@ -23,10 +23,10 @@ const contacts = [
     icon: 'email',
   },
   {
-    title: 'Адміністратор',
-    label: '@renat_kos',
-    href: 'https://t.me/renat_kos',
-    hint: 'Спори, модерація, термінові питання',
+    title: 'Підтримка 24/7',
+    label: '@tgsell_support_bot',
+    href: 'https://t.me/tgsell_support_bot',
+    hint: 'Питання користувачів, угоди, акаунт',
     icon: 'admin',
   },
   {

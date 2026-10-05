@@ -65,7 +65,7 @@ const PrivacyPage = () => (
         <p>— Запросити видалення облікового запису та всіх пов'язаних даних;</p>
         <p>— Отримати копію своїх даних;</p>
         <p>— Відкликати згоду на обробку даних.</p>
-        <p>Для реалізації прав зверніться: <a href="https://t.me/renat_kos" className="text-accent hover:underline" target="_blank" rel="noopener noreferrer">@renat_kos</a></p>
+        <p>Для реалізації прав зверніться: <a href="https://t.me/tgsell_support_bot" className="text-accent hover:underline" target="_blank" rel="noopener noreferrer">@tgsell_support_bot</a></p>
       </Section>
 
       <Section title="7. Cookie та локальне сховище">
@@ -77,7 +77,7 @@ const PrivacyPage = () => (
       </Section>
 
       <Section title="9. Контакти">
-        <p>З питань конфіденційності звертайтесь: <a href="https://t.me/renat_kos" className="text-accent hover:underline" target="_blank" rel="noopener noreferrer">@renat_kos</a></p>
+        <p>З питань конфіденційності звертайтесь: <a href="https://t.me/tgsell_support_bot" className="text-accent hover:underline" target="_blank" rel="noopener noreferrer">@tgsell_support_bot</a></p>
       </Section>
     </div>
   </motion.div>

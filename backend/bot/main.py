@@ -707,7 +707,9 @@ async def auth_cancel_callback(callback: CallbackQuery):
 # ── Bot runner ────────────────────────────────────────────────────────
 
 async def run_bots_background():
-    """Start both Telegram bots as a background task (called from FastAPI lifespan)."""
+    """Start Telegram bots as a background task (called from FastAPI lifespan)."""
+    from bot.support import run_support_bot_background
+
     try:
         alerts_bot = Bot(token=settings.bot_token_alerts)
         alerts_dp = Dispatcher(storage=MemoryStorage())
@@ -717,15 +719,17 @@ async def run_bots_background():
         auth_dp = Dispatcher(storage=MemoryStorage())
         auth_dp.include_router(auth_router)
 
-        logger.info("Telegram bots starting (alerts + auth)…")
+        logger.info("Telegram bots starting (alerts + auth + support)…")
         await asyncio.gather(
             alerts_dp.start_polling(alerts_bot),
             auth_dp.start_polling(auth_bot),
+            run_support_bot_background(),
         )
     except asyncio.CancelledError:
         logger.info("Telegram bots stopped.")
     except Exception as e:
-        logger.error(f"Telegram bots error: {e}")
+        from app.utils.log_redact import redact
+        logger.error(f"Telegram bots error: {redact(e)}")
 
 
 async def start_bot():

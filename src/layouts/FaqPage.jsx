@@ -82,7 +82,7 @@ const FaqPage = () => (
       <Section title="6. Спори та повернення">
         <p>Якщо після оплати виникла проблема з передачею каналу, покупець може відкрити <strong>спір</strong> на сторінці угоди (кнопка «Спір»). Статус угоди змінюється на «disputed», і питання розглядає адміністратор.</p>
         <p>Також у чаті угоди можна викликати адміністратора.</p>
-        <p>Контакт для спорів: <a href="https://t.me/renat_kos" className="text-accent hover:underline" target="_blank" rel="noopener noreferrer">@renat_kos</a>.</p>
+        <p>Контакт для спорів: <a href="https://t.me/tgsell_support_bot" className="text-accent hover:underline" target="_blank" rel="noopener noreferrer">@tgsell_support_bot</a>.</p>
         <p>Рішення адміністратора в рамках платформи є остаточним (див. <NavLink to="/oferta" className="text-accent hover:underline">публічну оферту</NavLink>). Повернення з ескроу можливе за рішенням адмін-модерації, якщо угоду скасовано або спір вирішено на користь покупця — конкретний результат залежить від обставин угоди.</p>
         <p>Платформа виступає посередником і не гарантує якість контенту чи аудиторії каналу після угоди.</p>
       </Section>
