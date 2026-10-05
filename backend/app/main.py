@@ -87,7 +87,7 @@ async def lifespan(app: FastAPI):
     background_tasks.append(loop.create_task(run_view_tracker(interval_hours=3)))
     background_tasks.append(loop.create_task(run_auction_manager(interval_seconds=60)))
     background_tasks.append(loop.create_task(run_bots_background()))
-    background_tasks.append(loop.create_task(run_health_monitor(interval_minutes=30)))
+    background_tasks.append(loop.create_task(run_health_monitor(interval_minutes=10)))
     background_tasks.append(loop.create_task(run_checklist_reminders(interval_minutes=30)))
     yield
     logger.info("Shutting down background tasks…")

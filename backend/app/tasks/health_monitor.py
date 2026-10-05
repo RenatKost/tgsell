@@ -8,7 +8,13 @@ from sqlalchemy import func, select
 from app.config import settings
 from app.database import async_session
 from app.models.channel import Channel, ChannelStats, ChannelStatus
-from app.services.alerts import send_admin_alert, alert_service_down, alert_service_recovered
+from app.services.alerts import (
+    send_admin_alert,
+    alert_service_down,
+    alert_service_recovered,
+    alert_telethon_session_down,
+    alert_telethon_session_recovered,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -20,7 +26,8 @@ async def _check_telethon():
     """Check if Telethon is alive and authorized.
 
     During the startup delay (status waiting/connecting) we skip alerts so
-    a fresh deploy does not look like an outage.
+    a fresh deploy does not look like an outage. Event-driven alerts in
+    channel_stats fire instantly on real failures; this loop is a backup.
     """
     global _prev_telethon_ok
     from app.services.channel_stats import get_telethon_health, _get_telethon_client
@@ -40,12 +47,17 @@ async def _check_telethon():
     if health.get("authkey_duplicated"):
         ok = False
 
-    if _prev_telethon_ok is not None and ok != _prev_telethon_ok:
-        if ok:
-            await alert_service_recovered("Telethon (аналітика каналів)")
+    if ok:
+        await alert_telethon_session_recovered()
+    else:
+        if health.get("authkey_duplicated"):
+            reason = "authkey_duplicated"
+            detail = health.get("detail") or "AuthKeyDuplicatedError"
         else:
+            reason = "health_check"
             detail = health.get("detail") or "Клієнт відключений або сесія протухла"
-            await alert_service_down("Telethon (аналітика каналів)", detail)
+        await alert_telethon_session_down(reason, detail)
+
     _prev_telethon_ok = ok
     return ok
 
@@ -147,8 +159,8 @@ async def health_check_once():
     )
 
 
-async def run_health_monitor(interval_minutes: int = 30):
-    """Run health monitor loop."""
+async def run_health_monitor(interval_minutes: int = 10):
+    """Run health monitor loop (backup to event-driven Telethon alerts)."""
     logger.info(f"Health monitor started (interval: {interval_minutes}min)")
     # Initial delay — let services start up
     await asyncio.sleep(60)
