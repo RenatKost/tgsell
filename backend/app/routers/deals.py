@@ -17,6 +17,8 @@ from app.schemas.deal import (
 )
 from app.services import deal_checklist as checklist_svc
 from app.services.escrow import generate_escrow_wallet
+from app.services.payment_deadlines import created_stage_deadline, payment_stage_deadline
+from app.utils.timeutil import utcnow_naive
 from app.services.deal_lifecycle import (
     claim_deal_for_transfer,
     has_payout_tx,
@@ -118,6 +120,8 @@ async def create_deal(
             escrow_private_key_encrypted=encrypted_private_key,
             amount_usdt=bundle.price,
             service_fee=fee,
+            # 'created' stage timeout (auto-cancel only if escrow balance is confirmed 0)
+            payment_deadline_at=created_stage_deadline(utcnow_naive()),
         )
         db.add(deal)
         await db.commit()
@@ -193,6 +197,8 @@ async def create_deal(
         escrow_private_key_encrypted=encrypted_private_key,
         amount_usdt=channel.price,
         service_fee=fee,
+        # 'created' stage timeout (auto-cancel only if escrow balance is confirmed 0)
+        payment_deadline_at=created_stage_deadline(utcnow_naive()),
     )
     db.add(deal)
     await db.commit()
@@ -370,6 +376,9 @@ async def confirm_ready(
     # Both ready → move to payment_pending
     if deal.buyer_ready and deal.seller_ready:
         deal.status = DealStatus.payment_pending
+        # Payment window starts now (PAYMENT_TIMEOUT_HOURS); checker cancels only after
+        # a confirmed zero balance past this deadline.
+        deal.payment_deadline_at = payment_stage_deadline(utcnow_naive())
         logger.info(f"[DEAL] Deal #{deal.id}: STATUS → payment_pending, escrow={deal.escrow_wallet_address}, awaiting {deal.amount_usdt} USDT")
         payment_msg = (
             f"Обидві сторони готові! Очікуємо оплату {deal.amount_usdt} USDT.\n"

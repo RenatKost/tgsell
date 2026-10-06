@@ -284,6 +284,9 @@ const ModerCabinet = () => {
 
 	const [escrowWallets, setEscrowWallets] = useState([]);
 	const [escrowTotal, setEscrowTotal] = useState(0);
+	const [escrowUnknown, setEscrowUnknown] = useState([]);
+	const [escrowMeta, setEscrowMeta] = useState(null);
+	const [escrowRefresh, setEscrowRefresh] = useState(false);
 	const [sweepTarget, setSweepTarget] = useState({});
 	const [sweeping, setSweeping] = useState({});
 
@@ -295,6 +298,12 @@ const ModerCabinet = () => {
 	useEffect(() => {
 		loadData();
 	}, [section, statusFilter, dealStatusFilter, auctionFilter]);
+
+	// "Оновити" on the escrow page: bypass the 60s server cache once.
+	useEffect(() => {
+		if (escrowRefresh && section === 'escrow') loadData();
+		// eslint-disable-next-line react-hooks/exhaustive-deps
+	}, [escrowRefresh]);
 
 	const loadData = async () => {
 		setLoading(true);
@@ -341,9 +350,12 @@ const ModerCabinet = () => {
 				setActConfig(data);
 				setActConfigDirty(false);
 			} else if (section === 'escrow') {
-				const { data } = await adminAPI.getEscrowBalances();
+				const { data } = await adminAPI.getEscrowBalances(escrowRefresh);
+				setEscrowRefresh(false);
 				setEscrowWallets(data.wallets_with_funds || []);
 				setEscrowTotal(data.total || 0);
+				setEscrowUnknown(data.unknown || []);
+				setEscrowMeta({ checkedAt: data.checked_at, cached: data.cached, checked: data.checked_count });
 			}
 		} catch (err) {
 			console.error('Failed to load admin data:', err);
@@ -1391,18 +1403,35 @@ const ModerCabinet = () => {
 							<div className='flex items-center justify-between flex-wrap gap-4'>
 								<div>
 									<p className='text-gray-500 dark:text-gray-400 text-sm font-medium'>Загальний баланс на ескроу</p>
-									<p className='text-3xl font-bold text-gray-800 dark:text-white mt-1'>{escrowTotal.toFixed(2)} <span className='text-lg text-gray-500'>USDT</span></p>
+									<p className='text-3xl font-bold text-gray-800 dark:text-white mt-1'>{escrowUnknown.length > 0 && <span className='text-lg text-gray-500'>≥ </span>}{escrowTotal.toFixed(2)} <span className='text-lg text-gray-500'>USDT</span></p>
+									{escrowMeta?.checkedAt && (
+										<p className='text-xs text-gray-400 mt-1'>Перевірено: {new Date(escrowMeta.checkedAt).toLocaleString('uk-UA')}{escrowMeta.cached ? ' (кеш)' : ''}</p>
+									)}
 								</div>
 								<div className='flex items-center gap-3'>
 									<span className='text-sm text-gray-500 dark:text-gray-400'>{escrowWallets.length} гаманців з коштами</span>
-									<button onClick={loadData} className='bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-600 text-gray-600 dark:text-gray-300 px-4 py-2.5 rounded-xl font-semibold hover:bg-gray-50 dark:hover:bg-slate-700 duration-300 shadow-sm flex items-center gap-2'>
+									<button onClick={() => setEscrowRefresh(true)} className='bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-600 text-gray-600 dark:text-gray-300 px-4 py-2.5 rounded-xl font-semibold hover:bg-gray-50 dark:hover:bg-slate-700 duration-300 shadow-sm flex items-center gap-2'>
 										<FontAwesomeIcon icon={faSync} /> Оновити
 									</button>
 								</div>
 							</div>
 						</div>
+						{!loading && escrowUnknown.length > 0 && (
+							<div className='bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-2xl p-4 mb-6'>
+								<p className='font-semibold text-amber-800 dark:text-amber-300 mb-2'>
+									⚠️ Баланс невідомий для {escrowUnknown.length} гаманців (помилка TronGrid) — це НЕ означає 0. Оновіть пізніше.
+								</p>
+								<ul className='text-sm text-amber-900 dark:text-amber-200 space-y-1'>
+									{escrowUnknown.map(w => (
+										<li key={w.deal_id} className='font-mono break-all'>
+											Угода #{w.deal_id} · {DEAL_STATUS_LABELS[w.status]?.text || w.status} · {w.escrow} · <span className='font-sans font-semibold'>помилка/невідомо</span>
+										</li>
+									))}
+								</ul>
+							</div>
+						)}
 						{loading ? <Loader /> : escrowWallets.length === 0 ? (
-							<EmptyState icon='💳' title='Усі ескроу порожні' />
+							<EmptyState icon='💳' title={escrowUnknown.length > 0 ? 'Підтверджених коштів не знайдено (є невідомі баланси)' : 'Усі ескроу порожні'} />
 						) : (
 							<div className='space-y-4'>
 								{escrowWallets.map(w => (

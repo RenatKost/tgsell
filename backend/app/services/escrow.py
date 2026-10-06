@@ -1,5 +1,8 @@
 """USDT TRC-20 Escrow Service — wallet generation, balance checking, payouts."""
 import logging
+import random
+import threading
+import time
 
 from tronpy import Tron
 from tronpy.keys import PrivateKey
@@ -32,6 +35,97 @@ def _get_tron_client() -> Tron:
         return Tron(network=settings.tron_network)
 
 
+# ── TronGrid throttling for read calls (balance checks) ─────────────────
+#
+# TronGrid answers bursts with HTTP 429. All balance reads go through one lock with
+# a minimum interval between requests, retry 429/5xx/network errors with exponential
+# backoff, and reuse the client + USDT contract object (tronpy's get_contract() is
+# an extra HTTP request — it caused most of the 429s on /admin/escrow/balances).
+
+class BalanceUnavailable(Exception):
+    """USDT balance could not be determined (TronGrid error / rate limit).
+
+    Callers must treat this as UNKNOWN — never as 0 (no cancellations on unknown).
+    """
+
+
+TRON_MIN_INTERVAL_SEC = 0.35
+TRON_MAX_RETRIES = 3
+TRON_BACKOFF_BASE_SEC = 1.0
+
+_tron_lock = threading.Lock()
+_last_tron_request_at = 0.0
+_read_client: Tron | None = None
+_read_client_key: tuple | None = None
+_usdt_contract = None
+_usdt_contract_key: tuple | None = None
+
+
+def _usdt_contract_address() -> str:
+    return settings.usdt_contract_address or USDT_CONTRACTS.get(
+        settings.tron_network, USDT_CONTRACTS["nile"]
+    )
+
+
+def _is_retryable(exc: Exception) -> bool:
+    status = getattr(getattr(exc, "response", None), "status_code", None)
+    if status is not None:
+        return status == 429 or status >= 500
+    try:
+        import requests
+
+        return isinstance(exc, (requests.ConnectionError, requests.Timeout))
+    except Exception:  # pragma: no cover
+        return False
+
+
+def _throttled(fn, *, what: str):
+    """Run one TronGrid request: serialized, min interval, retry 429/5xx with backoff."""
+    global _last_tron_request_at
+    attempt = 0
+    while True:
+        with _tron_lock:
+            wait = TRON_MIN_INTERVAL_SEC - (time.monotonic() - _last_tron_request_at)
+            if wait > 0:
+                time.sleep(wait)
+            try:
+                return fn()
+            except Exception as e:
+                err = e
+            finally:
+                _last_tron_request_at = time.monotonic()
+        if attempt >= TRON_MAX_RETRIES or not _is_retryable(err):
+            raise err
+        delay = TRON_BACKOFF_BASE_SEC * (2 ** attempt) + random.uniform(0, 0.25)
+        logger.warning(f"[TRON] {what}: {err} — retry {attempt + 1}/{TRON_MAX_RETRIES} in {delay:.1f}s")
+        attempt += 1
+        time.sleep(delay)
+
+
+def _get_usdt_contract():
+    """Cached USDT contract (one getcontract request per process/config)."""
+    global _read_client, _read_client_key, _usdt_contract, _usdt_contract_key
+    client_key = (settings.tron_network, settings.tron_api_key)
+    if _read_client is None or _read_client_key != client_key:
+        _read_client = _get_tron_client()
+        _read_client_key = client_key
+        _usdt_contract = None
+    contract_key = (client_key, _usdt_contract_address())
+    if _usdt_contract is None or _usdt_contract_key != contract_key:
+        client = _read_client
+        _usdt_contract = _throttled(lambda: client.get_contract(_usdt_contract_address()), what="getcontract")
+        _usdt_contract_key = contract_key
+    return _usdt_contract
+
+
+def reset_tron_read_cache() -> None:
+    """Drop cached client/contract (tests, config change)."""
+    global _read_client, _read_client_key, _usdt_contract, _usdt_contract_key, _last_tron_request_at
+    with _tron_lock:
+        _read_client = _read_client_key = _usdt_contract = _usdt_contract_key = None
+        _last_tron_request_at = 0.0
+
+
 def generate_escrow_wallet() -> tuple[str, str]:
     """Generate a new TRC-20 wallet for escrow.
 
@@ -45,24 +139,35 @@ def generate_escrow_wallet() -> tuple[str, str]:
     return address, encrypted_key
 
 
-def get_usdt_balance(wallet_address: str) -> float:
-    """Check USDT TRC-20 balance of a wallet.
+def fetch_usdt_balance(wallet_address: str) -> float:
+    """USDT TRC-20 balance (6 decimals). Raises BalanceUnavailable if unknown.
 
-    Returns balance in USDT (6 decimals).
+    Blocking (requests + throttle sleeps) — from async code use
+    ``await asyncio.to_thread(fetch_usdt_balance, addr)``.
     """
+    if not wallet_address:
+        raise BalanceUnavailable("empty wallet address")
     try:
-        client = _get_tron_client()
-        contract_address = settings.usdt_contract_address or USDT_CONTRACTS.get(
-            settings.tron_network, USDT_CONTRACTS["nile"]
+        contract = _get_usdt_contract()
+        balance_raw = _throttled(
+            lambda: contract.functions.balanceOf(wallet_address), what=f"balanceOf {wallet_address}"
         )
-        contract = client.get_contract(contract_address)
-        balance_raw = contract.functions.balanceOf(wallet_address)
-        balance = balance_raw / 1_000_000  # USDT has 6 decimals
-        logger.info(f"[ESCROW] Balance check: {wallet_address} = {balance} USDT (contract={contract_address})")
-        return balance
+        balance = int(balance_raw) / 1_000_000  # USDT has 6 decimals
+    except BalanceUnavailable:
+        raise
     except Exception as e:
-        logger.error(f"[ESCROW] Failed to check USDT balance for {wallet_address}: {e}", exc_info=True)
-        return 0.0
+        logger.error(f"[ESCROW] USDT balance UNKNOWN for {wallet_address}: {e}")
+        raise BalanceUnavailable(str(e)) from e
+    logger.info(f"[ESCROW] Balance check: {wallet_address} = {balance} USDT (contract={_usdt_contract_address()})")
+    return balance
+
+
+def get_usdt_balance(wallet_address: str) -> float | None:
+    """USDT balance, or None if it could not be determined (NEVER 0.0 on error)."""
+    try:
+        return fetch_usdt_balance(wallet_address)
+    except BalanceUnavailable:
+        return None
 
 
 def transfer_usdt(

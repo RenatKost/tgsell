@@ -64,6 +64,13 @@ class Deal(Base):
     paid_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     completed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
 
+    # Payment timeout (migration 0025). NULL on legacy deals: a legacy 'created' deal is
+    # never auto-cancelled; legacy 'payment_pending' falls back to created_at + timeout.
+    # Auto-cancel happens only after a SUCCESSFUL zero-balance check (payment_checker).
+    payment_deadline_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    cancelled_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    cancel_reason: Mapped[str | None] = mapped_column(String(50), nullable=True)
+
     bundle_id: Mapped[int | None] = mapped_column(
         Integer, ForeignKey("channel_bundles.id"), nullable=True
     )

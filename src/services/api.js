@@ -192,8 +192,8 @@ export const adminAPI = {
 	cancelDeal: (id) =>
 		api.post(`/admin/deals/${id}/cancel`),
 
-	getEscrowBalances: () =>
-		api.get('/admin/escrow/balances'),
+	getEscrowBalances: (refresh = false) =>
+		api.get('/admin/escrow/balances', { params: refresh ? { refresh: true } : {} }),
 
 	sweepEscrow: (dealId, toAddress) =>
 		api.post(`/admin/escrow/sweep/${dealId}`, { to_address: toAddress }),
