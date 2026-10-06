@@ -152,7 +152,7 @@ def _install_strict_guard(engine) -> None:
 # ── Real ORM wiring (isolated from the app.database stub other tests use) ──
 
 _ISOLATED_PREFIXES = ("app.database", "app.models", "app.routers.support", "bot.support",
-                      "app.tasks.stats_collector")
+                      "app.tasks.stats_collector", "app.routers.channels", "app.routers.bundles")
 
 
 @pytest_asyncio.fixture
@@ -219,6 +219,16 @@ async def orm(db_url):
             if key.startswith(("app.", "bot.")) and key not in snapshot:
                 del sys.modules[key]
         sys.modules.update(snapshot)
+        # Re-sync package attributes (``from app.services import x``) with sys.modules
+        for key in [k for k in sys.modules if k.startswith(("app.", "bot."))] + list(_ISOLATED_PREFIXES):
+            parent_name, _, child = key.rpartition(".")
+            parent = sys.modules.get(parent_name)
+            if parent is None:
+                continue
+            if key in sys.modules:
+                setattr(parent, child, sys.modules[key])
+            elif hasattr(parent, child):
+                delattr(parent, child)
 
 
 def _strict_errors():
@@ -381,7 +391,7 @@ async def test_support_full_cycle_incoming_reply_handled(orm, monkeypatch):
 async def test_update_post_views_once_uses_naive_cutoff(orm, monkeypatch):
     from app.models.channel import Channel, ChannelPost, ChannelStatus
     from app.models.user import User
-    from app.services import channel_stats as cs
+    cs = importlib.import_module("app.services.channel_stats")
 
     stats_collector = importlib.import_module("app.tasks.stats_collector")
 
@@ -420,3 +430,112 @@ async def test_update_post_views_once_uses_naive_cutoff(orm, monkeypatch):
     assert post.forwards == 7
     assert post.views_1h == 555 and post.views_12h == 555
     assert post.views_24h is None
+
+
+# ── AI analysis cache: ai_cache_updated_at (naive) ─────────────────────
+
+async def _seed_channel(orm, **overrides):
+    from app.models.channel import Channel, ChannelStatus
+    from app.models.user import User
+
+    async with orm.session() as db:
+        user = User(first_name="Seller")
+        db.add(user)
+        await db.flush()
+        fields = dict(
+            seller_id=user.id, telegram_link="https://t.me/test_channel", channel_name="Test",
+            category="news", price=10.0, status=ChannelStatus.approved, is_closed=False,
+        )
+        fields.update(overrides)
+        channel = Channel(**fields)
+        db.add(channel)
+        await db.commit()
+        return user.id, channel.id
+
+
+@pytest.mark.asyncio
+async def test_channel_ai_analysis_cache_is_saved_and_reused(orm, monkeypatch):
+    from app.models.channel import Channel
+    ai_analysis = importlib.import_module("app.services.ai_analysis")
+
+    channels_router = importlib.import_module("app.routers.channels")
+    _, channel_id = await _seed_channel(orm)
+
+    analysis = {"score": 7, "summary": "ok"}
+    fake_analyze = AsyncMock(return_value=analysis)
+    monkeypatch.setattr(ai_analysis, "analyze_channel", fake_analyze)
+
+    async with orm.session() as db:
+        assert await channels_router.get_ai_analysis(channel_id, db) == analysis
+
+    async with orm.session() as db:
+        channel = (await db.execute(select(Channel).where(Channel.id == channel_id))).scalar_one()
+    # Cache write is wrapped in try/except (warning + rollback), so check it really landed.
+    assert channel.ai_cache is not None, "AI cache was not saved (aware datetime rejected?)"
+    _assert_naive_recent(channel.ai_cache_updated_at)
+
+    # Second call within TTL → served from cache, no new AI call
+    async with orm.session() as db:
+        assert await channels_router.get_ai_analysis(channel_id, db) == analysis
+    assert fake_analyze.await_count == 1
+
+
+@pytest.mark.asyncio
+async def test_channel_ai_analysis_stale_cache_is_refreshed(orm, monkeypatch):
+    import json
+
+    from app.models.channel import Channel
+    ai_analysis = importlib.import_module("app.services.ai_analysis")
+
+    channels_router = importlib.import_module("app.routers.channels")
+    stale_at = utcnow_naive() - timedelta(days=8)
+    _, channel_id = await _seed_channel(
+        orm, ai_cache=json.dumps({"old": True}), ai_cache_updated_at=stale_at,
+    )
+    fresh = {"old": False}
+    monkeypatch.setattr(ai_analysis, "analyze_channel", AsyncMock(return_value=fresh))
+
+    async with orm.session() as db:
+        assert await channels_router.get_ai_analysis(channel_id, db) == fresh
+
+    async with orm.session() as db:
+        channel = (await db.execute(select(Channel).where(Channel.id == channel_id))).scalar_one()
+    assert json.loads(channel.ai_cache) == fresh
+    _assert_naive_recent(channel.ai_cache_updated_at)
+
+
+@pytest.mark.asyncio
+async def test_bundle_ai_analysis_cache_is_saved_and_reused(orm, monkeypatch):
+    from app.models.bundle import BundleChannel, BundleStatus, ChannelBundle
+
+    bundles_router = importlib.import_module("app.routers.bundles")
+    user_id, channel_id = await _seed_channel(orm, subscribers_count=100, er=5.0)
+
+    async with orm.session() as db:
+        bundle = ChannelBundle(
+            seller_id=user_id, name="Bundle", price=100.0, status=BundleStatus.approved,
+        )
+        db.add(bundle)
+        await db.flush()
+        db.add(BundleChannel(bundle_id=bundle.id, channel_id=channel_id, display_order=0))
+        await db.commit()
+        bundle_id = bundle.id
+
+    analysis = {"score": 8, "summary": "bundle ok"}
+    fake_analyze = AsyncMock(return_value=analysis)
+    monkeypatch.setattr(bundles_router, "analyze_bundle", fake_analyze)
+
+    async with orm.session() as db:
+        assert await bundles_router.get_bundle_ai_analysis(bundle_id, db) == analysis
+    fake_analyze.assert_awaited_once()
+
+    async with orm.session() as db:
+        bundle = (await db.execute(
+            select(ChannelBundle).where(ChannelBundle.id == bundle_id)
+        )).scalar_one()
+    assert bundle.ai_cache is not None, "AI cache was not saved (aware datetime rejected?)"
+    _assert_naive_recent(bundle.ai_cache_updated_at)
+
+    async with orm.session() as db:
+        assert await bundles_router.get_bundle_ai_analysis(bundle_id, db) == analysis
+    assert fake_analyze.await_count == 1

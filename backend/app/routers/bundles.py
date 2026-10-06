@@ -1,7 +1,7 @@
 """Channel bundle router — create, list, detail, stats."""
 import json
 import logging
-from datetime import datetime, timedelta, timezone
+from datetime import timedelta
 
 from fastapi import APIRouter, Body, Depends, HTTPException, Query, status
 from sqlalchemy import func, select
@@ -20,6 +20,7 @@ from app.schemas.bundle import (
     BundleChannelInfo,
 )
 from app.utils.security import get_current_user
+from app.utils.timeutil import to_naive_utc, utcnow_naive
 from app.utils.avatars import public_channel_avatar_url
 from app.models.user import User
 from app.services.ai_analysis import analyze_bundle
@@ -324,7 +325,8 @@ async def get_bundle_ai_analysis(
 
     # Return cached result if fresher than 7 days
     if bundle.ai_cache and bundle.ai_cache_updated_at:
-        age = datetime.now(timezone.utc) - bundle.ai_cache_updated_at.replace(tzinfo=timezone.utc)
+        # ai_cache_updated_at is naive TIMESTAMP (UTC)
+        age = utcnow_naive() - to_naive_utc(bundle.ai_cache_updated_at)
         if age < timedelta(days=7):
             return json.loads(bundle.ai_cache)
 
@@ -362,7 +364,7 @@ async def get_bundle_ai_analysis(
     # Save to cache (non-blocking — don't fail the request if cache write fails)
     try:
         bundle.ai_cache = json.dumps(analysis, ensure_ascii=False)
-        bundle.ai_cache_updated_at = datetime.now(timezone.utc)
+        bundle.ai_cache_updated_at = utcnow_naive()  # naive TIMESTAMP (UTC); asyncpg rejects aware
         await db.commit()
     except Exception as cache_err:
         logger.warning(f"Failed to save AI cache for bundle {bundle_id}: {cache_err}")
