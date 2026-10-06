@@ -15,7 +15,7 @@ from sqlalchemy import select
 
 from app.config import settings
 from app.database import async_session
-from app.models.support import SupportMessage
+from app.models.support import DELIVERY_SENT, SupportMessage
 from app.services.support_logic import (
     AUTO_REPLY_TEXT,
     WELCOME_TEXT,
@@ -34,6 +34,8 @@ support_router = Router(name="support")
 
 # In-process urgent-alert dedup (also throttled via send_admin_alert alert_key).
 _last_urgent_alert: dict[int, datetime] = {}
+# In-process auto-reply cooldown guard (naive UTC), complements the DB lookup.
+_last_auto_reply_mem: dict[int, datetime] = {}
 
 
 def _content_type(message: Message) -> str | None:
@@ -85,7 +87,9 @@ async def _save_message(
     is_urgent: bool = False,
     handled: bool = False,
     reply_to_id: int | None = None,
+    telegram_message_id: int | None = None,
 ) -> SupportMessage:
+    now = utcnow_naive()  # naive TIMESTAMP (UTC)
     async with async_session() as db:
         row = SupportMessage(
             telegram_user_id=telegram_user_id,
@@ -96,8 +100,12 @@ async def _save_message(
             text=text,
             is_urgent=is_urgent,
             handled=handled,
-            handled_at=utcnow_naive() if handled else None,  # naive TIMESTAMP (UTC)
+            handled_at=now if handled else None,
             reply_to_id=reply_to_id,
+            # Bot-originated 'out' rows are saved right after Telegram accepted them.
+            delivery_status=DELIVERY_SENT if direction == "out" else None,
+            sent_at=now if direction == "out" else None,
+            telegram_message_id=telegram_message_id if isinstance(telegram_message_id, int) else None,
         )
         db.add(row)
         await db.commit()
@@ -120,7 +128,7 @@ async def support_start(message: Message):
         text=text,
         is_urgent=False,
     )
-    await message.answer(WELCOME_TEXT)
+    sent = await message.answer(WELCOME_TEXT)
     await _save_message(
         telegram_user_id=user.id,
         username=user.username,
@@ -129,6 +137,7 @@ async def support_start(message: Message):
         direction="out",
         text=WELCOME_TEXT,
         handled=True,
+        telegram_message_id=getattr(sent, "message_id", None),
     )
 
 
@@ -155,20 +164,34 @@ async def support_private_message(message: Message):
     # Auto-reply cooldown
     async with async_session() as db:
         last_ar = await _last_auto_reply_at(db, user.id)
+    # In-process guard: aiogram handles updates concurrently, so two quick messages
+    # could both read "no auto-reply yet" from the DB. Check + set has no await between.
+    mem_ar = _last_auto_reply_mem.get(user.id)
+    if mem_ar is not None and (last_ar is None or mem_ar > last_ar):
+        last_ar = mem_ar
     if should_send_auto_reply(last_ar):
+        _last_auto_reply_mem[user.id] = utcnow_naive()
+        sent, delivered = None, False
         try:
-            await message.answer(AUTO_REPLY_TEXT)
-            await _save_message(
-                telegram_user_id=user.id,
-                username=user.username,
-                first_name=user.first_name,
-                chat_id=message.chat.id,
-                direction="out",
-                text=AUTO_REPLY_TEXT,
-                handled=True,
-            )
+            sent = await message.answer(AUTO_REPLY_TEXT)
+            delivered = True
         except Exception as e:
+            _last_auto_reply_mem.pop(user.id, None)  # not delivered → allow next attempt
             logger.error("Support auto-reply failed: %s", redact(e))
+        if delivered:
+            try:
+                await _save_message(
+                    telegram_user_id=user.id,
+                    username=user.username,
+                    first_name=user.first_name,
+                    chat_id=message.chat.id,
+                    direction="out",
+                    text=AUTO_REPLY_TEXT,
+                    handled=True,
+                    telegram_message_id=getattr(sent, "message_id", None),
+                )
+            except Exception as e:
+                logger.error("Support auto-reply save failed: %s", redact(e))
 
     if urgent and should_send_urgent_alert(_last_urgent_alert.get(user.id)):
         _last_urgent_alert[user.id] = datetime.now(timezone.utc)
