@@ -44,7 +44,10 @@ class Settings(BaseSettings):
 
     # Service
     service_fee_percent: float = 3.0
-    payment_timeout_hours: int = 2
+    payment_timeout_hours: int = 2  # window after both sides are ready (payment_pending)
+    # 'created' stage (waiting for readiness; the buyer already has the escrow address):
+    # auto-cancel after this many hours, only if the escrow balance is confirmed 0.
+    created_deal_timeout_hours: int = 24
     transfer_timeout_hours: int = 48
     frontend_url: str = "http://localhost:5173"
     admin_group_id: int = 0  # Telegram group chat_id for admin notifications

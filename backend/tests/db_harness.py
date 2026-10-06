@@ -131,8 +131,13 @@ def _install_strict_guard(engine) -> None:
 
 # ── Real ORM wiring (isolated from the app.database stub other tests use) ──
 
-_ISOLATED_PREFIXES = ("app.database", "app.models", "app.routers.support", "bot.support",
-                      "app.tasks.stats_collector", "app.routers.channels", "app.routers.bundles")
+_ISOLATED_PREFIXES = (
+    # Everything that binds to app.database.Base / async_session at import time.
+    "app.database", "app.models", "app.routers", "app.tasks", "bot.",
+    "app.services.deal_checklist", "app.services.deal_lifecycle",
+    "app.services.payment_deadlines", "app.services.checklist_autoverify",
+    "app.utils.security",
+)
 
 
 @pytest_asyncio.fixture

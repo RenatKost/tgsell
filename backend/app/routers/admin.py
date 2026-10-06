@@ -1,3 +1,4 @@
+import asyncio
 import logging
 from datetime import datetime, timedelta, timezone
 import os
@@ -16,6 +17,7 @@ from app.models.user import User, UserRole
 from app.schemas.channel import ChannelResponse, ChannelUpdate
 from app.schemas.deal import DealResolveRequest, DealResponse
 from app.utils.security import get_admin_user
+from app.utils.timeutil import utcnow_naive
 
 logger = logging.getLogger(__name__)
 
@@ -767,8 +769,10 @@ async def sweep_escrow_wallet(
     escrow_addr = deal.escrow_wallet_address
     encrypted_key = deal.escrow_private_key_encrypted
 
-    # 1. Check USDT balance
-    balance = get_usdt_balance(escrow_addr)
+    # 1. Check USDT balance (None = unknown, e.g. TronGrid 429 — never treat as 0)
+    balance = await asyncio.to_thread(get_usdt_balance, escrow_addr)
+    if balance is None:
+        return {"ok": False, "error": f"Не вдалося отримати баланс {escrow_addr} (TronGrid). Спробуйте пізніше."}
     if balance <= 0:
         return {"ok": False, "error": f"Escrow {escrow_addr} has 0 USDT"}
 
@@ -801,31 +805,71 @@ async def sweep_escrow_wallet(
     }
 
 
+ESCROW_BALANCES_CACHE_TTL_SEC = 60
+ESCROW_BALANCES_MIN_REFRESH_SEC = 10
+_escrow_balances_cache: dict = {"at": 0.0, "payload": None}
+_escrow_balances_lock = asyncio.Lock()
+
+
+def _collect_escrow_balances(rows: list[tuple[int, str, str]]) -> dict:
+    """Blocking: one throttled TronGrid read per escrow. Unknown ≠ 0."""
+    from app.services.escrow import BalanceUnavailable, fetch_usdt_balance
+
+    with_funds, unknown = [], []
+    for deal_id, escrow, status_value in rows:
+        try:
+            balance = fetch_usdt_balance(escrow)
+        except BalanceUnavailable as e:
+            unknown.append({
+                "deal_id": deal_id, "escrow": escrow, "status": status_value,
+                "balance_usdt": None, "error": "unknown", "detail": str(e)[:200],
+            })
+            continue
+        if balance > 0:
+            with_funds.append({
+                "deal_id": deal_id, "escrow": escrow, "status": status_value, "balance_usdt": balance,
+            })
+    return {
+        "wallets_with_funds": with_funds,
+        "total": sum(w["balance_usdt"] for w in with_funds),
+        "unknown": unknown,
+        "unknown_count": len(unknown),
+        "checked_count": len(rows),
+    }
+
+
 @router.get("/escrow/balances")
 async def check_escrow_balances(
+    refresh: bool = Query(False),
     admin: User = Depends(get_admin_user),
     db: AsyncSession = Depends(get_db),
 ):
-    """Check USDT balances of all escrow wallets."""
-    from app.services.escrow import get_usdt_balance
+    """USDT balances of all escrow wallets.
 
-    result = await db.execute(
-        select(Deal).order_by(Deal.id.desc())
-    )
-    deals = result.scalars().all()
+    Cached for 60s (``refresh=true`` bypasses it, at most once per 10s). TronGrid reads
+    are throttled; wallets whose balance could not be read are listed in ``unknown``
+    (shown as "помилка/невідомо" in the UI) — they are NOT counted as 0.
+    """
+    import time as _time
 
-    balances = []
-    for deal in deals:
-        balance = get_usdt_balance(deal.escrow_wallet_address)
-        if balance > 0:
-            balances.append({
-                "deal_id": deal.id,
-                "escrow": deal.escrow_wallet_address,
-                "balance_usdt": balance,
-                "status": deal.status.value,
-            })
+    async with _escrow_balances_lock:
+        cached = _escrow_balances_cache["payload"]
+        age = _time.monotonic() - _escrow_balances_cache["at"]
+        use_cache = cached is not None and (
+            age < ESCROW_BALANCES_MIN_REFRESH_SEC or (not refresh and age < ESCROW_BALANCES_CACHE_TTL_SEC)
+        )
+        if use_cache:
+            return {**cached, "cached": True, "cache_age_sec": round(age, 1)}
 
-    return {"wallets_with_funds": balances, "total": sum(b["balance_usdt"] for b in balances)}
+        result = await db.execute(
+            select(Deal.id, Deal.escrow_wallet_address, Deal.status).order_by(Deal.id.desc())
+        )
+        rows = [(d_id, addr, st.value if hasattr(st, "value") else str(st)) for d_id, addr, st in result.all()]
+        payload = await asyncio.to_thread(_collect_escrow_balances, rows)
+        payload["checked_at"] = utcnow_naive().isoformat() + "Z"
+        _escrow_balances_cache["payload"] = payload
+        _escrow_balances_cache["at"] = _time.monotonic()
+        return {**payload, "cached": False, "cache_age_sec": 0.0}
 
 
 # ═══════════════════════════════════════════════════════════════

@@ -290,7 +290,9 @@ async def notify_new_deal(bot: Bot, deal: Deal, buyer: User, seller: User):
         f"💰 Сума: {deal.amount_usdt} USDT\n"
         f"💳 Адреса для оплати:\n<code>{deal.escrow_wallet_address}</code>\n"
         f"Мережа: TRON (TRC-20 USDT)\n\n"
-        f"⏱ Час на оплату: {settings.payment_timeout_hours} год."
+        f"⏱ Обидві сторони мають підтвердити готовність протягом {settings.created_deal_timeout_hours} год, "
+        f"після цього — {settings.payment_timeout_hours} год на оплату. "
+        f"Якщо оплату не отримано вчасно (баланс 0), угоду буде скасовано."
     )
     if buyer.telegram_id:
         try:
@@ -362,6 +364,66 @@ async def notify_payment_received(bot: Bot, deal: Deal, buyer: User, seller: Use
             await bot.send_message(settings.admin_group_id, admin_text, parse_mode=ParseMode.HTML)
         except Exception as e:
             logger.error(f"[NOTIFY] Failed to notify admin group about payment: {e}")
+
+
+async def notify_deal_cancelled_timeout(bot: Bot, deal: Deal, buyer: User | None, seller: User | None):
+    """Deal auto-cancelled: payment not received in time (escrow balance confirmed 0)."""
+    logger.info(f"[NOTIFY] notify_deal_cancelled_timeout called: deal={deal.id}")
+    frontend_url = settings.frontend_url.rstrip("/")
+    link = f"<a href='{frontend_url}/deal/{deal.id}'>Сторінка угоди →</a>"
+    buyer_text = (
+        f"❌ <b>Угоду #{deal.id} скасовано</b>\n\n"
+        f"Оплату {deal.amount_usdt} USDT не отримано вчасно, тому угоду скасовано автоматично.\n"
+        f"Будь ласка, <b>не надсилайте кошти</b> на адресу цієї угоди. Якщо ви вже оплатили — "
+        f"негайно напишіть у підтримку.\n\n{link}"
+    )
+    seller_text = (
+        f"❌ <b>Угоду #{deal.id} скасовано</b>\n\n"
+        f"Покупець не оплатив {deal.amount_usdt} USDT вчасно — угоду скасовано автоматично. "
+        f"Канал передавати не потрібно.\n\n{link}"
+    )
+    for user, msg in ((buyer, buyer_text), (seller, seller_text)):
+        if user is not None and user.telegram_id:
+            try:
+                await bot.send_message(user.telegram_id, msg, parse_mode=ParseMode.HTML)
+            except Exception as e:
+                logger.error(f"[NOTIFY] Failed to notify user {user.telegram_id} about cancel of deal #{deal.id}: {e}")
+    if settings.admin_group_id:
+        try:
+            await bot.send_message(
+                settings.admin_group_id,
+                f"❌ Угоду #{deal.id} ({deal.amount_usdt} USDT) автоматично скасовано: "
+                f"таймаут оплати, баланс ескроу 0 USDT.",
+                parse_mode=ParseMode.HTML,
+            )
+        except Exception as e:
+            logger.error(f"[NOTIFY] Failed to notify admin group about cancel of deal #{deal.id}: {e}")
+
+
+async def notify_partial_payment_admin(bot: Bot, deal: Deal, balance: float):
+    """Admin: partial payment on escrow — the deal is NOT cancelled automatically."""
+    if not settings.admin_group_id:
+        return
+    await bot.send_message(
+        settings.admin_group_id,
+        f"⚠️ <b>Часткова оплата</b> — угода #{deal.id}\n\n"
+        f"На ескроу <code>{deal.escrow_wallet_address}</code>: {balance} з {deal.amount_usdt} USDT.\n"
+        f"Автоскасування вимкнено для цієї угоди — потрібне рішення адміна.",
+        parse_mode=ParseMode.HTML,
+    )
+
+
+async def notify_late_payment_admin(bot: Bot, deal: Deal, balance: float):
+    """Admin: funds arrived on a deal that was auto-cancelled for payment timeout."""
+    if not settings.admin_group_id:
+        return
+    await bot.send_message(
+        settings.admin_group_id,
+        f"🚨 <b>Кошти на скасованій угоді #{deal.id}</b>\n\n"
+        f"На ескроу <code>{deal.escrow_wallet_address}</code> надійшло {balance} USDT "
+        f"після автоскасування (таймаут оплати). Потрібне рішення адміна (повернення/відновлення).",
+        parse_mode=ParseMode.HTML,
+    )
 
 
 async def notify_checklist_reminder(bot: Bot, telegram_id: int, text: str) -> bool:

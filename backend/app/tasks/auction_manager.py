@@ -15,6 +15,8 @@ from app.models.channel import Channel
 from app.models.deal import Deal, DealMessage, DealStatus
 from app.models.user import User
 from app.services.escrow import generate_escrow_wallet
+from app.services.payment_deadlines import created_stage_deadline
+from app.utils.timeutil import utcnow_naive
 
 logger = logging.getLogger(__name__)
 
@@ -34,6 +36,7 @@ async def _create_deal_for_auction(db: AsyncSession, auction: Auction) -> Deal |
         escrow_private_key_encrypted=encrypted_private_key,
         amount_usdt=auction.current_price,
         service_fee=fee,
+        payment_deadline_at=created_stage_deadline(utcnow_naive()),
     )
     db.add(deal)
     await db.flush()  # Get deal.id
