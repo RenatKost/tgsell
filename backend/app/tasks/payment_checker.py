@@ -5,7 +5,9 @@ Rules (audit 2026-10-06, task 11):
   escrow address right at creation, so money can arrive before both sides are ready).
 * BALANCE FIRST, then timeout:
     - balance unknown (TronGrid error / 429)  → do nothing, retry next cycle;
-    - balance >= amount                       → paid (even if the deadline passed);
+    - balance >= amount, ``payment_pending``  → paid (even if the deadline passed);
+    - balance >= amount, ``created``          → stays ``created`` (seller not ready yet),
+      admin alert (deduped), never cancelled; paid on the first cycle after confirm_ready;
     - 0 < balance < amount (partial)          → never cancel, alert admin (deduped);
     - balance == 0 (confirmed) and deadline passed → re-check once, then cancel +
       notify buyer, seller and admin group.
@@ -30,6 +32,7 @@ from app.services.payment_deadlines import effective_payment_deadline
 from app.utils.timeutil import utcnow_naive
 from bot.main import (
     notify_deal_cancelled_timeout,
+    notify_full_payment_unconfirmed_admin,
     notify_late_payment_admin,
     notify_partial_payment_admin,
     notify_payment_received,
@@ -48,6 +51,7 @@ LATE_PAYMENT_CHECK_EVERY_N_CYCLES = 10  # × 30s ≈ every 5 min
 # In-process alert dedup: deal_id → balance we last alerted about.
 _partial_alerted: dict[int, float] = {}
 _late_alerted: dict[int, float] = {}
+_full_unconfirmed_alerted: dict[int, float] = {}
 _cycle = 0
 
 
@@ -112,6 +116,11 @@ async def _process_deal(db, deal: Deal, now: datetime) -> None:
     )
 
     if balance + BALANCE_EPSILON >= deal.amount_usdt:
+        if deal.status == DealStatus.created:
+            # Seller has not confirmed ready yet: do NOT mark paid, never cancel.
+            # Once confirm_ready moves it to payment_pending, the next cycle marks it paid.
+            await _alert_full_unconfirmed(deal, balance)
+            return
         await _mark_paid(db, deal, balance, now)
         return
 
@@ -154,6 +163,7 @@ async def _mark_paid(db, deal: Deal, balance: float, now: datetime) -> None:
     await db.commit()
     await db.refresh(deal)
     _partial_alerted.pop(deal.id, None)
+    _full_unconfirmed_alerted.pop(deal.id, None)
     logger.info(
         f"[PAYMENT] Deal #{deal.id} PAID ({prev_status.value} → paid): {balance} USDT received at "
         f"{deal.escrow_wallet_address}; deposit transaction recorded"
@@ -211,6 +221,23 @@ async def _alert_partial(deal: Deal, balance: float) -> None:
         await notify_partial_payment_admin(bot, deal, balance)
     except Exception as e:
         logger.error(f"[PAYMENT] Deal #{deal.id}: partial-payment admin alert failed: {e}")
+    finally:
+        await _close_bot(bot)
+
+
+async def _alert_full_unconfirmed(deal: Deal, balance: float) -> None:
+    logger.warning(
+        f"[PAYMENT] Deal #{deal.id}: FULL amount {balance}/{deal.amount_usdt} USDT on escrow but deal is "
+        f"still 'created' (seller not ready) — not marking paid, not cancelling"
+    )
+    if _full_unconfirmed_alerted.get(deal.id) == balance:
+        return
+    _full_unconfirmed_alerted[deal.id] = balance
+    bot = _new_bot()
+    try:
+        await notify_full_payment_unconfirmed_admin(bot, deal, balance)
+    except Exception as e:
+        logger.error(f"[PAYMENT] Deal #{deal.id}: full-payment (unconfirmed) admin alert failed: {e}")
     finally:
         await _close_bot(bot)
 

@@ -413,6 +413,21 @@ async def notify_partial_payment_admin(bot: Bot, deal: Deal, balance: float):
     )
 
 
+async def notify_full_payment_unconfirmed_admin(bot: Bot, deal: Deal, balance: float):
+    """Admin: full amount on escrow while the deal is still 'created' (seller not ready)."""
+    if not settings.admin_group_id:
+        return
+    await bot.send_message(
+        settings.admin_group_id,
+        f"💰 <b>Угода #{deal.id}</b>: на ескроу надійшла повна сума {balance} USDT, "
+        f"але продавець ще не підтвердив готовність.\n\n"
+        f"Ескроу: <code>{deal.escrow_wallet_address}</code> (потрібно {deal.amount_usdt} USDT).\n"
+        f"Статус лишається «created», автоскасування не буде. Після підтвердження продавцем "
+        f"угода стане оплаченою автоматично.",
+        parse_mode=ParseMode.HTML,
+    )
+
+
 async def notify_late_payment_admin(bot: Bot, deal: Deal, balance: float):
     """Admin: funds arrived on a deal that was auto-cancelled for payment timeout."""
     if not settings.admin_group_id:

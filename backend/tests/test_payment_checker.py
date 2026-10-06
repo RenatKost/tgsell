@@ -81,6 +81,7 @@ async def env(pg_orm, monkeypatch):
     FakeBot.sent = []
     pc._partial_alerted.clear()
     pc._late_alerted.clear()
+    pc._full_unconfirmed_alerted.clear()
     monkeypatch.setattr(pc, "_cycle", 0)
     monkeypatch.setattr(pc, "LATE_PAYMENT_CHECK_EVERY_N_CYCLES", 1)
 
@@ -265,13 +266,48 @@ async def test_new_created_deal_within_24h_is_left_alone(env):
 
 
 @pytest.mark.asyncio
-async def test_created_deal_with_full_payment_becomes_paid(env):
-    deal_id, addr = await env.make_deal(env.S.created, age_hours=50, buyer_ready=True)
+async def test_created_full_payment_stays_created_alerts_once_never_cancelled(env):
+    # past its 24h created-stage deadline, seller never confirmed, full amount on escrow
+    deal_id, addr = await env.make_deal(env.S.created, age_hours=30, deadline_in_hours=-6, buyer_ready=True)
     env.chain.balances[addr] = 15.0
+
+    for _ in range(3):
+        await env.pc.check_payments_once()
+
+    deal = await env.get(deal_id)
+    assert deal.status == env.S.created and deal.paid_at is None and deal.cancelled_at is None
+    assert await env.count(env.Tx, deal_id=deal_id) == 0
+    alerts = [t for t in _sent_to(ADMIN_GROUP) if "надійшла повна сума" in t]
+    assert len(alerts) == 1
+    assert f"Угода #{deal_id}" in alerts[0] and "15.0 USDT" in alerts[0]
+    assert "продавець ще не підтвердив готовність" in alerts[0]
+    assert _sent_to(BUYER_TG) == [] and _sent_to(SELLER_TG) == []
+    assert not any("скасовано" in t.lower() for _, t in FakeBot.sent)
+
+
+@pytest.mark.asyncio
+async def test_created_full_payment_becomes_paid_after_seller_confirms_ready(env):
+    from app.models.user import User
+
+    deals_router = importlib.import_module("app.routers.deals")
+    deal_id, addr = await env.make_deal(env.S.created, age_hours=50, buyer_ready=True)  # legacy, like #26
+    env.chain.balances[addr] = 15.0
+
+    await env.pc.check_payments_once()
+    assert (await env.get(deal_id)).status == env.S.created
+
+    async with env.orm.session() as db:
+        seller = await db.get(User, env.ids.seller)
+        await deals_router.confirm_ready(deal_id, user=seller, db=db)
+    assert (await env.get(deal_id)).status == env.S.payment_pending
+
     await env.pc.check_payments_once()
     deal = await env.get(deal_id)
-    assert deal.status == env.S.paid
+    assert deal.status == env.S.paid and deal.paid_at is not None
     assert await env.count(env.Tx, deal_id=deal_id) == 1
+    assert await env.count(env.Item, deal_id=deal_id) > 0
+    assert any("оплата 15.0 USDT отримана" in t for t in _sent_to(BUYER_TG))
+    assert env.pc._full_unconfirmed_alerted.get(deal_id) is None
 
 
 @pytest.mark.asyncio
