@@ -9,6 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.database import async_session
 from app.models.channel import Channel, ChannelPost, ChannelStats, ChannelStatus
 from app.services.channel_stats import collect_channel_stats, parse_telegram_link, reset_telethon_retries
+from app.utils.timeutil import utcnow_naive
 
 logger = logging.getLogger(__name__)
 
@@ -253,7 +254,8 @@ async def update_post_views_once():
 
     async with async_session() as db:
         # Get all posts from last 48 hours that still need view snapshots
-        cutoff = datetime.now(timezone.utc).replace(hour=0, minute=0) - __import__('datetime').timedelta(hours=50)
+        # ChannelPost.date is naive TIMESTAMP (UTC) — compare with a naive cutoff (asyncpg rejects aware)
+        cutoff = utcnow_naive().replace(hour=0, minute=0) - __import__('datetime').timedelta(hours=50)
         result = await db.execute(
             select(ChannelPost).join(Channel).where(
                 ChannelPost.date >= cutoff,

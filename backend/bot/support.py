@@ -26,6 +26,7 @@ from app.services.support_logic import (
     should_send_urgent_alert,
 )
 from app.utils.log_redact import redact
+from app.utils.timeutil import utcnow_naive
 
 logger = logging.getLogger(__name__)
 
@@ -95,7 +96,7 @@ async def _save_message(
             text=text,
             is_urgent=is_urgent,
             handled=handled,
-            handled_at=datetime.now(timezone.utc) if handled else None,
+            handled_at=utcnow_naive() if handled else None,  # naive TIMESTAMP (UTC)
             reply_to_id=reply_to_id,
         )
         db.add(row)

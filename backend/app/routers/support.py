@@ -3,7 +3,6 @@ from __future__ import annotations
 
 import hmac
 import logging
-from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Query
 from pydantic import BaseModel, Field
@@ -15,6 +14,7 @@ from app.database import get_db
 from app.models.support import SupportMessage
 from app.services.support_logic import MAX_SUPPORT_TEXT_LEN
 from app.utils.log_redact import redact
+from app.utils.timeutil import utcnow_naive
 
 logger = logging.getLogger(__name__)
 
@@ -123,7 +123,7 @@ async def support_reply(
         logger.error("Support reply send failed: %s", redact(e))
         raise HTTPException(status_code=502, detail="Failed to send Telegram message") from e
 
-    now = datetime.now(timezone.utc)
+    now = utcnow_naive()  # handled_at is naive TIMESTAMP (UTC)
     out = SupportMessage(
         telegram_user_id=body.telegram_user_id,
         username=last.username,
@@ -168,7 +168,7 @@ async def support_mark_handled(
     _: None = Depends(require_support_secret),
     db: AsyncSession = Depends(get_db),
 ):
-    now = datetime.now(timezone.utc)
+    now = utcnow_naive()  # handled_at is naive TIMESTAMP (UTC)
     result = await db.execute(
         update(SupportMessage)
         .where(SupportMessage.id.in_(body.ids))
