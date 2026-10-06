@@ -1,7 +1,7 @@
 import json
 import logging
 import math
-from datetime import datetime, timedelta, timezone
+from datetime import timedelta
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import func, select
@@ -20,6 +20,7 @@ from app.schemas.channel import (
     ChannelUpdate,
 )
 from app.utils.security import get_current_user
+from app.utils.timeutil import to_naive_utc, utcnow_naive
 
 logger = logging.getLogger(__name__)
 
@@ -400,7 +401,8 @@ async def get_ai_analysis(channel_id: int, db: AsyncSession = Depends(get_db)):
 
     # Return cached result if fresher than 7 days
     if channel.ai_cache and channel.ai_cache_updated_at:
-        age = datetime.now(timezone.utc) - channel.ai_cache_updated_at.replace(tzinfo=timezone.utc)
+        # ai_cache_updated_at is naive TIMESTAMP (UTC)
+        age = utcnow_naive() - to_naive_utc(channel.ai_cache_updated_at)
         if age < timedelta(days=7):
             return json.loads(channel.ai_cache)
 
@@ -468,7 +470,7 @@ async def get_ai_analysis(channel_id: int, db: AsyncSession = Depends(get_db)):
     # Save to cache (non-blocking — don't fail the request if cache write fails)
     try:
         channel.ai_cache = json.dumps(analysis, ensure_ascii=False)
-        channel.ai_cache_updated_at = datetime.now(timezone.utc)
+        channel.ai_cache_updated_at = utcnow_naive()  # naive TIMESTAMP (UTC); asyncpg rejects aware
         await db.commit()
     except Exception as cache_err:
         logger.warning(f"Failed to save AI cache for channel {channel_id}: {cache_err}")
