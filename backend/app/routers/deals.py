@@ -582,6 +582,12 @@ async def auto_verify_deal_checklist(
 
     items = await checklist_svc.ensure_checklist(db, deal)
     message = await run_auto_verify(db, deal, items)
+    if message and message.startswith("Автоперевірку виконано"):
+        import app.services.chat as chat_svc
+
+        chat_svc.system(db, deal, "auto_verify",
+                        "🔎 Автоперевірку виконано — результати біля пунктів чекліста "
+                        "(лише підказка, не замінює ручну перевірку).", actor_id=user.id)
     await db.commit()
     await db.refresh(deal)
     items = await checklist_svc.load_items(db, deal.id)
@@ -890,6 +896,7 @@ async def send_deal_message(
         deal_id=deal_id,
         sender_id=user.id,
         text=text,
+        tg_forward_status="pending",
     )
     db.add(message)
     await db.commit()
