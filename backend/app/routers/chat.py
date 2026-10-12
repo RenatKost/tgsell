@@ -253,3 +253,21 @@ async def download_attachment(
         "Content-Disposition": f"{'inline' if inline else 'attachment'}; filename*=UTF-8''{fname}",
     }
     return Response(content=bytes(row.blob), media_type=mime, headers=headers)
+
+
+@router.get("/{deal_id}/tg-notify")
+async def tg_notify_state(
+    deal_id: int,
+    user: User = Depends(get_current_user_or_blocked),
+    db: AsyncSession = Depends(get_db),
+):
+    """Deal page banner: can the alerts bot write to this user? + deep link to start it."""
+    import app.services.chat_bridge as bridge
+
+    await chat_svc.load_deal_for(db, deal_id, user)
+    return {
+        "telegram_bound": bool(user.telegram_id),
+        "bot_started": bool(user.tg_bot_started_at),
+        "bot_unreachable": bool(user.tg_bot_unreachable_at),
+        "deep_link": bridge.deep_link(deal_id),
+    }

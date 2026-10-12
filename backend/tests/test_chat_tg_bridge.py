@@ -233,3 +233,84 @@ async def test_auto_verify_adds_system_message(env, monkeypatch):
         ev = list((await db.execute(select(DealMessage).where(
             DealMessage.deal_id == deal_id, DealMessage.event == "auto_verify"))).scalars())
     assert len(ev) == 1 and ev[0].tg_forward_status is None
+
+
+class ChatNotFoundBot(FakeBot):
+    async def send_message(self, chat_id, text, **kw):
+        if chat_id in self.fail_for:
+            raise RuntimeError("Telegram server says - Bad Request: chat not found")
+        return await super().send_message(chat_id, text, **kw)
+
+
+@pytest.mark.asyncio
+async def test_chat_not_found_marks_unreachable_and_banner(env, chat, br):
+    from app.models.user import User
+
+    r = importlib.import_module("app.routers.chat")
+    deal_id, _ = await env.make_deal(env.S.paid)
+    st = await call(env, r.tg_notify_state, deal_id, user=env.ids.seller)
+    assert st["telegram_bound"] and not st["bot_unreachable"] and not st["bot_started"]
+    assert st["deep_link"].endswith(f"?start=deal_{deal_id}")
+    await send(env, chat, deal_id, env.ids.buyer, "hi")
+    await br.forward_pending(env.orm.session, ChatNotFoundBot(fail_for={9102}))
+    st = await call(env, r.tg_notify_state, deal_id, user=env.ids.seller)
+    assert st["bot_unreachable"] is True
+    # /start deal_<id> → started, unreachable cleared
+    async with env.orm.session() as db:
+        u = await br.mark_bot_started(db, 9102)
+        assert u.id == env.ids.seller
+    st = await call(env, r.tg_notify_state, deal_id, user=env.ids.seller)
+    assert st["bot_started"] and not st["bot_unreachable"]
+    # successful send also clears a stale flag
+    async with env.orm.session() as db:
+        from app.utils.timeutil import utcnow_naive
+        (await db.get(User, env.ids.seller)).tg_bot_unreachable_at = utcnow_naive()
+        await db.commit()
+    await send(env, chat, deal_id, env.ids.buyer, "again")
+    await br.forward_pending(env.orm.session, FakeBot())
+    assert not (await call(env, r.tg_notify_state, deal_id, user=env.ids.seller))["bot_unreachable"]
+    outsider = await _user(env, tg=7301)
+    from fastapi import HTTPException
+    with pytest.raises(HTTPException):
+        await call(env, r.tg_notify_state, deal_id, user=outsider)
+
+
+def test_unreachable_error_classification(br):
+    assert br.is_unreachable_error(RuntimeError("Bad Request: chat not found"))
+    assert br.is_unreachable_error(RuntimeError("Forbidden: bot was blocked by the user"))
+    assert not br.is_unreachable_error(RuntimeError("Too Many Requests: retry after 5"))
+
+
+@pytest.mark.asyncio
+async def test_start_deep_link_answers(env, monkeypatch):
+    bm = importlib.import_module("bot.main")
+    monkeypatch.setattr(bm, "async_session", env.orm.session)
+    out = []
+
+    async def answer(text, **kw):
+        out.append(text)
+
+    msg = SimpleNamespace(text="/start deal_5", from_user=SimpleNamespace(id=9101, username="b"), answer=answer)
+    await bm.cmd_start(msg)
+    assert "#5" in out[-1]
+    msg2 = SimpleNamespace(text="/start deal_5", from_user=SimpleNamespace(id=123456, username="x"), answer=answer)
+    await bm.cmd_start(msg2)
+    assert "не привʼязаний" in out[-1]
+
+
+@pytest.mark.asyncio
+async def test_api_responses_not_cacheable():
+    from starlette.responses import JSONResponse
+
+    m = SimpleNamespace(_api_no_store=importlib.import_module("app.utils.http_cache").api_no_store)
+
+    async def nxt(req):
+        return JSONResponse({})
+
+    req = SimpleNamespace(url=SimpleNamespace(path="/api/deals/1/chat"))
+    assert (await m._api_no_store(req, nxt)).headers["cache-control"] == "no-store"
+
+    async def media(req):
+        return JSONResponse({}, headers={"Cache-Control": "public, max-age=86400"})
+
+    assert (await m._api_no_store(req, media)).headers["cache-control"] == "public, max-age=86400"

@@ -123,11 +123,16 @@ async def forward_pending(session_factory, bot) -> int:
                                                  disable_web_page_preview=True)
                     await db.execute(update(DealChatTgLink).where(DealChatTgLink.id == link_id)
                                      .values(tg_message_id=res.message_id))
+                    await db.execute(update(User).where(User.id == uid, User.tg_bot_unreachable_at.isnot(None))
+                                     .values(tg_bot_unreachable_at=None))
                     await db.commit()
                     sent += 1
                 except Exception as e:
                     await db.rollback()
                     logger.warning(f"[CHAT-TG] deal #{deal_id} msg #{msg_id} → user #{uid}: {e}")
+                    if is_unreachable_error(e):
+                        await db.execute(update(User).where(User.id == uid).values(tg_bot_unreachable_at=utcnow_naive()))
+                        await db.commit()
     return sent
 
 
@@ -158,6 +163,30 @@ async def sync_reads_to_telegram(session_factory, bot) -> int:
 
 
 # ── Telegram → site ─────────────────────────────────────────────────────
+
+UNREACHABLE_MARKERS = ("chat not found", "bot was blocked", "user is deactivated", "bot can't initiate",
+                       "forbidden")
+
+
+def is_unreachable_error(e: Exception) -> bool:
+    """Telegram says we cannot write to this user (no dialog with the bot / blocked)."""
+    text = f"{type(e).__name__} {e}".lower()
+    return any(m in text for m in UNREACHABLE_MARKERS)
+
+
+def deep_link(deal_id: int | None = None) -> str:
+    start = f"deal_{deal_id}" if deal_id else "subscribe"
+    return f"https://t.me/{settings.alerts_bot_username.lstrip('@')}?start={start}"
+
+
+async def mark_bot_started(db, tg_user_id: int) -> User | None:
+    user = (await db.execute(select(User).where(User.telegram_id == tg_user_id))).scalar_one_or_none()
+    if user is not None:
+        user.tg_bot_started_at = utcnow_naive()
+        user.tg_bot_unreachable_at = None
+        await db.commit()
+    return user
+
 
 class BridgeReject(Exception):
     def __init__(self, text: str):

@@ -65,6 +65,27 @@ def deal_keyboard(deal_id: int, user_role: str) -> InlineKeyboardMarkup:
 @router.message(CommandStart())
 async def cmd_start(message: Message):
     logger.info(f"[BOT] /start from user {message.from_user.id} (@{message.from_user.username})")
+    import app.services.chat_bridge as bridge
+
+    site_user = None
+    try:
+        async with async_session() as db:
+            site_user = await bridge.mark_bot_started(db, message.from_user.id)
+    except Exception as e:
+        logger.warning(f"[BOT] /start: could not record bot dialog: {e}")
+    arg = (message.text or "").split(maxsplit=1)[1:] or [""]
+    if arg[0].startswith("deal_") and arg[0][5:].isdigit():
+        deal_id = int(arg[0][5:])
+        if site_user is None:
+            await message.answer(
+                "⚠️ Цей Telegram не привʼязаний до акаунта TgSell. Увійдіть на сайті через Telegram "
+                "з цього ж акаунта — тоді повідомлення з чату угоди надходитимуть сюди.")
+            return
+        await message.answer(
+            f"🔔 Готово! Повідомлення з чату угоди #{deal_id} надходитимуть сюди.\n"
+            f"Відповідайте (Reply) на них — відповідь потрапить у чат на сайті.",
+            reply_markup=bridge.keyboard(deal_id, None, read=True))
+        return
     await message.answer(
         "👋 Вітаю! Я бот TgSell — маркетплейс Telegram-каналів.\n\n"
         "Я допоможу вам із угодами:\n"
