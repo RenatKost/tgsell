@@ -455,6 +455,7 @@ async def test_sweep_with_unknown_balance_moves_nothing(env, monkeypatch):
     gas, transfer = MagicMock(), MagicMock()
     monkeypatch.setattr(escrow, "send_trx_for_gas", gas)
     monkeypatch.setattr(escrow, "transfer_usdt", transfer)
+    monkeypatch.setattr(escrow, "escrow_usdt_payout", transfer)
 
     async with env.orm.session() as db:
         r = await admin_router.sweep_escrow_wallet(deal_id, to_address="TTARGET", admin=None, db=db)

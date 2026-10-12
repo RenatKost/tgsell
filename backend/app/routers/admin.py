@@ -228,34 +228,24 @@ async def get_all_deals(
     return responses
 
 
-async def _escrow_transfer_usdt(deal: Deal, to_address: str, amount: float) -> str | None:
-    """Send gas TRX then transfer USDT from deal escrow. Returns tx_hash or None."""
+async def _escrow_transfer_usdt(deal: Deal, to_address: str, amount: float) -> tuple[str | None, str | None]:
+    """Estimate gas, top up, transfer USDT, wait for receipt, sweep TRX back.
+
+    Returns (tx_hash, None) only when the on-chain receipt is SUCCESS, else (None, error).
+    """
     import asyncio
-    from app.services.escrow import send_trx_for_gas, transfer_usdt, sweep_trx_to_master
+    from app.services.escrow import escrow_usdt_payout
 
     logger.info(
         f"[ADMIN-ESCROW] Deal #{deal.id}: transfer {amount:.2f} USDT → {to_address}"
     )
-    gas_tx = send_trx_for_gas(deal.escrow_wallet_address, amount_trx=7)
-    logger.info(f"[ADMIN-ESCROW] Deal #{deal.id}: gas tx={gas_tx or 'FAILED'}")
-    if gas_tx:
-        await asyncio.sleep(6)
-
-    tx_hash = None
-    for attempt in range(2):
-        tx_hash = transfer_usdt(deal.escrow_private_key_encrypted, to_address, amount)
-        if tx_hash:
-            break
-        if attempt == 0:
-            await asyncio.sleep(10)
-
-    if tx_hash:
-        try:
-            await asyncio.sleep(6)
-            sweep_trx_to_master(deal.escrow_private_key_encrypted)
-        except Exception as sweep_err:
-            logger.warning(f"[ADMIN-ESCROW] Deal #{deal.id}: TRX sweep failed: {sweep_err}")
-    return tx_hash
+    res = await asyncio.to_thread(
+        escrow_usdt_payout, deal.escrow_private_key_encrypted, to_address, amount
+    )
+    logger.info(f"[ADMIN-ESCROW] Deal #{deal.id}: payout result={res}")
+    if res["ok"]:
+        return res["tx_hash"], None
+    return None, res.get("error") or "unknown error"
 
 
 def _resolve_wallet(preferred: str | None, user_wallet: str | None, override: str | None) -> str | None:
@@ -356,7 +346,7 @@ async def resolve_deal(
     logger.info(f"[ADMIN] Deal #{deal.id}: CLAIMED payout_in_progress for {body.resolution}")
 
     # 5) On-chain transfer AFTER claim.
-    tx_hash = await _escrow_transfer_usdt(deal, wallet, amount)
+    tx_hash, payout_error = await _escrow_transfer_usdt(deal, wallet, amount)
     if not tx_hash:
         release_payout_claim(deal, restore_status=DealStatus.disputed)
         await db.commit()
@@ -364,7 +354,7 @@ async def resolve_deal(
             from app.services.alerts import send_admin_alert
             await send_admin_alert(
                 f"🔴 <b>Admin {body.resolution} FAILED</b> — deal #{deal.id}\n"
-                f"Статус повернуто до disputed.",
+                f"Статус повернуто до disputed.\n{payout_error}",
                 alert_key=f"admin_resolve_fail_{deal.id}",
                 throttle_minutes=5,
             )
@@ -376,7 +366,7 @@ async def resolve_deal(
                 "Ончейн-refund не вдався. Статус угоди не змінено (залишається disputed)."
                 if body.resolution == "refund_buyer"
                 else "Ончейн-release не вдався. Статус угоди не змінено (залишається disputed)."
-            ),
+            ) + f" {payout_error}",
         )
 
     if body.resolution == "refund_buyer":
@@ -472,13 +462,14 @@ async def admin_cancel_deal(
                 ),
             )
         amount = deal.amount_usdt
-        tx_hash = await _escrow_transfer_usdt(deal, wallet, amount)
+        tx_hash, payout_error = await _escrow_transfer_usdt(deal, wallet, amount)
         if not tx_hash:
             raise HTTPException(
                 status_code=502,
                 detail=(
                     "Ончейн-refund не вдався — угоду НЕ скасовано. "
-                    "Кошти лишаються в escrow; використайте resolve_deal."
+                    "Кошти лишаються в escrow; використайте resolve_deal. "
+                    f"{payout_error}"
                 ),
             )
         db.add(Transaction(
@@ -759,7 +750,7 @@ async def sweep_escrow_wallet(
     Steps: check balance → send TRX for gas → wait → transfer USDT → sweep leftover TRX back.
     """
     import asyncio
-    from app.services.escrow import get_usdt_balance, send_trx_for_gas, transfer_usdt, sweep_trx_to_master
+    from app.services.escrow import escrow_usdt_payout, get_usdt_balance
 
     result = await db.execute(select(Deal).where(Deal.id == deal_id))
     deal = result.scalar_one_or_none()
@@ -776,33 +767,23 @@ async def sweep_escrow_wallet(
     if balance <= 0:
         return {"ok": False, "error": f"Escrow {escrow_addr} has 0 USDT"}
 
-    # 2. Send TRX for gas (from master wallet) — reduced to 7 TRX
-    gas_tx = send_trx_for_gas(escrow_addr, amount_trx=7)
-    if not gas_tx:
-        return {"ok": False, "error": "Failed to send TRX for gas. Is master wallet funded with TRX?"}
-
-    # 3. Wait for TRX to confirm
-    await asyncio.sleep(6)
-
-    # 4. Transfer USDT
-    tx_hash = transfer_usdt(encrypted_key, to_address, balance)
-    if not tx_hash:
-        return {"ok": False, "error": "USDT transfer failed. Check logs for details."}
-
-    # 5. Wait for USDT transfer to confirm, then sweep leftover TRX back to master
-    await asyncio.sleep(6)
-    trx_sweep_tx = sweep_trx_to_master(encrypted_key)
-
-    return {
-        "ok": True,
+    # 2. Estimate gas → top up only the difference → transfer → wait for receipt → sweep TRX.
+    res = await asyncio.to_thread(escrow_usdt_payout, encrypted_key, to_address, balance)
+    resp = {
+        "ok": bool(res["ok"]),
         "deal_id": deal_id,
         "escrow": escrow_addr,
         "to": to_address,
         "amount_usdt": balance,
-        "gas_tx": gas_tx,
-        "usdt_tx": tx_hash,
-        "trx_sweep_tx": trx_sweep_tx,
+        "gas_tx": res.get("gas_tx"),
+        "usdt_tx": res.get("tx_hash"),
+        "trx_sweep_tx": res.get("trx_sweep_tx"),
+        "estimate": res.get("estimate"),
     }
+    if not res["ok"]:
+        resp["error"] = res.get("error") or "USDT transfer failed"
+        resp["reason"] = res.get("reason")
+    return resp
 
 
 ESCROW_BALANCES_CACHE_TTL_SEC = 60
