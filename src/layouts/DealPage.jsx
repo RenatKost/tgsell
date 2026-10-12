@@ -82,6 +82,7 @@ const DealPage = () => {
 	const [checklist, setChecklist] = useState(null);
 	const [payoutStatus, setPayoutStatus] = useState(null);
 	const [notice, setNotice] = useState(null);
+	const [refundAddress, setRefundAddress] = useState('');
 
 	const refreshDeal = async () => {
 		try {
@@ -113,6 +114,15 @@ const DealPage = () => {
 		} finally {
 			setActionLoading(false);
 		}
+	};
+
+	const handleSubmitRefundAddress = () => {
+		if (!refundAddress.trim()) return;
+		handleAction(async () => {
+			await dealsAPI.setOverpayRefundAddress(id, refundAddress.trim());
+			setNotice('Адресу для повернення переплати збережено.');
+			setTimeout(() => setNotice(null), 8000);
+		});
 	};
 
 	const handleConfirmReady = () => handleAction(() => dealsAPI.confirmReady(id));
@@ -316,6 +326,45 @@ const DealPage = () => {
 							Ви підтвердили. Очікуйте іншу сторону
 						</div>
 					)}
+				</div>
+			)}
+
+			{/* Partial payment */}
+			{['created', 'payment_pending'].includes(deal.status) && deal.received_usdt > 0 && deal.received_usdt < deal.amount_usdt && (
+				<div className='bg-orange-50 dark:bg-orange-900/20 border border-orange-200 rounded-2xl p-5 mb-6'>
+					<p className='font-semibold text-orange-800 dark:text-orange-200'>
+						Отримано {deal.received_usdt} з {deal.amount_usdt} USDT, доплатіть {(Math.round((deal.amount_usdt - deal.received_usdt) * 1e6) / 1e6)} USDT
+					</p>
+					<p className='text-xs text-orange-700 dark:text-orange-300 mt-1'>
+						⚠️ Біржа або гаманець можуть утримати комісію за виведення — надсилайте так, щоб на escrow надійшла повна сума.
+					</p>
+				</div>
+			)}
+
+			{/* Overpayment refund */}
+			{deal.overpay_units > 0 && (isBuyer || isSeller) && (
+				<div className='bg-white dark:bg-slate-800 rounded-2xl shadow-lg border border-gray-100 dark:border-slate-700 p-6 mb-6'>
+					<h3 className='font-bold text-lg mb-2'>Переплата {deal.overpay_units / 1e6} USDT</h3>
+					{deal.overpay_status === 'awaiting_address' && isBuyer && !deal.overpay_refund_address && (
+						<>
+							<p className='text-gray-500 text-sm mb-3'>
+								Переплату буде повернено після виплати продавцю. Вкажіть свою TRON-адресу (TRC-20 USDT). Адресу відправника (біржі) не використовуємо.
+							</p>
+							<div className='flex gap-2'>
+								<input value={refundAddress} onChange={(e) => setRefundAddress(e.target.value)} placeholder='T...'
+									className='flex-1 border border-gray-200 dark:border-slate-600 dark:bg-slate-700 rounded-xl px-3 py-2 font-mono text-sm' />
+								<button onClick={handleSubmitRefundAddress} disabled={actionLoading}
+									className='bg-[#3498db] text-white rounded-xl px-4 py-2 text-sm font-semibold disabled:opacity-50'>Зберегти</button>
+							</div>
+						</>
+					)}
+					{deal.overpay_refund_address && (
+						<p className='text-sm text-gray-600 dark:text-gray-300 break-all'>Адреса повернення: <span className='font-mono'>{deal.overpay_refund_address}</span></p>
+					)}
+					<p className='text-sm text-gray-500 mt-2'>
+						{{ awaiting_address: deal.overpay_refund_address ? 'Очікує виплати продавцю' : 'Очікує адресу покупця',
+							queued: 'Повернення в черзі ⏳', done: 'Повернено ✅', failed: 'Повернення не виконано — адміністратор розбирається' }[deal.overpay_status] || ''}
+					</p>
 				</div>
 			)}
 

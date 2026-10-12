@@ -13,7 +13,7 @@ from app.models.user import User
 from app.schemas.deal import (
     ChecklistItemResponse, ChecklistSideResponse, ChecklistToggleRequest,
     DealChecklistResponse, DealCreate, DealDisputeRequest, DealMessageCreate,
-    DealMessageResponse, DealResponse, SellerWalletRequest,
+    DealMessageResponse, DealResponse, OverpayRefundAddressRequest, SellerWalletRequest,
 )
 from app.services import deal_checklist as checklist_svc
 from app.services.escrow import generate_escrow_wallet
@@ -62,6 +62,10 @@ def _deal_to_response(deal: Deal, channel: Channel | None = None, buyer: User | 
         seller_confirmed_transfer=deal.seller_confirmed_transfer,
         seller_payout_address=deal.seller_payout_address,
         payout_tx_hash=deal.payout_tx_hash,
+        received_usdt=deal.received_usdt,
+        overpay_units=deal.overpay_units,
+        overpay_refund_address=deal.overpay_refund_address,
+        overpay_status=deal.overpay_status,
         created_at=deal.created_at,
         paid_at=deal.paid_at,
         completed_at=deal.completed_at,
@@ -758,6 +762,43 @@ async def set_seller_wallet(
     )
     response.status_code = 202
     return await _respond()
+
+
+@router.post("/{deal_id}/overpay-refund-address")
+async def set_overpay_refund_address(
+    deal_id: int,
+    body: OverpayRefundAddressRequest,
+    user: User = Depends(get_current_user_or_blocked),
+    db: AsyncSession = Depends(get_db),
+):
+    """Buyer enters the TRON address for the overpayment refund (never the sender address).
+
+    The refund is queued only after the seller payout succeeded (or right away if it already did).
+    """
+    from app.services import payouts
+    from app.services.payouts import PayoutError
+
+    deal = (await db.execute(select(Deal).where(Deal.id == deal_id).with_for_update())).scalar_one_or_none()
+    if not deal:
+        raise HTTPException(status_code=404, detail="Deal not found")
+    if deal.buyer_id != user.id:
+        raise HTTPException(status_code=403, detail="Тільки покупець вказує адресу повернення")
+    moderation.ensure_deal_action_allowed(user, deal)
+    if not deal.overpay_units or deal.overpay_status != "awaiting_address":
+        raise HTTPException(status_code=400, detail="Для цієї угоди немає переплати, що очікує повернення")
+    try:
+        wallet = await payouts.validate_destination(db, body.wallet_address)
+    except PayoutError as e:
+        raise HTTPException(status_code=e.http_status, detail=e.message)
+    deal.overpay_refund_address = wallet
+    await _add_system_message(
+        db, deal.id, user.id,
+        f"Покупець вказав адресу для повернення переплати {payouts.units_to_usdt(deal.overpay_units)} USDT: {wallet}",
+        event="overpay_address",
+    )
+    payouts.maybe_enqueue_overpay_refund(db, deal)
+    await db.commit()
+    return {"overpay_status": deal.overpay_status, "overpay_refund_address": wallet}
 
 
 @router.get("/{deal_id}/payout-status")

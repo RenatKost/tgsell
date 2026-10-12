@@ -50,6 +50,8 @@ LATE_PAYMENT_CHECK_EVERY_N_CYCLES = 10  # × 30s ≈ every 5 min
 
 # In-process alert dedup: deal_id → balance we last alerted about.
 _partial_alerted: dict[int, float] = {}
+# Overpayment below this is not refunded (TRC-20 gas would exceed it): 0.1 USDT.
+OVERPAY_MIN_UNITS = 100_000
 _late_alerted: dict[int, float] = {}
 _full_unconfirmed_alerted: dict[int, float] = {}
 _cycle = 0
@@ -127,6 +129,7 @@ async def _process_deal(db, deal: Deal, now: datetime) -> None:
         return
 
     if balance > 0:
+        await _record_partial(db, deal, balance)
         await _alert_partial(deal, balance)
         return  # partial payment: never auto-cancel
 
@@ -144,12 +147,51 @@ async def _process_deal(db, deal: Deal, now: datetime) -> None:
     await _cancel_for_timeout(db, deal, now)
 
 
+def _units(v) -> int:
+    from app.services.payouts import to_units
+
+    return to_units(v)
+
+
+def _fmt(units: int) -> str:
+    from app.services.payouts import units_to_usdt
+
+    return f"{units_to_usdt(units):g}"
+
+
+async def _record_partial(db, deal: Deal, balance: float) -> None:
+    """Persist received amount; one chat system message per NEW partial amount (no spam)."""
+    got = _units(balance)
+    need = _units(deal.amount_usdt)
+    if deal.partial_notified_units == got:
+        if deal.received_usdt != balance:
+            deal.received_usdt = balance
+            await db.commit()
+        return
+    deal.received_usdt = balance
+    deal.partial_notified_units = got
+    import app.services.chat as chat_svc
+
+    chat_svc.system(
+        db, deal, "payment_partial",
+        f"Отримано {_fmt(got)} з {_fmt(need)} USDT. Доплатіть {_fmt(need - got)} USDT на ту саму адресу escrow.\n"
+        f"⚠️ Біржа/гаманець можуть утримати комісію за виведення — надсилайте так, щоб на escrow "
+        f"надійшла повна сума.",
+        received_units=got, required_units=need,
+    )
+    await db.commit()
+
+
 async def _mark_paid(db, deal: Deal, balance: float, now: datetime) -> None:
     prev_status = deal.status
+    over = max(0, _units(balance) - _units(deal.amount_usdt))
+    values = dict(status=DealStatus.paid, paid_at=now, received_usdt=balance)
+    if over >= OVERPAY_MIN_UNITS:
+        values.update(overpay_units=over, overpay_status="awaiting_address")
     res = await db.execute(
         update(Deal)
         .where(Deal.id == deal.id, Deal.status == prev_status)
-        .values(status=DealStatus.paid, paid_at=now)
+        .values(**values)
     )
     if res.rowcount != 1:
         await db.rollback()
@@ -196,6 +238,17 @@ async def _mark_paid(db, deal: Deal, balance: float, now: datetime) -> None:
         ),
         is_system=True,
     ))
+    if over >= OVERPAY_MIN_UNITS:
+        db.add(DealMessage(
+            deal_id=deal.id, sender_id=None, kind="system", event="overpay_detected", is_system=True,
+            text=(
+                f"Переплата {_fmt(over)} USDT (отримано {_fmt(_units(balance))}, ціна {_fmt(_units(deal.amount_usdt))} USDT) — "
+                f"буде повернена покупцю після виплати продавцю.\n"
+                f"Покупець, вкажіть свою TRON-адресу (TRC-20) для повернення на сторінці угоди. "
+                f"Адресу відправника не використовуємо (біржі її не приймають)."
+            ),
+            meta={"overpay_units": over},
+        ))
     await db.commit()
 
     try:
