@@ -72,7 +72,7 @@ class DealMessageCreate(BaseModel):
 class DealMessageResponse(BaseModel):
     id: int
     deal_id: int
-    sender_id: int
+    sender_id: int | None = None
     sender_name: str | None = None
     text: str
     is_system: bool = False

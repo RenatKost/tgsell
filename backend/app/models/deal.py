@@ -2,10 +2,11 @@ import enum
 from datetime import datetime
 
 from sqlalchemy import (
-    Index,
+    JSON, Index,
     BigInteger, Boolean, CheckConstraint, DateTime, Enum, Float, ForeignKey,
     Integer, String, Text, UniqueConstraint, func,
 )
+from sqlalchemy import text as sa_text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database import Base
@@ -134,13 +135,26 @@ class Transaction(Base):
 
 class DealMessage(Base):
     __tablename__ = "deal_messages"
+    __table_args__ = (
+        Index("ix_deal_messages_deal_id_id", "deal_id", "id"),
+        Index("uq_deal_messages_client_id", "deal_id", "client_id", unique=True,
+              postgresql_where=sa_text("client_id IS NOT NULL")),
+    )
 
     id: Mapped[int] = mapped_column(primary_key=True)
     deal_id: Mapped[int] = mapped_column(ForeignKey("deals.id", ondelete="CASCADE"), index=True)
-    sender_id: Mapped[int] = mapped_column(ForeignKey("users.id"))
+    # NULL for system messages created after migration 0029 (legacy rows keep a party id).
+    sender_id: Mapped[int | None] = mapped_column(ForeignKey("users.id"), nullable=True)
     text: Mapped[str] = mapped_column(Text)
     is_system: Mapped[bool] = mapped_column(Boolean, default=False)
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+    # Chat v2 (migration 0029, all nullable; legacy rows: kind NULL → derived from is_system)
+    kind: Mapped[str | None] = mapped_column(String(16), nullable=True)  # text | system | file
+    event: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    meta: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    client_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    edited_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    deleted_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
 
     deal = relationship("Deal", back_populates="messages")
     sender = relationship("User")

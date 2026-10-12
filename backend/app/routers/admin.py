@@ -450,6 +450,9 @@ async def admin_cancel_deal(
     if deal.channel:
         deal.channel.status = ChannelStatus.approved
     audit(db, admin, "deal.cancel", "deal", deal.id, prev_status=prev)
+    import app.services.chat as chat_svc
+
+    chat_svc.system(db, deal, "cancelled", "Угоду скасовано гарантом.")
     await db.commit()
     return _admin_deal_response(await _load_deal_full(db, deal_id))
 
