@@ -26,7 +26,8 @@ from app.services.deal_lifecycle import (
     PayoutClaimError,
     release_payout_claim,
 )
-from app.utils.security import get_current_user
+from app.utils.security import get_current_user, get_current_user_or_blocked
+from app.services import moderation
 from app.utils.avatars import public_channel_avatar_url
 
 import logging
@@ -67,6 +68,12 @@ def _deal_to_response(deal: Deal, channel: Channel | None = None, buyer: User | 
     )
 
 
+async def _ensure_seller_not_blocked(db: AsyncSession, seller_id: int) -> None:
+    seller = await db.get(User, seller_id)
+    if seller is not None and seller.is_blocked:
+        raise HTTPException(status_code=400, detail="Продавець недоступний — нові угоди заборонені")
+
+
 @router.post("", response_model=DealResponse, status_code=status.HTTP_201_CREATED)
 async def create_deal(
     body: DealCreate,
@@ -93,6 +100,7 @@ async def create_deal(
             raise HTTPException(status_code=400, detail="Bundle is not available for purchase")
         if bundle.seller_id == user.id:
             raise HTTPException(status_code=400, detail="Cannot buy your own bundle")
+        await _ensure_seller_not_blocked(db, bundle.seller_id)
 
         # Check no active deal for this bundle
         existing = await db.execute(
@@ -166,6 +174,7 @@ async def create_deal(
         raise HTTPException(status_code=400, detail="Channel is not available for purchase")
     if channel.seller_id == user.id:
         raise HTTPException(status_code=400, detail="Cannot buy your own channel")
+    await _ensure_seller_not_blocked(db, channel.seller_id)
 
     # Check no active deal for this channel
     existing = await db.execute(
@@ -238,7 +247,7 @@ async def create_deal(
 
 @router.get("/my", response_model=list[DealResponse])
 async def get_my_deals(
-    user: User = Depends(get_current_user),
+    user: User = Depends(get_current_user_or_blocked),
     db: AsyncSession = Depends(get_db),
 ):
     """Get all deals where user is buyer or seller."""
@@ -267,7 +276,7 @@ async def get_my_deals(
 @router.get("/{deal_id}", response_model=DealResponse)
 async def get_deal(
     deal_id: int,
-    user: User = Depends(get_current_user),
+    user: User = Depends(get_current_user_or_blocked),
     db: AsyncSession = Depends(get_db),
 ):
     """Get deal details (only buyer/seller/admin can see)."""
@@ -299,7 +308,7 @@ async def get_deal(
 @router.post("/{deal_id}/confirm-transfer", response_model=DealResponse)
 async def confirm_transfer(
     deal_id: int,
-    user: User = Depends(get_current_user),
+    user: User = Depends(get_current_user_or_blocked),
     db: AsyncSession = Depends(get_db),
 ):
     """Legacy endpoint — same logic as confirm-channel-transfer (checklist-gated)."""
@@ -394,7 +403,7 @@ async def confirm_ready(
 @router.post("/{deal_id}/confirm-channel-transfer", response_model=DealResponse)
 async def confirm_channel_transfer(
     deal_id: int,
-    user: User = Depends(get_current_user),
+    user: User = Depends(get_current_user_or_blocked),
     db: AsyncSession = Depends(get_db),
 ):
     """Buyer or seller confirms channel has been transferred (checklist-gated)."""
@@ -419,6 +428,7 @@ async def _confirm_transfer_impl(deal_id: int, user: User, db: AsyncSession) -> 
         raise HTTPException(status_code=404, detail="Deal not found")
     if checklist_svc.side_for_user(deal, user.id) is None:
         raise HTTPException(status_code=403, detail="Access denied")
+    moderation.ensure_deal_action_allowed(user, deal)
     if deal.status not in checklist_svc.TRANSFER_STATUSES:
         raise HTTPException(status_code=400, detail="Угода не в статусі передачі каналу")
 
@@ -520,7 +530,7 @@ def _can_view_checklist(deal: Deal, user: User) -> bool:
 @router.get("/{deal_id}/checklist", response_model=DealChecklistResponse)
 async def get_deal_checklist(
     deal_id: int,
-    user: User = Depends(get_current_user),
+    user: User = Depends(get_current_user_or_blocked),
     db: AsyncSession = Depends(get_db),
 ):
     """Transfer checklist (buyer, seller, admin/moderator). Lazily created for paid deals."""
@@ -543,7 +553,7 @@ async def get_deal_checklist(
 @router.post("/{deal_id}/checklist/auto-verify", response_model=DealChecklistResponse)
 async def auto_verify_deal_checklist(
     deal_id: int,
-    user: User = Depends(get_current_user),
+    user: User = Depends(get_current_user_or_blocked),
     db: AsyncSession = Depends(get_db),
 ):
     """Best-effort Telethon check (owner / admins / subscribers).
@@ -564,6 +574,7 @@ async def auto_verify_deal_checklist(
         raise HTTPException(status_code=404, detail="Deal not found")
     if not _can_view_checklist(deal, user):
         raise HTTPException(status_code=403, detail="Access denied")
+    moderation.ensure_deal_action_allowed(user, deal)
     if deal.status not in checklist_svc.TRANSFER_STATUSES:
         raise HTTPException(status_code=400, detail="Автоперевірка доступна лише під час передачі каналу")
 
@@ -580,7 +591,7 @@ async def toggle_deal_checklist_item(
     deal_id: int,
     key: str,
     body: ChecklistToggleRequest | None = Body(default=None),
-    user: User = Depends(get_current_user),
+    user: User = Depends(get_current_user_or_blocked),
     db: AsyncSession = Depends(get_db),
 ):
     """Tick/untick a checklist item. Only the owning side may change its items."""
@@ -597,6 +608,7 @@ async def toggle_deal_checklist_item(
     ).scalar_one_or_none()
     if not deal:
         raise HTTPException(status_code=404, detail="Deal not found")
+    moderation.ensure_deal_action_allowed(user, deal)
     try:
         _item_def, side = checklist_svc.check_toggle_allowed(deal, user.id, key)
     except checklist_svc.ChecklistError as e:
@@ -649,7 +661,7 @@ async def set_seller_wallet(
     deal_id: int,
     body: SellerWalletRequest,
     response: Response,
-    user: User = Depends(get_current_user),
+    user: User = Depends(get_current_user_or_blocked),
     db: AsyncSession = Depends(get_db),
 ):
     """Seller provides their USDT wallet for payout.
@@ -668,6 +680,7 @@ async def set_seller_wallet(
         raise HTTPException(status_code=404, detail="Deal not found")
     if deal.seller_id != user.id:
         raise HTTPException(status_code=403, detail="Only seller can provide wallet")
+    moderation.ensure_deal_action_allowed(user, deal)
 
     async def _respond():
         result = await db.execute(
@@ -736,7 +749,7 @@ async def set_seller_wallet(
 @router.get("/{deal_id}/payout-status")
 async def get_payout_status(
     deal_id: int,
-    user: User = Depends(get_current_user),
+    user: User = Depends(get_current_user_or_blocked),
     db: AsyncSession = Depends(get_db),
 ):
     """Poll payout progress (buyer/seller of the deal)."""
@@ -753,7 +766,7 @@ async def get_payout_status(
 @router.post("/{deal_id}/call-admin", response_model=DealMessageResponse)
 async def call_admin(
     deal_id: int,
-    user: User = Depends(get_current_user),
+    user: User = Depends(get_current_user_or_blocked),
     db: AsyncSession = Depends(get_db),
 ):
     """Call admin to the deal chat. Sends Telegram notification."""
@@ -767,6 +780,7 @@ async def call_admin(
         raise HTTPException(status_code=404, detail="Deal not found")
     if deal.buyer_id != user.id and deal.seller_id != user.id:
         raise HTTPException(status_code=403, detail="Access denied")
+    moderation.ensure_deal_action_allowed(user, deal)
 
     # Add system message
     msg = DealMessage(
@@ -806,7 +820,7 @@ async def call_admin(
 @router.get("/{deal_id}/messages", response_model=list[DealMessageResponse])
 async def get_deal_messages(
     deal_id: int,
-    user: User = Depends(get_current_user),
+    user: User = Depends(get_current_user_or_blocked),
     db: AsyncSession = Depends(get_db),
 ):
     """Get all messages for a deal."""
@@ -849,7 +863,7 @@ async def get_deal_messages(
 async def send_deal_message(
     deal_id: int,
     body: DealMessageCreate,
-    user: User = Depends(get_current_user),
+    user: User = Depends(get_current_user_or_blocked),
     db: AsyncSession = Depends(get_db),
 ):
     """Send a message in deal chat."""
@@ -859,6 +873,7 @@ async def send_deal_message(
         raise HTTPException(status_code=404, detail="Deal not found")
     if deal.buyer_id != user.id and deal.seller_id != user.id and user.role not in ("admin", "moderator"):
         raise HTTPException(status_code=403, detail="Access denied")
+    moderation.ensure_deal_action_allowed(user, deal)
 
     text = body.text.strip()
     if not text:

@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
 import { adminAPI, dealsAPI, bundlesAPI } from '../services/api';
 import { useAuth } from '../context/AppContext';
+import UsersPanel from '../components/Admin/UsersPanel';
+import AuditLogPanel from '../components/Admin/AuditLogPanel';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import {
 	faCheck,
@@ -44,6 +46,8 @@ const SECTIONS = [
 	{ id: 'auctions', label: 'Аукціони', icon: faGavel },
 	{ id: 'activity', label: 'Активність', icon: faChartLine },
 	{ id: 'escrow', label: 'Ескроу', icon: faWallet },
+	{ id: 'users', label: 'Користувачі', icon: faUsers, adminOnly: true },
+	{ id: 'audit', label: 'Журнал дій', icon: faList, adminOnly: true },
 ];
 
 const STATUS_FILTERS = [
@@ -247,6 +251,8 @@ const DealChatModal = ({ dealId, userId, onClose }) => {
 
 const ModerCabinet = () => {
 	const { user } = useAuth();
+	// Money actions + blocking are admin-only (backend enforces; UI hides for moderators).
+	const isAdmin = user?.role === 'admin';
 	const [section, setSection] = useState('dashboard');
 	const [sidebarOpen, setSidebarOpen] = useState(true);
 	const [loading, setLoading] = useState(true);
@@ -588,7 +594,7 @@ const ModerCabinet = () => {
 					</button>
 				</div>
 				<nav className='flex-1 py-2 overflow-y-auto'>
-					{SECTIONS.map(s => (
+					{SECTIONS.filter(s => isAdmin || !s.adminOnly).map(s => (
 						<button
 							key={s.id}
 							onClick={() => setSection(s.id)}
@@ -1209,7 +1215,7 @@ const ModerCabinet = () => {
 												<a href={'/deal/' + deal.id} target='_blank' rel='noopener noreferrer' className='bg-gray-100 dark:bg-slate-700 text-gray-700 dark:text-gray-300 px-4 py-2 rounded-xl text-sm font-semibold hover:bg-gray-200 dark:hover:bg-slate-600 duration-300 flex items-center gap-2'>
 													<FontAwesomeIcon icon={faArrowRight} /> Відкрити
 												</a>
-												{deal.status === 'disputed' && (
+												{isAdmin && deal.status === 'disputed' && (
 													<>
 														<button onClick={() => handleResolve(deal.id, 'refund_buyer')} className='bg-orange-500 text-white px-4 py-2 rounded-xl text-sm font-semibold hover:bg-orange-600 duration-300'>
 															Повернути покупцю
@@ -1219,7 +1225,7 @@ const ModerCabinet = () => {
 														</button>
 													</>
 												)}
-												{!isTerminal && (
+												{isAdmin && !isTerminal && (
 													<button onClick={() => handleCancelDeal(deal.id)} className='bg-red-500 text-white px-4 py-2 rounded-xl text-sm font-semibold hover:bg-red-600 duration-300 flex items-center gap-2'>
 														<FontAwesomeIcon icon={faBan} /> Скасувати
 													</button>
@@ -1264,6 +1270,7 @@ const ModerCabinet = () => {
 											<button onClick={() => setChatDealId(deal.id)} className='bg-[#3498db] text-white px-5 py-2.5 rounded-xl font-semibold hover:bg-[#2980b9] duration-300 shadow-sm flex items-center gap-2'>
 												<FontAwesomeIcon icon={faComments} /> Чат
 											</button>
+											{isAdmin && (<>
 											<button onClick={() => handleResolve(deal.id, 'refund_buyer')} className='bg-orange-500 text-white px-5 py-2.5 rounded-xl font-semibold hover:bg-orange-600 duration-300 shadow-sm'>
 												Повернути покупцю
 											</button>
@@ -1273,6 +1280,7 @@ const ModerCabinet = () => {
 											<button onClick={() => handleCancelDeal(deal.id)} className='bg-red-500 text-white px-5 py-2.5 rounded-xl font-semibold hover:bg-red-600 duration-300 shadow-sm flex items-center gap-2'>
 												<FontAwesomeIcon icon={faBan} /> Скасувати
 											</button>
+											</>)}
 										</div>
 									</div>
 								))}
@@ -1508,7 +1516,7 @@ const ModerCabinet = () => {
 												</div>
 												<p className='text-2xl font-bold text-green-600'>{w.balance_usdt.toFixed(2)} <span className='text-sm text-gray-400'>USDT</span></p>
 											</div>
-											<div className='lg:w-96 flex-shrink-0'>
+											{isAdmin && <div className='lg:w-96 flex-shrink-0'>
 												<label className='text-sm text-gray-500 dark:text-gray-400 font-medium mb-1.5 block'>Перевести на адресу (TRC-20)</label>
 												<div className='flex gap-2'>
 													<input type='text' value={sweepTarget[w.deal_id] || ''} onChange={e => setSweepTarget(prev => ({ ...prev, [w.deal_id]: e.target.value }))} placeholder='TRC-20 адреса...' className='flex-1 border border-gray-200 dark:border-slate-600 rounded-xl px-4 py-2.5 text-sm font-mono bg-white dark:bg-slate-700 text-gray-800 dark:text-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-300 focus:border-transparent' />
@@ -1523,7 +1531,7 @@ const ModerCabinet = () => {
 														{collecting[w.deal_id] ? '...' : 'Зібрати комісію на master'}
 													</button>
 												)}
-											</div>
+											</div>}
 										</div>
 									</div>
 								))}
@@ -1531,6 +1539,9 @@ const ModerCabinet = () => {
 						)}
 					</div>
 				)}
+
+				{isAdmin && section === 'users' && <UsersPanel />}
+				{isAdmin && section === 'audit' && <AuditLogPanel />}
 
 				{chatDealId && (
 					<DealChatModal dealId={chatDealId} userId={user?.id} onClose={() => setChatDealId(null)} />

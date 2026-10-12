@@ -4,6 +4,7 @@ from datetime import datetime, timedelta, timezone
 import os
 
 from fastapi import APIRouter, Body, Depends, HTTPException, Query, Response, status
+from pydantic import BaseModel, Field
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
@@ -16,7 +17,8 @@ from app.models.deal import Deal, DealStatus, Transaction, TransactionStatus, Tr
 from app.models.user import User, UserRole
 from app.schemas.channel import ChannelResponse, ChannelUpdate
 from app.schemas.deal import DealResolveRequest, DealResponse
-from app.utils.security import get_admin_user
+from app.services.moderation import audit
+from app.utils.security import get_admin_user, get_superadmin_user
 from app.utils.timeutil import utcnow_naive
 
 logger = logging.getLogger(__name__)
@@ -40,7 +42,9 @@ async def initial_admin_setup(
     if not user:
         raise HTTPException(status_code=404, detail="User not found. Login via Telegram first.")
 
+    prev_role = user.role.value
     user.role = UserRole.admin
+    audit(db, None, "admin.setup", "user", user.id, prev_role=prev_role, telegram_id=telegram_id)
     await db.commit()
     await db.refresh(user)
 
@@ -80,6 +84,7 @@ async def approve_channel(
         channel.status = ChannelStatus.approved
         channel.moderator_id = admin.id
         channel.moderated_at = datetime.utcnow()
+        audit(db, admin, "channel.approve", "channel", channel.id)
         await db.commit()
         await db.refresh(channel)
 
@@ -188,6 +193,7 @@ async def reject_channel(
         channel.moderator_id = admin.id
         channel.moderated_at = datetime.utcnow()
         channel.rejection_reason = reason
+        audit(db, admin, "channel.reject", "channel", channel.id, reason=reason)
         await db.commit()
         await db.refresh(channel)
         return ChannelResponse.model_validate(channel)
@@ -277,7 +283,7 @@ async def resolve_deal(
     deal_id: int,
     body: DealResolveRequest,
     response: Response,
-    admin: User = Depends(get_admin_user),
+    admin: User = Depends(get_superadmin_user),
     db: AsyncSession = Depends(get_db),
 ):
     """Resolve a disputed deal: on-chain refund to buyer or release to seller.
@@ -351,6 +357,8 @@ async def resolve_deal(
         db, deal, tx_type=tx_type, to_address=wallet, amount_units=units,
         restore_status=DealStatus.disputed,
     )
+    audit(db, admin, "deal.resolve", "deal", deal.id, resolution=body.resolution,
+          to_address=wallet, amount_units=units)
     await db.commit()  # claim + job visible — second double-click gets 409
     logger.info(f"[ADMIN] Deal #{deal.id}: CLAIMED + queued {body.resolution}")
     response.status_code = 202
@@ -371,7 +379,7 @@ _FUNDED_DEAL_STATUSES = (
 async def admin_cancel_deal(
     deal_id: int,
     response: Response,
-    admin: User = Depends(get_admin_user),
+    admin: User = Depends(get_superadmin_user),
     db: AsyncSession = Depends(get_db),
 ):
     """Admin cancel a deal. Paid/escrowed deals require on-chain refund (or refuse).
@@ -430,14 +438,18 @@ async def admin_cancel_deal(
             db, deal, tx_type=TransactionType.refund, to_address=wallet,
             amount_units=units, restore_status=prev_status,
         )
+        audit(db, admin, "deal.cancel_refund", "deal", deal.id, to_address=wallet,
+              amount_units=units, prev_status=prev_status.value)
         await db.commit()
         logger.info(f"[ADMIN] Deal #{deal.id}: cancel-with-refund queued")
         response.status_code = 202
         return _admin_deal_response(await _load_deal_full(db, deal_id))
 
+    prev = deal.status.value
     deal.status = DealStatus.cancelled
     if deal.channel:
         deal.channel.status = ChannelStatus.approved
+    audit(db, admin, "deal.cancel", "deal", deal.id, prev_status=prev)
     await db.commit()
     return _admin_deal_response(await _load_deal_full(db, deal_id))
 
@@ -446,7 +458,7 @@ async def admin_cancel_deal(
 async def collect_fee(
     deal_id: int,
     response: Response,
-    admin: User = Depends(get_admin_user),
+    admin: User = Depends(get_superadmin_user),
     db: AsyncSession = Depends(get_db),
 ):
     """Admin-manual: move exactly deal.service_fee USDT from a completed deal's escrow to master.
@@ -503,6 +515,7 @@ async def collect_fee(
         db, deal, tx_type=TransactionType.fee_collection, to_address=master,
         amount_units=units, restore_status=None,
     )
+    audit(db, admin, "deal.collect_fee", "deal", deal.id, to_address=master, amount_units=units)
     await db.commit()
     response.status_code = 202
     return {
@@ -524,7 +537,7 @@ def settings_master_wallet() -> str:
 async def set_user_role(
     user_id: int,
     role: str,
-    admin: User = Depends(get_admin_user),
+    admin: User = Depends(get_superadmin_user),
     db: AsyncSession = Depends(get_db),
 ):
     """Set user role (admin only). Only admins can assign roles."""
@@ -539,32 +552,240 @@ async def set_user_role(
     if not target:
         raise HTTPException(status_code=404, detail="Користувача не знайдено")
 
+    prev_role = target.role.value
     target.role = UserRole(role)
+    audit(db, admin, "user.role", "user", target.id, prev_role=prev_role, role=role)
     await db.commit()
     await db.refresh(target)
 
     return {"id": target.id, "username": target.username, "role": target.role.value}
 
 
+def _user_row(u: User) -> dict:
+    return {
+        "id": u.id,
+        "telegram_id": u.telegram_id,
+        "username": u.username,
+        "first_name": u.first_name,
+        "email": u.email,
+        "role": u.role.value,
+        "is_active": u.is_active,
+        "is_blocked": bool(u.is_blocked),
+        "blocked_reason": u.blocked_reason,
+        "blocked_at": u.blocked_at.isoformat() if u.blocked_at else None,
+        "blocked_by_id": u.blocked_by_id,
+        "created_at": u.created_at.isoformat() if u.created_at else None,
+    }
+
+
 @router.get("/users")
 async def list_users(
-    admin: User = Depends(get_admin_user),
+    q: str = Query("", max_length=100),
+    blocked: bool | None = None,
+    role: str | None = None,
+    page: int = Query(1, ge=1),
+    limit: int = Query(50, ge=1, le=200),
+    admin: User = Depends(get_superadmin_user),
     db: AsyncSession = Depends(get_db),
 ):
-    """List all users (admin/moderator only)."""
-    result = await db.execute(select(User).order_by(User.created_at.desc()))
-    users = result.scalars().all()
-    return [
-        {
-            "id": u.id,
-            "telegram_id": u.telegram_id,
-            "username": u.username,
-            "first_name": u.first_name,
-            "role": u.role.value,
-            "created_at": u.created_at.isoformat(),
-        }
-        for u in users
-    ]
+    """Search users (admin only)."""
+    from sqlalchemy import cast, or_, String as SAString
+
+    query = select(User)
+    q = q.strip().lstrip("@")
+    if q:
+        like = f"%{q}%"
+        conds = [User.username.ilike(like), User.first_name.ilike(like), User.email.ilike(like),
+                 cast(User.telegram_id, SAString).ilike(like)]
+        if q.isdigit():
+            conds.append(User.id == int(q))
+        query = query.where(or_(*conds))
+    if blocked is not None:
+        query = query.where(User.is_blocked.is_(blocked))
+    if role:
+        if role not in ("user", "moderator", "admin"):
+            raise HTTPException(status_code=400, detail="Невідома роль")
+        query = query.where(User.role == UserRole(role))
+    total = (await db.execute(select(func.count()).select_from(query.subquery()))).scalar() or 0
+    rows = (await db.execute(
+        query.order_by(User.created_at.desc(), User.id.desc()).offset((page - 1) * limit).limit(limit)
+    )).scalars().all()
+    return {"items": [_user_row(u) for u in rows], "total": total, "page": page, "limit": limit}
+
+
+@router.get("/users/{user_id}")
+async def get_user_detail(
+    user_id: int,
+    admin: User = Depends(get_superadmin_user),
+    db: AsyncSession = Depends(get_db),
+):
+    from app.services import moderation
+
+    target = await db.get(User, user_id)
+    if not target:
+        raise HTTPException(status_code=404, detail="Користувача не знайдено")
+    deals = await moderation.active_deals_of(db, target.id)
+    return {**_user_row(target), "active_deals": [moderation.deal_brief(d, target.id) for d in deals]}
+
+
+class BlockRequest(BaseModel):
+    reason: str = Field(..., min_length=3, max_length=1000)
+
+
+@router.post("/users/{user_id}/block")
+async def block_user(
+    user_id: int,
+    body: BlockRequest,
+    admin: User = Depends(get_superadmin_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Block a user. Never modifies deals: funded deals continue under admin control."""
+    from app.services import moderation
+
+    reason = body.reason.strip()
+    if len(reason) < 3:
+        raise HTTPException(status_code=400, detail="Вкажіть причину блокування")
+    target = (await db.execute(select(User).where(User.id == user_id).with_for_update())).scalar_one_or_none()
+    if not target:
+        raise HTTPException(status_code=404, detail="Користувача не знайдено")
+    if target.id == admin.id:
+        raise HTTPException(status_code=400, detail="Не можна заблокувати себе")
+    if target.role == UserRole.admin:
+        raise HTTPException(status_code=400, detail="Не можна заблокувати адміністратора — спершу змініть роль")
+    deals = await moderation.active_deals_of(db, target.id)
+    if not target.is_blocked:
+        target.is_blocked = True
+        target.blocked_reason = reason
+        target.blocked_at = utcnow_naive()
+        target.blocked_by_id = admin.id
+        audit(db, admin, "user.block", "user", target.id, reason=reason,
+              active_deals=[d.id for d in deals])
+        await db.commit()
+        await db.refresh(target)
+    briefs = [moderation.deal_brief(d, target.id) for d in deals]
+    pending = [b for b in briefs if b["needs_admin_decision"]]
+    if pending:
+        try:
+            from app.services.alerts import send_admin_alert, telegram_html_safe as _h
+
+            lines = "\n".join(f"• угода #{b['deal_id']} ({b['status']}, {b['amount_usdt']} USDT)" for b in pending)
+            await send_admin_alert(
+                f"⛔ <b>Користувача #{target.id} заблоковано</b> ({_h(target.username or target.first_name)})\n"
+                f"Оплачені угоди потребують рішення (allow / dispute):\n{lines}",
+                alert_key=f"user_blocked_{target.id}", throttle_minutes=1,
+            )
+        except Exception as e:  # pragma: no cover
+            logger.warning(f"[ADMIN] block alert failed: {e}")
+    return {
+        **_user_row(target),
+        "active_deals": briefs,
+        "escrow_total_usdt": round(sum(b["amount_usdt"] or 0 for b in briefs if b["funded"]), 6),
+    }
+
+
+@router.post("/users/{user_id}/unblock")
+async def unblock_user(
+    user_id: int,
+    admin: User = Depends(get_superadmin_user),
+    db: AsyncSession = Depends(get_db),
+):
+    target = (await db.execute(select(User).where(User.id == user_id).with_for_update())).scalar_one_or_none()
+    if not target:
+        raise HTTPException(status_code=404, detail="Користувача не знайдено")
+    if target.is_blocked:
+        prev_reason = target.blocked_reason
+        target.is_blocked = False
+        target.blocked_reason = None
+        target.blocked_at = None
+        target.blocked_by_id = None
+        audit(db, admin, "user.unblock", "user", target.id, prev_reason=prev_reason)
+        await db.commit()
+        await db.refresh(target)
+    return _user_row(target)
+
+
+class BlockedPartyRequest(BaseModel):
+    action: str = Field(..., pattern="^(allow|disallow|dispute)$")
+    note: str | None = Field(None, max_length=1000)
+
+
+@router.post("/deals/{deal_id}/blocked-party")
+async def deal_blocked_party(
+    deal_id: int,
+    body: BlockedPartyRequest,
+    admin: User = Depends(get_superadmin_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Decide what happens to a deal with a blocked party.
+
+    allow/disallow toggles the blocked party's ability to act on THIS deal.
+    dispute moves a funded deal into admin resolution (paid/channel_transferring/awaiting_payout
+    only). payout_in_progress or any open outgoing tx → 409 (never interrupted).
+    """
+    from app.services import payouts
+
+    deal = (await db.execute(select(Deal).where(Deal.id == deal_id).with_for_update())).scalar_one_or_none()
+    if not deal:
+        raise HTTPException(status_code=404, detail="Deal not found")
+    if body.action in ("allow", "disallow"):
+        deal.blocked_party_allowed = body.action == "allow"
+    else:
+        if deal.status == DealStatus.payout_in_progress:
+            raise HTTPException(status_code=409, detail="Виплата в процесі — не можна переводити у спір")
+        if await payouts.open_outgoing_tx(db, deal.id) is not None:
+            raise HTTPException(status_code=409, detail="Є відкрита вихідна транзакція — не можна переводити у спір")
+        allowed = (DealStatus.paid, DealStatus.channel_transferring, DealStatus.awaiting_payout)
+        if deal.status not in allowed:
+            raise HTTPException(status_code=409, detail=f"Спір можливий лише з {', '.join(s.value for s in allowed)}")
+        prev = deal.status.value
+        deal.status = DealStatus.disputed
+        deal.dispute_reason = (body.note or "Адмін: заблокований учасник угоди")[:1000]
+    audit(db, admin, f"deal.blocked_party.{body.action}", "deal", deal.id,
+          status=deal.status.value, note=body.note)
+    await db.commit()
+    return {"deal_id": deal.id, "status": deal.status.value,
+            "blocked_party_allowed": bool(deal.blocked_party_allowed)}
+
+
+@router.get("/audit-log")
+async def get_audit_log(
+    action: str | None = None,
+    target_type: str | None = None,
+    target_id: int | None = None,
+    actor_id: int | None = None,
+    page: int = Query(1, ge=1),
+    limit: int = Query(50, ge=1, le=200),
+    admin: User = Depends(get_superadmin_user),
+    db: AsyncSession = Depends(get_db),
+):
+    from app.models.user import AdminAuditLog
+
+    query = select(AdminAuditLog)
+    if action:
+        query = query.where(AdminAuditLog.action.ilike(f"{action}%"))
+    if target_type:
+        query = query.where(AdminAuditLog.target_type == target_type)
+    if target_id is not None:
+        query = query.where(AdminAuditLog.target_id == target_id)
+    if actor_id is not None:
+        query = query.where(AdminAuditLog.actor_id == actor_id)
+    total = (await db.execute(select(func.count()).select_from(query.subquery()))).scalar() or 0
+    rows = (await db.execute(
+        query.order_by(AdminAuditLog.id.desc()).offset((page - 1) * limit).limit(limit)
+    )).scalars().all()
+    actor_ids = {r.actor_id for r in rows if r.actor_id}
+    names = {}
+    if actor_ids:
+        for u in (await db.execute(select(User).where(User.id.in_(actor_ids)))).scalars():
+            names[u.id] = u.username or u.first_name
+    return {
+        "items": [{
+            "id": r.id, "actor_id": r.actor_id, "actor": names.get(r.actor_id),
+            "action": r.action, "target_type": r.target_type, "target_id": r.target_id,
+            "details": r.details, "created_at": r.created_at.isoformat() if r.created_at else None,
+        } for r in rows],
+        "total": total, "page": page, "limit": limit,
+    }
 
 
 @router.get("/channels", response_model=list[ChannelResponse])
@@ -759,7 +980,7 @@ async def sweep_escrow_wallet(
     deal_id: int,
     response: Response,
     to_address: str = Body(..., embed=True),
-    admin: User = Depends(get_admin_user),
+    admin: User = Depends(get_superadmin_user),
     db: AsyncSession = Depends(get_db),
 ):
     """Admin-manual: sweep stray USDT from a CANCELLED deal's escrow to a validated address.
@@ -811,6 +1032,7 @@ async def sweep_escrow_wallet(
         db, deal, tx_type=TransactionType.sweep, to_address=to_address,
         amount_units=units, restore_status=None,
     )
+    audit(db, admin, "escrow.sweep", "deal", deal.id, to_address=to_address, amount_units=units)
     await db.commit()
     response.status_code = 202
     return {
@@ -1689,6 +1911,7 @@ async def approve_bundle(
     bundle.status = BundleStatus.approved
     bundle.moderator_id = admin.id
     bundle.moderated_at = datetime.utcnow()
+    audit(db, admin, "bundle.approve", "bundle", bundle.id)
     await db.commit()
     await db.refresh(bundle)
 
@@ -1730,6 +1953,7 @@ async def reject_bundle(
     bundle.moderator_id = admin.id
     bundle.moderated_at = datetime.utcnow()
     bundle.rejection_reason = reason
+    audit(db, admin, "bundle.reject", "bundle", bundle.id, reason=reason)
     await db.commit()
 
     # Notify seller

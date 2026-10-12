@@ -61,6 +61,8 @@ class Deal(Base):
     seller_confirmed_transfer: Mapped[bool] = mapped_column(Boolean, default=False)
     seller_payout_address: Mapped[str | None] = mapped_column(String(100), nullable=True)
     payout_tx_hash: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    # Admin: a blocked buyer/seller may still act on THIS deal (migration 0027).
+    blocked_party_allowed: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false")
 
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
     paid_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)

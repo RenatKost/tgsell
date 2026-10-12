@@ -136,7 +136,7 @@ _ISOLATED_PREFIXES = (
     "app.database", "app.models", "app.routers", "app.tasks", "bot.",
     "app.services.deal_checklist", "app.services.deal_lifecycle",
     "app.services.payment_deadlines", "app.services.checklist_autoverify",
-    "app.services.payouts", "app.tasks.payout_worker",
+    "app.services.payouts", "app.tasks.payout_worker", "app.services.moderation",
     "app.utils.security",
 )
 

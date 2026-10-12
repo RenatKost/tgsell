@@ -20,6 +20,7 @@ from app.schemas.channel import (
     ChannelStatsResponse,
     ChannelUpdate,
 )
+from app.services.moderation import not_blocked_seller
 from app.utils.security import get_current_user
 from app.utils.timeutil import to_naive_utc, utcnow_naive
 
@@ -90,6 +91,7 @@ async def list_channels(
         bundled_ids_subq = select(BundleChannel.channel_id).scalar_subquery()
         query = query.where(Channel.status == ChannelStatus.approved)
         query = query.where(~Channel.id.in_(bundled_ids_subq))
+        query = query.where(not_blocked_seller(Channel.seller_id))
 
     if search:
         query = query.where(Channel.channel_name.ilike(f"%{search}%"))
@@ -162,7 +164,9 @@ async def list_channels(
 async def get_channel(channel_id: int, db: AsyncSession = Depends(get_db)):
     """Get channel details by ID. Includes active auction data if present."""
     from app.models.auction import Auction, AuctionStatus
-    result = await db.execute(select(Channel).where(Channel.id == channel_id))
+    result = await db.execute(
+        select(Channel).where(Channel.id == channel_id).where(not_blocked_seller(Channel.seller_id))
+    )
     channel = result.scalar_one_or_none()
     if not channel:
         raise HTTPException(status_code=404, detail="Channel not found")

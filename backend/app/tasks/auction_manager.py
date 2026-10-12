@@ -22,6 +22,32 @@ from app.utils.timeutil import utcnow_naive
 logger = logging.getLogger(__name__)
 
 
+async def _blocked_party(db: AsyncSession, auction: Auction) -> User | None:
+    """Return the blocked seller/winner of an auction (auction is frozen), else None."""
+    for uid in (auction.seller_id, auction.winner_id):
+        if uid is None:
+            continue
+        u = await db.get(User, uid)
+        if u is not None and u.is_blocked:
+            return u
+    return None
+
+
+async def _alert_frozen(auction: Auction, blocked: User) -> None:
+    try:
+        from app.services.alerts import send_admin_alert
+
+        await send_admin_alert(
+            f"🧊 <b>Аукціон #{auction.id} заморожено</b>\n"
+            f"Заблокований учасник: {telegram_html_safe(blocked.first_name)} (id={blocked.id})\n"
+            f"Фіналізацію пропущено до розблокування.",
+            alert_key=f"auction_frozen_{auction.id}",
+            throttle_minutes=360,
+        )
+    except Exception as e:  # pragma: no cover
+        logger.warning(f"[AUCTION] frozen alert failed: {e}")
+
+
 async def _create_deal_for_auction(db: AsyncSession, auction: Auction) -> Deal | None:
     """Create a deal + escrow wallet for a finished auction with a winner."""
     wallet_address, encrypted_private_key = generate_escrow_wallet()
@@ -164,6 +190,11 @@ async def _process_auctions(db: AsyncSession):
         select(Auction).where(Auction.status == "active", Auction.ends_at <= now)
     )
     for auction in result.scalars().all():
+        blocked = await _blocked_party(db, auction)
+        if blocked is not None:
+            logger.info(f"Auction #{auction.id} frozen: user #{blocked.id} is blocked")
+            await _alert_frozen(auction, blocked)
+            continue
         auction.status = "ended"
         logger.info(f"Auction #{auction.id} ended (channel #{auction.channel_id})")
         await _finalize_auction(db, auction)
@@ -185,6 +216,11 @@ async def _process_auctions(db: AsyncSession):
             )
         )).scalar_one_or_none()
         if not existing_deal:
+            blocked = await _blocked_party(db, auction)
+            if blocked is not None:
+                logger.info(f"Auction #{auction.id} finalize skipped: user #{blocked.id} is blocked")
+                await _alert_frozen(auction, blocked)
+                continue
             logger.info(f"Auction #{auction.id} was buyout — creating deal now")
             await _finalize_auction(db, auction)
 

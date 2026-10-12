@@ -19,6 +19,7 @@ from app.schemas.bundle import (
     BundleUpdate,
     BundleChannelInfo,
 )
+from app.services.moderation import not_blocked_seller
 from app.utils.security import get_current_user
 from app.utils.timeutil import to_naive_utc, utcnow_naive
 from app.utils.avatars import public_channel_avatar_url
@@ -91,6 +92,7 @@ async def list_bundles(
         query = query.where(ChannelBundle.seller_id == seller_id)
     else:
         query = query.where(ChannelBundle.status == BundleStatus.approved)
+        query = query.where(not_blocked_seller(ChannelBundle.seller_id))
 
     if category:
         query = query.where(ChannelBundle.category == category)
@@ -129,6 +131,7 @@ async def get_bundle(
             selectinload(ChannelBundle.bundle_channels).selectinload(BundleChannel.channel)
         )
         .where(ChannelBundle.id == bundle_id)
+        .where(not_blocked_seller(ChannelBundle.seller_id))
     )
     bundle = result.scalar_one_or_none()
     if not bundle:
