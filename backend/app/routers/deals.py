@@ -656,12 +656,7 @@ async def set_seller_wallet(
     Money-safety: claim the deal row (FOR UPDATE → payout_in_progress + commit)
     BEFORE any on-chain broadcast so a parallel request cannot double-pay.
     """
-    import asyncio
-    from app.services.escrow import send_trx_for_gas, transfer_usdt, sweep_trx_to_master
-
-    wallet = body.wallet_address.strip()
-    if not wallet or len(wallet) < 20:
-        raise HTTPException(status_code=400, detail="Invalid wallet address")
+    from app.services import payouts
 
     # 1) Lock deal row — second concurrent request waits here.
     result = await db.execute(
@@ -673,29 +668,41 @@ async def set_seller_wallet(
     if deal.seller_id != user.id:
         raise HTTPException(status_code=403, detail="Only seller can provide wallet")
 
-    # 2) Idempotency: already paid — do not send again.
-    if has_payout_tx(deal):
-        await db.commit()  # release lock
+    async def _respond():
         result = await db.execute(
             select(Deal)
             .options(selectinload(Deal.channel), selectinload(Deal.buyer), selectinload(Deal.seller))
             .where(Deal.id == deal_id)
+            .execution_options(populate_existing=True)
         )
-        deal = result.scalar_one()
-        return _deal_to_response(deal, deal.channel, deal.buyer, deal.seller)
+        d = result.scalar_one()
+        return _deal_to_response(d, d.channel, d.buyer, d.seller)
 
-    # 3) Atomic claim: status must still be awaiting_payout.
+    # 2) Idempotency: already paid — do not send again.
+    if has_payout_tx(deal):
+        await db.commit()  # release lock
+        return await _respond()
+
+    # Real base58check address; never master or any escrow.
     try:
-        claim_deal_for_transfer(deal, expected_status=DealStatus.awaiting_payout)
+        wallet = await payouts.validate_destination(db, body.wallet_address)
+    except payouts.PayoutError as e:
+        await db.rollback()
+        raise HTTPException(status_code=e.http_status, detail=e.message)
+
+    # 3) Atomic claim: status must still be awaiting_payout, no unresolved outgoing tx.
+    try:
+        await payouts.claim_for_payout(db, deal, expected_status=DealStatus.awaiting_payout)
     except PayoutClaimError as e:
         await db.rollback()
         raise HTTPException(status_code=e.http_status, detail=e.message)
 
     deal.seller_payout_address = wallet
-    payout_amount = deal.amount_usdt - deal.service_fee
+    units = payouts.release_units(deal)
+    payout_amount = payouts.units_to_usdt(units)
     logger.info(
         f"[PAYOUT] Deal #{deal.id}: CLAIMED payout_in_progress, wallet={wallet}, "
-        f"payout_amount={payout_amount:.2f} USDT"
+        f"payout_amount={payout_amount} USDT"
     )
     await _add_system_message(
         db, deal.id, user.id, "Продавець вказав гаманець. Виконуємо переказ..."
@@ -703,106 +710,23 @@ async def set_seller_wallet(
     # Commit claim FIRST so the second request no longer sees awaiting_payout.
     await db.commit()
 
-    # 4) On-chain work AFTER claim (sleep/gas must not leave a second claim window).
-    tx_hash = None
-    try:
-        logger.info(f"[PAYOUT] Deal #{deal.id}: sending TRX for gas to escrow {deal.escrow_wallet_address}")
-        gas_tx = send_trx_for_gas(deal.escrow_wallet_address, amount_trx=7)
-        logger.info(f"[PAYOUT] Deal #{deal.id}: TRX gas tx={gas_tx or 'FAILED'}")
-        if gas_tx:
-            await asyncio.sleep(6)
-
-        for attempt in range(2):
-            logger.info(
-                f"[PAYOUT] Deal #{deal.id}: USDT transfer attempt {attempt+1}/2 — "
-                f"{payout_amount:.2f} USDT → {wallet}"
-            )
-            tx_hash = transfer_usdt(deal.escrow_private_key_encrypted, wallet, payout_amount)
-            if tx_hash:
-                logger.info(f"[PAYOUT] Deal #{deal.id}: USDT transfer SUCCESS, tx={tx_hash}")
-                break
-            logger.warning(f"[PAYOUT] Deal #{deal.id}: USDT transfer attempt {attempt+1} FAILED")
-            if attempt == 0:
-                await asyncio.sleep(10)
-
-        if tx_hash:
-            mark_deal_completed(deal, tx_hash)
-            db.add(Transaction(
-                deal_id=deal.id,
-                tx_hash=tx_hash,
-                from_address=deal.escrow_wallet_address,
-                to_address=wallet,
-                amount=payout_amount,
-                type=TransactionType.release,
-                status=TransactionStatus.confirmed,
-            ))
-            logger.info(
-                f"[PAYOUT] Deal #{deal.id}: STATUS → completed, "
-                f"payout={payout_amount:.2f} USDT, tx={tx_hash}"
-            )
-            await _add_system_message(
-                db, deal.id, user.id,
-                f"Виплата {payout_amount:.2f} USDT відправлена!\nTX: {tx_hash}",
-            )
-            try:
-                await asyncio.sleep(6)
-                sweep_tx = sweep_trx_to_master(deal.escrow_private_key_encrypted)
-                logger.info(f"[PAYOUT] Deal #{deal.id}: TRX sweep-back tx={sweep_tx or 'nothing to sweep'}")
-            except Exception as sweep_err:
-                logger.warning(f"[PAYOUT] Deal #{deal.id}: TRX sweep-back failed (non-critical): {sweep_err}")
-        else:
-            release_payout_claim(deal, restore_status=DealStatus.awaiting_payout)
-            db.add(Transaction(
-                deal_id=deal.id,
-                from_address=deal.escrow_wallet_address,
-                to_address=wallet,
-                amount=payout_amount,
-                type=TransactionType.release,
-                status=TransactionStatus.failed,
-            ))
-            logger.error(
-                f"[PAYOUT] Deal #{deal.id}: PAYOUT FAILED after 2 attempts, "
-                f"STATUS → awaiting_payout (claim released)"
-            )
-            await _add_system_message(
-                db, deal.id, user.id,
-                "Автоматична виплата не вдалася. Спробуйте ще раз або зверніться до адміністратора.",
-            )
-            try:
-                from app.services.alerts import send_admin_alert
-                await send_admin_alert(
-                    f"🔴 <b>Payout FAILED</b> — deal #{deal.id}\n"
-                    f"Статус повернуто до awaiting_payout. Повторний send НЕ виконувався.",
-                    alert_key=f"payout_fail_{deal.id}",
-                    throttle_minutes=5,
-                )
-            except Exception as alert_err:
-                logger.warning(f"[PAYOUT] Deal #{deal.id}: admin alert failed: {alert_err}")
-    except Exception as e:
-        logger.error(f"[PAYOUT] Deal #{deal.id}: EXCEPTION during payout: {e}", exc_info=True)
-        release_payout_claim(deal, restore_status=DealStatus.awaiting_payout)
-        await _add_system_message(
-            db, deal.id, user.id,
-            "Помилка виплати. Статус повернуто — можна повторити або викликати адміна.",
-        )
-        try:
-            from app.services.alerts import send_admin_alert
-            await send_admin_alert(
-                f"🔴 <b>Payout EXCEPTION</b> — deal #{deal.id}\n<code>{e}</code>",
-                alert_key=f"payout_exc_{deal.id}",
-                throttle_minutes=5,
-            )
-        except Exception as alert_err:
-            logger.warning(f"[PAYOUT] Deal #{deal.id}: admin alert failed: {alert_err}")
-
-    await db.commit()
-    result = await db.execute(
-        select(Deal)
-        .options(selectinload(Deal.channel), selectinload(Deal.buyer), selectinload(Deal.seller))
-        .where(Deal.id == deal_id)
+    # 4) On-chain work AFTER claim — unified, receipt-checked payout.
+    outcome = await payouts.execute_transfer(
+        db, deal, tx_type=TransactionType.release, to_address=wallet, amount_units=units,
+        restore_status=DealStatus.awaiting_payout,
     )
-    deal = result.scalar_one()
-    return _deal_to_response(deal, deal.channel, deal.buyer, deal.seller)
+    if outcome.status == "success":
+        text = f"Виплата {payout_amount} USDT відправлена!\nTX: {outcome.tx_hash}"
+    elif outcome.status == "pending":
+        text = (
+            f"Транзакцію виплати відправлено, очікуємо підтвердження мережі.\nTX: {outcome.tx_hash}"
+        )
+    else:
+        text = "Автоматична виплата не вдалася. Спробуйте ще раз або зверніться до адміністратора."
+    logger.info(f"[PAYOUT] Deal #{deal.id}: payout outcome={outcome}")
+    await _add_system_message(db, deal.id, user.id, text)
+    await db.commit()
+    return await _respond()
 
 
 @router.post("/{deal_id}/call-admin", response_model=DealMessageResponse)

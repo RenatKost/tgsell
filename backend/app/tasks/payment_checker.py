@@ -94,6 +94,16 @@ async def check_payments_once(now: datetime | None = None) -> None:
                 logger.error(f"[PAYMENT] Deal #{deal_id}: ERROR checking payment: {e}", exc_info=True)
                 await db.rollback()
 
+    # Outgoing escrow transfers left PENDING (no receipt yet / restart): finalize by
+    # receipt only — never resends (audit task 12).
+    try:
+        from app.services.payouts import reconcile_pending_transfers
+
+        async with async_session() as db:
+            await reconcile_pending_transfers(db, now or utcnow_naive())
+    except Exception as e:
+        logger.error(f"[PAYMENT] payout reconcile failed: {e}", exc_info=True)
+
     if (_cycle - 1) % max(1, LATE_PAYMENT_CHECK_EVERY_N_CYCLES) == 0:
         try:
             await check_late_payments_once(now or utcnow_naive())
