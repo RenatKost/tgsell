@@ -287,7 +287,11 @@ MIN_FEE_LIMIT_SUN = 30 * SUN_PER_TRX
 MASTER_TRANSFER_RESERVE_SUN = int(1.5 * SUN_PER_TRX)
 RECEIPT_TIMEOUT_SEC = 60
 RECEIPT_POLL_SEC = 3
-GAS_CONFIRM_TIMEOUT_SEC = 30
+GAS_CONFIRM_TIMEOUT_SEC = 60
+# Re-check of a previous attempt's top-up on retry (worker cycle), seconds.
+GAS_RECHECK_TIMEOUT_SEC = 15
+# Backoff between gas-confirmation polls (seconds); last value repeats.
+GAS_WAIT_BACKOFF = (1, 2, 3, 5, 8, 10)
 
 
 def _api(client: Tron, method: str, params: dict | None = None) -> dict:
@@ -385,7 +389,7 @@ def wait_for_receipt(client: Tron, txid: str, timeout: float = RECEIPT_TIMEOUT_S
             if rres == "SUCCESS":
                 return {"status": "SUCCESS", "reason": None, "info": info}
             # TRX transfers have no receipt.result; contract calls always do.
-            if rres is None and info.get("result") != "FAILED" and not info.get("contractResult"):
+            if rres is None and info.get("result") != "FAILED" and not any(info.get("contractResult") or []):
                 return {"status": "SUCCESS", "reason": None, "info": info}
             reason = rres or info.get("result") or "FAILED"
             msg = info.get("resMessage")
@@ -429,10 +433,57 @@ def fetch_usdt_balance_units(wallet_address: str) -> int:
 class EscrowTransferRefused(Exception):
     """Transfer was not prepared — NOTHING broadcast (USDT). reason is a short code."""
 
-    def __init__(self, reason: str, message: str):
+    def __init__(self, reason: str, message: str, *, retryable: bool = False, gas_tx: str | None = None):
         super().__init__(message)
         self.reason = reason
         self.message = message
+        # retryable=True: NOTHING USDT-related sent and TRX (if any) left on escrow on purpose —
+        # the job stays queued and is retried later without sweeping.
+        self.retryable = retryable
+        self.gas_tx = gas_tx
+
+
+def _trx_sun_or_none(client, address: str) -> int | None:
+    try:
+        return int(_account_balance_sun(client, address))
+    except Exception as e:
+        logger.warning(f"[ESCROW] TRX balance UNKNOWN for {address}: {e}")
+        return None
+
+
+def wait_gas_topup(client, gas_tx: str, address: str, required_sun: int, timeout: float = None,
+                   sleep=time.sleep) -> dict:
+    """Wait until the escrow can pay gas: escrow TRX ≥ required (authoritative) or the
+    top-up receipt is SUCCESS. Polls with backoff up to ``timeout`` seconds.
+
+    Returns {status: SUCCESS|FAILED|PENDING, reason, balance_sun}. FAILED only when the
+    top-up receipt is definitively FAILED and the balance is still short.
+    Blocking — runs inside asyncio.to_thread (prepare_usdt_transfer).
+    """
+    timeout = GAS_CONFIRM_TIMEOUT_SEC if timeout is None else timeout
+    deadline = time.monotonic() + timeout
+    i = 0
+    last = {"status": "PENDING", "reason": "not confirmed yet"}
+    while True:
+        bal = _trx_sun_or_none(client, address)
+        if bal is not None and bal >= required_sun:
+            return {"status": "SUCCESS", "reason": None, "balance_sun": bal}
+        if gas_tx:
+            try:
+                last = wait_for_receipt(client, gas_tx, timeout=0)
+            except Exception as e:  # pragma: no cover - wait_for_receipt already swallows
+                last = {"status": "PENDING", "reason": str(e)}
+            if last["status"] == "SUCCESS" and bal is None:
+                return {"status": "SUCCESS", "reason": None, "balance_sun": None}
+            if last["status"] == "FAILED" and bal is not None:
+                return {"status": "FAILED", "reason": last.get("reason"), "balance_sun": bal}
+        remaining = deadline - time.monotonic()
+        if remaining <= 0:
+            return {"status": "PENDING", "balance_sun": bal,
+                    "reason": f"escrow TRX {None if bal is None else bal / SUN_PER_TRX} < "
+                              f"{required_sun / SUN_PER_TRX} after {int(timeout)}s; receipt {last['status']}"}
+        sleep(min(GAS_WAIT_BACKOFF[min(i, len(GAS_WAIT_BACKOFF) - 1)], max(remaining, 0.01)))
+        i += 1
 
 
 def prepare_usdt_transfer(
@@ -441,6 +492,7 @@ def prepare_usdt_transfer(
     amount_units: int,
     *,
     allow_master: bool = False,
+    prior_gas_tx: str | None = None,
 ) -> dict:
     """Estimate gas, top up escrow TRX (difference only), build + sign the USDT transfer.
 
@@ -469,8 +521,27 @@ def prepare_usdt_transfer(
         raise EscrowTransferRefused("SELF_DESTINATION", "Адреса отримувача = сам escrow-гаманець")
 
     est = estimate_usdt_transfer_cost_sun(from_address, to_address, amount_units, client)
-    escrow_bal = _account_balance_sun(client, from_address)
-    topup = max(0, est["required_sun"] - escrow_bal)
+    required = int(est["required_sun"])
+    escrow_bal = _trx_sun_or_none(client, from_address)
+    if escrow_bal is None:  # unknown ≠ 0: never top up blindly
+        raise EscrowTransferRefused("ESCROW_TRX_UNKNOWN", f"Баланс TRX escrow {from_address} невідомий — повтор пізніше",
+                                    retryable=True, gas_tx=prior_gas_tx)
+    if escrow_bal < required and prior_gas_tx:
+        # A previous attempt already topped up — wait for it instead of sending TRX again.
+        prev = wait_gas_topup(client, prior_gas_tx, from_address, required, timeout=GAS_RECHECK_TIMEOUT_SEC)
+        if prev["status"] == "PENDING":
+            raise EscrowTransferRefused(
+                "GAS_TOPUP_UNCONFIRMED",
+                f"Попереднє газ-поповнення ще не підтверджене (tx {prior_gas_tx}); повтор пізніше без нового поповнення",
+                retryable=True, gas_tx=prior_gas_tx)
+        escrow_bal = _trx_sun_or_none(client, from_address) if prev.get("balance_sun") is None else prev["balance_sun"]
+        if escrow_bal is None:
+            if prev["status"] == "SUCCESS":
+                escrow_bal = required  # confirmed top-up, balance just not readable
+            else:
+                raise EscrowTransferRefused("ESCROW_TRX_UNKNOWN", f"Баланс TRX escrow {from_address} невідомий",
+                                            retryable=True, gas_tx=prior_gas_tx)
+    topup = max(0, required - escrow_bal)
     logger.info(
         f"[ESCROW] prepare {amount_units} units {from_address}→{to_address}: est={est}, "
         f"escrow TRX={escrow_bal / SUN_PER_TRX:.6f}, top-up={topup / SUN_PER_TRX:.6f}"
@@ -493,11 +564,13 @@ def prepare_usdt_transfer(
         except Exception as e:
             raise EscrowTransferRefused("GAS_TOPUP_FAILED", f"Газ-поповнення не вдалося: {e}") from e
         logger.info(f"[ESCROW] gas top-up {topup / SUN_PER_TRX:.6f} TRX tx={gas_tx}")
-        gas_r = wait_for_receipt(client, gas_tx, timeout=GAS_CONFIRM_TIMEOUT_SEC)
+        gas_r = wait_gas_topup(client, gas_tx, from_address, required, timeout=GAS_CONFIRM_TIMEOUT_SEC)
         if gas_r["status"] != "SUCCESS":
+            # TRX stays on escrow (no sweep); retried later and reused (no second top-up).
             raise EscrowTransferRefused(
                 "GAS_TOPUP_UNCONFIRMED",
                 f"Газ-поповнення escrow не підтвердилось: {gas_r['reason']} (tx {gas_tx})",
+                retryable=True, gas_tx=gas_tx,
             )
 
     contract = _get_usdt_contract()

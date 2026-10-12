@@ -57,6 +57,9 @@ PENDING_STALE_AFTER = timedelta(minutes=10)
 # tx_hash belong to an in-flight synchronous attempt of the previous release (deploy
 # overlap) and are never picked up by the worker.
 QUEUED = "QUEUED"
+# Retryable gas problems (top-up not yet confirmed / escrow TRX unknown): job stays queued,
+# TRX stays on escrow (no sweep). After this many attempts the job fails (still no sweep).
+MAX_GAS_ATTEMPTS = 60
 
 # Dedup for "stuck payout_in_progress without a tracked tx" alerts (per process).
 _stuck_alerted: set[int] = set()
@@ -347,7 +350,35 @@ async def process_queued(db, tx_id: int, *, receipt_timeout: float | None = None
     to_address = tx.to_address
     amount_units = int(tx.amount_units or to_units(tx.amount))
     allow_master = tx_type == TransactionType.fee_collection
+    prior_gas_tx = tx.gas_tx_hash
     await db.commit()  # release row lock during network calls
+
+    async def defer(code: str, msg: str, gas_tx: str | None) -> TransferOutcome:
+        """Retryable gas problem: nothing USDT sent, keep TRX on escrow, keep job queued."""
+        d = await _lock_deal(db, deal_id)
+        t = await db.get(Transaction, tx_id, populate_existing=True)
+        t.gas_tx_hash = gas_tx or t.gas_tx_hash
+        t.gas_attempts = int(t.gas_attempts or 0) + 1
+        if t.gas_attempts >= MAX_GAS_ATTEMPTS:
+            await _finalize_failure(db, d, t, code)
+            t.receipt_reason = f"{msg} (спроб: {t.gas_attempts})"
+            await db.commit()
+            await _alert(
+                f"🔴 <b>Escrow {tx_type.value} NOT SENT</b> — deal #{deal_id}\n{_e(msg)}\n"
+                f"Спроб: {t.gas_attempts}. TRX лишився на escrow (sweep не виконано).",
+                f"payout_gas_giveup_{tx_id}",
+            )
+            return TransferOutcome("refused", None, msg, code, tx_id)
+        t.receipt_status = QUEUED
+        t.receipt_reason = msg
+        await db.commit()
+        logger.warning(f"[PAYOUT] Deal #{deal_id}: {tx_type.value} deferred ({code}, attempt {t.gas_attempts}): {msg}")
+        await _alert(
+            f"⏳ <b>Escrow {tx_type.value} відкладено</b> — deal #{deal_id}\n{_e(msg)}\n"
+            f"TRX лишається на escrow; worker повторить автоматично без нового поповнення.",
+            f"payout_gas_defer_{tx_id}",
+        )
+        return TransferOutcome("pending", None, "Газ ще підтверджується — виплату буде повторено автоматично.", code, tx_id)
 
     async def refuse(code: str, msg: str, *, sweep: bool = False) -> TransferOutcome:
         d = await _lock_deal(db, deal_id)
@@ -377,11 +408,17 @@ async def process_queued(db, tx_id: int, *, receipt_timeout: float | None = None
         )
 
     try:
+        kw = {"allow_master": allow_master}
+        if prior_gas_tx:
+            kw["prior_gas_tx"] = prior_gas_tx
         prepared = await asyncio.to_thread(
             escrow_svc.prepare_usdt_transfer, deal.escrow_private_key_encrypted, to_address,
-            amount_units, allow_master=allow_master,
+            amount_units, **kw,
         )
     except Exception as e:
+        if getattr(e, "retryable", False):
+            return await defer(getattr(e, "reason", "GAS_RETRY"), getattr(e, "message", str(e)),
+                               getattr(e, "gas_tx", None))
         reason = getattr(e, "reason", "PREPARE_ERROR")
         msg = getattr(e, "message", None) or f"Підготовка переказу не вдалася: {e}"
         return await refuse(reason, msg, sweep=True)
@@ -389,6 +426,8 @@ async def process_queued(db, tx_id: int, *, receipt_timeout: float | None = None
     # txid is known before broadcast → persist it first.
     t = await db.get(Transaction, tx_id, populate_existing=True)
     t.tx_hash = prepared["txid"]
+    if prepared.get("gas_tx"):
+        t.gas_tx_hash = prepared["gas_tx"]
     t.fee_limit_sun = prepared.get("fee_limit_sun")
     t.broadcast_at = utcnow_naive()
     await db.commit()
