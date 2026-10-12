@@ -65,11 +65,17 @@ class FakeTron:
             raise BalanceUnavailable(str(v))
         return int(v)
 
-    def prepare(self, enc, to, units, allow_master=False):
+    def prepare(self, enc, to, units, allow_master=False, prior_gas_tx=None):
+        self.prior_gas_txs = getattr(self, "prior_gas_txs", []) + [prior_gas_tx]
         if self.prepare_delay:
             time.sleep(self.prepare_delay)
         if self.prepare_raises is not None:
-            raise self.prepare_raises
+            e = self.prepare_raises
+            if isinstance(e, list):
+                if e:
+                    raise e.pop(0)
+            else:
+                raise e
         with self._lock:
             self.prepared.append((enc, to, units, allow_master))
             txid = f"txid{len(self.prepared)}"

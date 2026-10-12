@@ -129,6 +129,9 @@ class Transaction(Base):
     fee_limit_sun: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
     broadcast_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     finalized_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    # Gas top-up already sent for this job (reused on retry, never topped up twice) + retry count.
+    gas_tx_hash: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    gas_attempts: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
 
     deal = relationship("Deal", back_populates="transactions")
 
