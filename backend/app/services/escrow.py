@@ -183,6 +183,27 @@ def get_trx_balance(wallet_address: str) -> float | None:
     return sun / SUN_PER_TRX
 
 
+def get_account_resources(address: str) -> dict | None:
+    """TRX balance + available energy/bandwidth of an account; None when unknown."""
+    if not address:
+        return None
+    try:
+        client = _get_tron_client()
+        trx_sun = _account_balance_sun(client, address)
+        res = _api(client, "wallet/getaccountresource", {"address": address, "visible": True})
+        energy = max(0, int(res.get("EnergyLimit", 0) or 0) - int(res.get("EnergyUsed", 0) or 0))
+        bandwidth = (
+            max(0, int(res.get("freeNetLimit", 0) or 0) - int(res.get("freeNetUsed", 0) or 0))
+            + max(0, int(res.get("NetLimit", 0) or 0) - int(res.get("NetUsed", 0) or 0))
+        )
+        fee = get_energy_fee_sun(client)
+    except Exception as e:
+        logger.error(f"[ESCROW] account resources UNKNOWN for {address}: {e}")
+        return None
+    return {"trx_sun": trx_sun, "energy_available": energy, "bandwidth_available": bandwidth,
+            "energy_fee_sun": fee}
+
+
 def check_gas_funding(escrow_address: str, to_address: str, amount_units: int) -> dict:
     """Pre-claim check: can master cover the gas top-up for this transfer? Never raises.
 

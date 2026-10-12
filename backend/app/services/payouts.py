@@ -249,6 +249,22 @@ async def _apply_receipt(db, deal_id: int, tx_id: int, receipt: dict) -> Transfe
 
 # ── pre-claim gas funding check ─────────────────────────────────────────
 
+# Refused prechecks (timestamps, this process) — shown in gas alerts/summary.
+_precheck_refusals: list = []
+
+
+def record_precheck_refusal(reason: str, now=None) -> None:
+    now = now or utcnow_naive()
+    _precheck_refusals.append((now, reason))
+    cutoff = now - timedelta(hours=24)
+    while _precheck_refusals and _precheck_refusals[0][0] < cutoff:
+        _precheck_refusals.pop(0)
+
+
+def refused_prechecks_24h(now=None) -> int:
+    cutoff = (now or utcnow_naive()) - timedelta(hours=24)
+    return sum(1 for t, _ in _precheck_refusals if t >= cutoff)
+
 async def precheck_gas(deal: Deal, to_address: str, amount_units: int, *, allow_master: bool = False) -> dict:
     """Master/escrow TRX must cover the estimated gas BEFORE any claim.
 
@@ -261,6 +277,7 @@ async def precheck_gas(deal: Deal, to_address: str, amount_units: int, *, allow_
     if res.get("ok"):
         return res
     reason = res.get("reason") or "GAS_UNKNOWN"
+    record_precheck_refusal(reason)
     await _alert(
         f"⛽ <b>Master TRX: виплату не розпочато</b> — deal #{deal.id}\n{_e(res.get('message'))}",
         f"master_trx_{reason}",

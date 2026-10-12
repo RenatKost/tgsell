@@ -2,6 +2,7 @@ import enum
 from datetime import datetime
 
 from sqlalchemy import (
+    Index,
     BigInteger, Boolean, CheckConstraint, DateTime, Enum, Float, ForeignKey,
     Integer, String, Text, UniqueConstraint, func,
 )
@@ -103,6 +104,7 @@ class Deal(Base):
 
 class Transaction(Base):
     __tablename__ = "transactions"
+    __table_args__ = (Index("ix_transactions_type_status_created", "type", "status", "created_at"),)
 
     id: Mapped[int] = mapped_column(primary_key=True)
     deal_id: Mapped[int] = mapped_column(ForeignKey("deals.id", ondelete="CASCADE"))
