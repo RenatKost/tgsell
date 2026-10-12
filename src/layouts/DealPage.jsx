@@ -19,6 +19,7 @@ const STATUS_META = {
 	paid: { stepIndex: 2 },
 	channel_transferring: { stepIndex: 2 },
 	awaiting_payout: { stepIndex: 3 },
+	payout_in_progress: { stepIndex: 3 },
 	completed: { stepIndex: 4 },
 	disputed: { stepIndex: -1 },
 	cancelled: { stepIndex: -1 },
@@ -267,6 +268,8 @@ const DealPage = () => {
 	const [walletAddress, setWalletAddress] = useState('');
 	const [copied, setCopied] = useState(false);
 	const [checklist, setChecklist] = useState(null);
+	const [payoutStatus, setPayoutStatus] = useState(null);
+	const [notice, setNotice] = useState(null);
 
 	const refreshDeal = async () => {
 		try {
@@ -304,8 +307,31 @@ const DealPage = () => {
 	const handleConfirmTransfer = () => handleAction(() => dealsAPI.confirmChannelTransfer(id));
 	const handleSubmitWallet = () => {
 		if (!walletAddress.trim()) return;
-		handleAction(() => dealsAPI.setSellerWallet(id, walletAddress.trim()));
+		handleAction(async () => {
+			const res = await dealsAPI.setSellerWallet(id, walletAddress.trim());
+			if (res.status === 202) {
+				setNotice('Виплату поставлено в чергу. Статус оновиться після підтвердження мережею.');
+				setTimeout(() => setNotice(null), 8000);
+			}
+		});
 	};
+
+	// Poll payout progress while the payout is being processed (worker + receipt).
+	useEffect(() => {
+		if (!deal || deal.status !== 'payout_in_progress') { setPayoutStatus(null); return; }
+		let stop = false;
+		const tick = async () => {
+			try {
+				const { data } = await dealsAPI.payoutStatus(id);
+				if (stop) return;
+				setPayoutStatus(data);
+				if (data.deal_status !== 'payout_in_progress') refreshDeal();
+			} catch { /* ignore */ }
+		};
+		tick();
+		const t = setInterval(tick, 5000);
+		return () => { stop = true; clearInterval(t); };
+	}, [deal?.status, id]);
 	const handleCallAdmin = () => handleAction(() => dealsAPI.callAdmin(id));
 
 	const handleDispute = async () => {
@@ -666,6 +692,29 @@ const DealPage = () => {
 						⚠️ Ретельно перевірте адресу — помилка призведе до втрати коштів
 					</p>
 				</div>
+			)}
+			{deal.status === 'payout_in_progress' && (
+				<div className='bg-white dark:bg-slate-800 rounded-2xl shadow-lg border border-cyan-200 dark:border-slate-700 p-6 mb-6'>
+					<div className='flex items-center gap-3'>
+						<div className='w-10 h-10 rounded-full bg-cyan-50 flex items-center justify-center animate-pulse'>
+							<span className='text-xl'>⏳</span>
+						</div>
+						<div className='min-w-0'>
+							<h3 className='font-bold'>Виплата обробляється</h3>
+							<p className='text-gray-500 text-sm'>
+								{payoutStatus?.last_transfer?.state === 'broadcast'
+									? 'Транзакцію відправлено, очікуємо підтвердження мережі TRON…'
+									: 'Виплату поставлено в чергу…'}
+							</p>
+							{payoutStatus?.last_transfer?.tx_hash && (
+								<p className='text-gray-400 text-xs mt-1 font-mono break-all'>TX: {payoutStatus.last_transfer.tx_hash}</p>
+							)}
+						</div>
+					</div>
+				</div>
+			)}
+			{notice && (
+				<div className='bg-cyan-50 dark:bg-cyan-900/20 text-cyan-700 text-sm font-medium px-4 py-3 rounded-xl text-center mb-6'>{notice}</div>
 			)}
 			{deal.status === 'awaiting_payout' && isBuyer && (
 				<div className='bg-white dark:bg-slate-800 rounded-2xl shadow-lg border border-gray-100 dark:border-slate-700 p-6 mb-6'>

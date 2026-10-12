@@ -11,6 +11,9 @@ Rules (audit task 12, PR A):
 * A Transaction row is committed as ``pending`` BEFORE broadcast and its tx_hash (known
   from the signed tx) is committed BEFORE broadcast too, so a crash/timeout after
   broadcast never leads to a blind resend.
+* HTTP handlers only claim + enqueue (job row in the SAME commit as the claim) and
+  return 202; the single payout worker (app.tasks.payout_worker, PG advisory lock)
+  runs :func:`process_queued` and :func:`reconcile_pending_transfers`.
 * Receipt SUCCESS → finalize (deal completed / cancelled-with-refund). FAILED → release the
   claim to the status stored on the row + admin alert. No receipt within the wait window
   → PENDING: claim kept, row stays pending, :func:`reconcile_pending_transfers`
@@ -49,6 +52,10 @@ OUTGOING_TYPES = (
 UNITS = Decimal("0.000001")
 # TRON txs expire 60s after build; a tx not on chain after this is dead for good.
 PENDING_STALE_AFTER = timedelta(minutes=10)
+# receipt_status marker of a job enqueued for the worker. Rows without it and without a
+# tx_hash belong to an in-flight synchronous attempt of the previous release (deploy
+# overlap) and are never picked up by the worker.
+QUEUED = "QUEUED"
 
 # Dedup for "stuck payout_in_progress without a tracked tx" alerts (per process).
 _stuck_alerted: set[int] = set()
@@ -178,6 +185,10 @@ async def _finalize_success(db, deal: Deal, tx: Transaction) -> None:
         deal.status = DealStatus.cancelled
         if channel is not None:
             channel.status = ChannelStatus.approved
+    if tx.type == TransactionType.release:
+        _add_deal_message(db, deal, f"Виплата {tx.amount} USDT підтверджена мережею ✅\nTX: {tx.tx_hash}")
+    elif tx.type == TransactionType.refund:
+        _add_deal_message(db, deal, f"Повернення {tx.amount} USDT покупцю підтверджено ✅\nTX: {tx.tx_hash}")
     logger.info(f"[PAYOUT] Deal #{deal.id}: {tx.type.value} SUCCESS tx={tx.tx_hash}")
 
 
@@ -189,6 +200,8 @@ async def _finalize_failure(db, deal: Deal, tx: Transaction, reason: str) -> Non
     if (tx.type in (TransactionType.release, TransactionType.refund)
             and deal.status == DealStatus.payout_in_progress and tx.restore_status):
         release_payout_claim(deal, restore_status=DealStatus(tx.restore_status))
+    if tx.type in (TransactionType.release, TransactionType.refund):
+        _add_deal_message(db, deal, "Виплату не виконано (кошти лишаються в escrow). Адміністратора повідомлено.")
     logger.error(f"[PAYOUT] Deal #{deal.id}: {tx.type.value} FAILED tx={tx.tx_hash}: {reason}")
 
 
@@ -228,9 +241,36 @@ async def _apply_receipt(db, deal_id: int, tx_id: int, receipt: dict) -> Transfe
     return TransferOutcome("pending", tx.tx_hash, None, "PENDING", tx.id)
 
 
-# ── execute ─────────────────────────────────────────────────────────────
+# ── pre-claim gas funding check ─────────────────────────────────────────
 
-async def execute_transfer(
+async def precheck_gas(deal: Deal, to_address: str, amount_units: int, *, allow_master: bool = False) -> dict:
+    """Master/escrow TRX must cover the estimated gas BEFORE any claim.
+
+    Unknown balances → refuse (never assume funded). Raises PayoutError(http 503) with a
+    clear text; sends a throttled admin alert when master TRX is insufficient/unknown.
+    """
+    res = await asyncio.to_thread(
+        escrow_svc.check_gas_funding, deal.escrow_wallet_address, to_address, int(amount_units)
+    )
+    if res.get("ok"):
+        return res
+    reason = res.get("reason") or "GAS_UNKNOWN"
+    await _alert(
+        f"⛽ <b>Master TRX: виплату не розпочато</b> — deal #{deal.id}\n{res.get('message')}",
+        f"master_trx_{reason}",
+    )
+    raise PayoutError(
+        "master_trx",
+        "Виплата тимчасово недоступна: на платформному гаманці недостатньо TRX для комісії мережі "
+        "(або баланс не вдалося перевірити). Адміністратора повідомлено, статус угоди не змінено — "
+        "спробуйте пізніше.",
+        http_status=503,
+    )
+
+
+# ── enqueue (HTTP) + process (worker) ───────────────────────────────────
+
+def enqueue_transfer(
     db,
     deal: Deal,
     *,
@@ -238,75 +278,89 @@ async def execute_transfer(
     to_address: str,
     amount_units: int,
     restore_status: DealStatus | None,
-    allow_master: bool = False,
-    receipt_timeout: float | None = None,
-) -> TransferOutcome:
-    """Send amount_units USDT from deal escrow to to_address (see module docstring).
+) -> Transaction:
+    """Add the job row (pending, tx_hash NULL) to the CURRENT db transaction.
 
-    For release/refund the deal must already be claimed (payout_in_progress) and that claim
-    committed; on refusal/failure the claim is released to restore_status. For
-    fee_collection/sweep the caller holds the deal row lock; the committed pending row is
-    the lock for concurrent requests.
+    The caller commits it together with the claim, so there is no window where a deal is
+    payout_in_progress without a tracked job (crash-safe: tx_hash NULL ⇒ never broadcast,
+    the worker can process it after a restart).
     """
-    deal_id = deal.id
-    escrow_addr = deal.escrow_wallet_address
-    enc_key = deal.escrow_private_key_encrypted
-    amount_units = int(amount_units)
-
-    async def refuse(code: str, msg: str) -> TransferOutcome:
-        d = await _lock_deal(db, deal_id)
-        if restore_status is not None and d.status == DealStatus.payout_in_progress:
-            release_payout_claim(d, restore_status=restore_status)
-        await db.commit()
-        await _alert(
-            f"⚠️ <b>Escrow {tx_type.value} REFUSED</b> — deal #{deal_id}\n{msg}\nНічого не відправлено.",
-            f"payout_refused_{deal_id}_{code}",
-        )
-        return TransferOutcome("refused", None, msg, code)
-
-    if amount_units <= 0:
-        return await refuse("BAD_AMOUNT", "Некоректна сума переказу")
-
-    # 1) On-chain balance (unknown or insufficient → refuse, nothing sent).
-    try:
-        balance = await asyncio.to_thread(escrow_svc.fetch_usdt_balance_units, escrow_addr)
-    except escrow_svc.BalanceUnavailable as e:
-        return await refuse("BALANCE_UNKNOWN", f"Баланс escrow {escrow_addr} невідомий ({e}). Спробуйте пізніше.")
-    if balance < amount_units:
-        return await refuse(
-            "INSUFFICIENT_ESCROW",
-            f"На escrow {escrow_addr} {units_to_usdt(balance)} USDT < потрібно {units_to_usdt(amount_units)} USDT",
-        )
-
-    # 2) Record the attempt BEFORE anything is broadcast.
     tx = Transaction(
-        deal_id=deal_id, tx_hash=None, from_address=escrow_addr, to_address=to_address,
-        amount=units_to_usdt(amount_units), amount_units=amount_units, type=tx_type,
-        status=TransactionStatus.pending,
+        deal_id=deal.id, tx_hash=None, from_address=deal.escrow_wallet_address, to_address=to_address,
+        amount=units_to_usdt(int(amount_units)), amount_units=int(amount_units), type=tx_type,
+        status=TransactionStatus.pending, receipt_status=QUEUED,
         restore_status=restore_status.value if restore_status is not None else None,
     )
     db.add(tx)
-    await db.commit()
-    tx_id = tx.id
+    return tx
 
-    # 3) Gas + build/sign (no USDT broadcast yet).
+
+def _add_deal_message(db, deal: Deal, text: str) -> None:
+    from app.models.deal import DealMessage
+
+    db.add(DealMessage(deal_id=deal.id, sender_id=deal.seller_id, text=text, is_system=True))
+
+
+async def process_queued(db, tx_id: int, *, receipt_timeout: float | None = None) -> TransferOutcome:
+    """Worker: execute one queued job (pending row with tx_hash NULL). Never resends.
+
+    balance check → gas top-up + build/sign → persist txid → broadcast → receipt.
+    """
+    tx = await db.get(Transaction, tx_id, populate_existing=True)
+    if tx is None or tx.status != TransactionStatus.pending or tx.tx_hash or tx.receipt_status != QUEUED:
+        await db.commit()
+        return TransferOutcome("pending" if tx is not None and tx.status == TransactionStatus.pending else "skipped")
+    deal = await _lock_deal(db, tx.deal_id)
+    tx = await db.get(Transaction, tx_id, populate_existing=True)
+    if tx.status != TransactionStatus.pending or tx.tx_hash or tx.receipt_status != QUEUED:
+        await db.commit()
+        return TransferOutcome("skipped")
+    tx.receipt_status = "PROCESSING"
+    deal_id = deal.id
+    tx_type = tx.type
+    to_address = tx.to_address
+    amount_units = int(tx.amount_units or to_units(tx.amount))
+    allow_master = tx_type == TransactionType.fee_collection
+    await db.commit()  # release row lock during network calls
+
+    async def refuse(code: str, msg: str, *, sweep: bool = False) -> TransferOutcome:
+        d = await _lock_deal(db, deal_id)
+        t = await db.get(Transaction, tx_id, populate_existing=True)
+        await _finalize_failure(db, d, t, code)
+        t.receipt_reason = msg
+        await db.commit()
+        await _alert(
+            f"⚠️ <b>Escrow {tx_type.value} NOT SENT</b> — deal #{deal_id}\n{msg}\nНічого не відправлено.",
+            f"payout_refused_{deal_id}_{code}",
+        )
+        if sweep:
+            await _sweep_trx(d)
+        return TransferOutcome("refused", None, msg, code, tx_id)
+
+    if amount_units <= 0:
+        return await refuse("BAD_AMOUNT", "Некоректна сума переказу")
+    try:
+        balance = await asyncio.to_thread(escrow_svc.fetch_usdt_balance_units, deal.escrow_wallet_address)
+    except escrow_svc.BalanceUnavailable as e:
+        return await refuse("BALANCE_UNKNOWN", f"Баланс escrow {deal.escrow_wallet_address} невідомий ({e}).")
+    if balance < amount_units:
+        return await refuse(
+            "INSUFFICIENT_ESCROW",
+            f"На escrow {deal.escrow_wallet_address} {units_to_usdt(balance)} USDT < "
+            f"потрібно {units_to_usdt(amount_units)} USDT",
+        )
+
     try:
         prepared = await asyncio.to_thread(
-            escrow_svc.prepare_usdt_transfer, enc_key, to_address, amount_units, allow_master=allow_master
+            escrow_svc.prepare_usdt_transfer, deal.escrow_private_key_encrypted, to_address,
+            amount_units, allow_master=allow_master,
         )
     except Exception as e:
         reason = getattr(e, "reason", "PREPARE_ERROR")
         msg = getattr(e, "message", None) or f"Підготовка переказу не вдалася: {e}"
-        d = await _lock_deal(db, deal_id)
-        t = await db.get(Transaction, tx_id, populate_existing=True)
-        await _finalize_failure(db, d, t, reason)
-        t.receipt_reason = msg
-        await db.commit()
-        await _alert(f"⚠️ <b>Escrow {tx_type.value} NOT SENT</b> — deal #{deal_id}\n{msg}", f"payout_prep_{deal_id}_{reason}")
-        await _sweep_trx(deal)
-        return TransferOutcome("refused", None, msg, reason, tx_id)
+        return await refuse(reason, msg, sweep=True)
 
-    # 4) txid is known before broadcast → persist it first.
+    # txid is known before broadcast → persist it first.
     t = await db.get(Transaction, tx_id, populate_existing=True)
     t.tx_hash = prepared["txid"]
     t.fee_limit_sun = prepared.get("fee_limit_sun")
@@ -314,24 +368,49 @@ async def execute_transfer(
     await db.commit()
     tx_hash = prepared["txid"]
 
-    # 5) Broadcast. An exception does NOT mean it was not sent — rely on the receipt.
     try:
         await asyncio.to_thread(escrow_svc.broadcast_prepared, prepared)
     except Exception as e:
         logger.error(f"[PAYOUT] Deal #{deal_id}: broadcast raised for {tx_hash}: {e} — checking receipt")
 
-    # 6) Receipt (bounded wait). No receipt → PENDING (claim kept, reconciled later).
     timeout = escrow_svc.RECEIPT_TIMEOUT_SEC if receipt_timeout is None else receipt_timeout
     receipt = await asyncio.to_thread(escrow_svc.get_receipt, tx_hash, timeout)
     outcome = await _apply_receipt(db, deal_id, tx_id, receipt)
     if outcome.status == "pending":
         await _alert(
             f"⏳ <b>Escrow {tx_type.value} PENDING</b> — deal #{deal_id}\nTX: <code>{tx_hash}</code>\n"
-            f"Немає квитанції за {int(timeout)}s; claim збережено, фінализує payment_checker.",
+            f"Немає квитанції за {int(timeout)}s; claim збережено, worker фіналізує за квитанцією.",
             f"payout_pending_{tx_id}",
         )
         outcome.error = f"Транзакція відправлена, очікує підтвердження. TX: {tx_hash}"
     return outcome
+
+
+async def payout_status(db, deal: Deal) -> dict:
+    """Status of the latest outgoing transfer of a deal (for UI polling)."""
+    tx = (await db.execute(
+        select(Transaction).where(
+            Transaction.deal_id == deal.id, Transaction.type.in_(OUTGOING_TYPES)
+        ).order_by(Transaction.id.desc()).limit(1)
+    )).scalar_one_or_none()
+    last = None
+    if tx is not None:
+        if tx.status == TransactionStatus.pending:
+            state = "queued" if not tx.tx_hash else "broadcast"
+        else:
+            state = "confirmed" if tx.status == TransactionStatus.confirmed else "failed"
+        last = {
+            "id": tx.id, "type": tx.type.value, "state": state, "tx_hash": tx.tx_hash,
+            "amount_usdt": tx.amount, "receipt_status": tx.receipt_status, "reason": tx.receipt_reason,
+        }
+    return {
+        "deal_id": deal.id,
+        "deal_status": deal.status.value,
+        "payout_tx_hash": deal.payout_tx_hash,
+        "in_progress": deal.status == DealStatus.payout_in_progress
+        or (last is not None and last["state"] in ("queued", "broadcast")),
+        "last_transfer": last,
+    }
 
 
 # ── reconciliation (payment_checker loop) ───────────────────────────────
@@ -349,12 +428,20 @@ async def reconcile_pending_transfers(db, now=None) -> int:
     for tx_id, deal_id in rows:
         try:
             tx = await db.get(Transaction, tx_id, populate_existing=True)
+            stale = now - (tx.broadcast_at or tx.created_at or now) >= PENDING_STALE_AFTER
+            if not tx.tx_hash:
+                if tx.receipt_status == QUEUED or not stale:
+                    # Queued job — processed by the payout worker (or fresh in-flight attempt).
+                    await db.commit()
+                    continue
+                # Stale row without txid: txid is persisted BEFORE broadcast, so this was
+                # never broadcast (crash during gas/prepare) → safe to fail + release claim.
+                await _apply_receipt(db, deal_id, tx_id, {"status": "FAILED", "reason": "NEVER_BROADCAST"})
+                done += 1
+                continue
             age_from = tx.broadcast_at or tx.created_at or now
             stale = now - age_from >= PENDING_STALE_AFTER
-            if tx.tx_hash:
-                receipt = await asyncio.to_thread(escrow_svc.get_receipt, tx.tx_hash, 0)
-            else:
-                receipt = {"status": "PENDING", "reason": "no txid recorded"}
+            receipt = await asyncio.to_thread(escrow_svc.get_receipt, tx.tx_hash, 0)
             if receipt["status"] == "PENDING":
                 if not stale:
                     await db.commit()

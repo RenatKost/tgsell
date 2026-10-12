@@ -211,8 +211,8 @@ def test_seller_wallet_uses_for_update_and_claim():
     assert "with_for_update()" in body
     claim_pos = body.index("claim_for_payout")
     commit_claim_pos = body.index("await db.commit()", claim_pos)
-    transfer_pos = body.index("execute_transfer(", commit_claim_pos)
-    assert claim_pos < commit_claim_pos < transfer_pos
+    enqueue_pos = body.index("enqueue_transfer(", claim_pos)
+    assert claim_pos < enqueue_pos < commit_claim_pos
     assert "transfer_usdt" not in body and "send_trx_for_gas" not in body
 
 
@@ -226,5 +226,6 @@ def test_admin_resolve_uses_for_update_and_claim():
     assert "DealStatus.disputed" in body
     claim_pos = body.index("claim_for_payout")
     commit_pos = body.index("await db.commit()", claim_pos)
-    transfer_pos = body.index("execute_transfer(", commit_pos)
-    assert claim_pos < commit_pos < transfer_pos
+    enqueue_pos = body.index("enqueue_transfer(", claim_pos)
+    commit_pos = body.index("await db.commit()", enqueue_pos)
+    assert claim_pos < enqueue_pos < commit_pos

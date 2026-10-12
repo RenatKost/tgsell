@@ -44,6 +44,8 @@ class Settings(BaseSettings):
 
     # Service
     service_fee_percent: float = 3.0
+    # Admin alert when master wallet TRX (gas source for payouts) drops below this.
+    master_trx_low_threshold: float = 30.0
     payment_timeout_hours: int = 2  # window after both sides are ready (payment_pending)
     # 'created' stage (waiting for readiness; the buyer already has the escrow address):
     # auto-cancel after this many hours, only if the escrow balance is confirmed 0.
