@@ -115,6 +115,12 @@ class PayoutWorker:
             reconciled = await payouts.reconcile_pending_transfers(db, utcnow_naive())
         if (self.cycles - 1) % MASTER_CHECK_EVERY_N_CYCLES == 0:
             await self.gas_cycle()
+        try:  # deal chat → Telegram bridge (same single-instance lock)
+            import importlib
+
+            await importlib.import_module("app.services.chat_bridge").bridge_cycle(self.session_factory)
+        except Exception as e:
+            logger.error(f"[PAYOUT-WORKER] chat bridge failed: {e}", exc_info=True)
         return {"leader": True, "processed": processed, "reconciled": reconciled}
 
 

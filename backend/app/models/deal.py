@@ -155,6 +155,8 @@ class DealMessage(Base):
     client_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
     edited_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     deleted_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    # Telegram bridge (0030): NULL = not forwarded (legacy/system), "pending" → worker forwards, "done"
+    tg_forward_status: Mapped[str | None] = mapped_column(String(16), nullable=True)
 
     deal = relationship("Deal", back_populates="messages")
     sender = relationship("User")

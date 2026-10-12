@@ -280,6 +280,11 @@ async def cb_deal_dispute(callback: CallbackQuery):
             return
 
         deal.status = DealStatus.disputed
+        import app.services.chat as chat_svc
+
+        chat_svc.system(db, deal, "dispute_opened",
+                        "⚠️ Покупець відкрив спір (через Telegram-бот). Гарант розгляне ситуацію.",
+                        actor_id=user.id, via="telegram")
         await db.commit()
 
     await callback.message.answer(
@@ -792,6 +797,51 @@ async def auth_cancel_callback(callback: CallbackQuery):
 
 # ── Bot runner ────────────────────────────────────────────────────────
 
+# ── Deal chat ⇄ Telegram bridge (task 13 stage B) ──────────────────────
+chat_bridge_router = Router(name="chat_bridge")
+
+
+@chat_bridge_router.message(F.reply_to_message)
+async def on_chat_bridge_reply(message: Message):
+    import app.services.chat_bridge as bridge
+
+    async with async_session() as db:
+        try:
+            msg = await bridge.handle_reply(
+                db, tg_user_id=message.from_user.id, tg_chat_id=message.chat.id,
+                reply_to_message_id=message.reply_to_message.message_id,
+                tg_message_id=message.message_id, text=message.text)
+        except bridge.BridgeReject as e:
+            await message.answer(f"⛔ {e.text}")
+            return
+    if msg is None:
+        return
+    await message.answer(f"✅ Надіслано в чат угоди #{msg.deal_id}",
+                         reply_markup=bridge.keyboard(msg.deal_id, None, read=True))
+
+
+@chat_bridge_router.callback_query(F.data.startswith("chatread:"))
+async def on_chat_bridge_read(callback: CallbackQuery):
+    import app.services.chat_bridge as bridge
+
+    try:
+        link_id = int(callback.data.split(":", 1)[1])
+    except ValueError:
+        await callback.answer()
+        return
+    async with async_session() as db:
+        try:
+            link = await bridge.handle_read_tap(db, tg_user_id=callback.from_user.id, link_id=link_id)
+        except bridge.BridgeReject as e:
+            await callback.answer(e.text, show_alert=True)
+            return
+    try:
+        await callback.message.edit_reply_markup(reply_markup=bridge.keyboard(link.deal_id, link.id, read=True))
+    except Exception:
+        pass
+    await callback.answer("Позначено прочитаним")
+
+
 async def run_bots_background():
     """Start Telegram bots as a background task (called from FastAPI lifespan)."""
     from bot.support import run_support_bot_background
@@ -800,6 +850,7 @@ async def run_bots_background():
         alerts_bot = Bot(token=settings.bot_token_alerts)
         alerts_dp = Dispatcher(storage=MemoryStorage())
         alerts_dp.include_router(router)
+        alerts_dp.include_router(chat_bridge_router)
 
         auth_bot = Bot(token=settings.bot_token_auth)
         auth_dp = Dispatcher(storage=MemoryStorage())
@@ -824,6 +875,7 @@ async def start_bot():
     alerts_bot = Bot(token=settings.bot_token_alerts)
     alerts_dp = Dispatcher(storage=MemoryStorage())
     alerts_dp.include_router(router)
+    alerts_dp.include_router(chat_bridge_router)
 
     # Auth bot (login via deep link)
     auth_bot = Bot(token=settings.bot_token_auth)

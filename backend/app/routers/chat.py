@@ -130,7 +130,8 @@ async def post_chat_message(
     prior = await _existing_by_client_id(db, deal, body.client_id)
     if prior is not None:
         return (await chat_svc.serialize_many(db, deal, [prior]))[0]
-    msg = DealMessage(deal_id=deal_id, sender_id=user.id, text=text, kind="text", client_id=body.client_id)
+    msg = DealMessage(deal_id=deal_id, sender_id=user.id, text=text, kind="text", client_id=body.client_id,
+                      tg_forward_status="pending")
     db.add(msg)
     try:
         await db.flush()
@@ -212,7 +213,7 @@ async def upload_attachment(
     await chat_svc.check_quotas(db, deal_id, user.id, stored)
     text = (caption or "").strip() or f"📎 {name}"
     msg = DealMessage(deal_id=deal_id, sender_id=user.id, text=text[: chat_svc.MAX_TEXT], kind="file",
-                      client_id=client_id)
+                      client_id=client_id, tg_forward_status="pending")
     db.add(msg)
     await db.flush()
     db.add(DealAttachment(deal_id=deal_id, message_id=msg.id, uploader_id=user.id, filename=name, mime=mime,
