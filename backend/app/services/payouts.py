@@ -22,6 +22,7 @@ Rules (audit task 12, PR A):
 from __future__ import annotations
 
 import asyncio
+import html
 import logging
 from dataclasses import dataclass
 from datetime import timedelta
@@ -153,6 +154,11 @@ async def claim_for_payout(db, deal: Deal, *, expected_status: DealStatus) -> No
     claim_deal_for_transfer(deal, expected_status=expected_status)
 
 
+def _e(value) -> str:
+    """HTML-escape an interpolated value for Telegram HTML alerts."""
+    return html.escape("" if value is None else str(value), quote=False)
+
+
 async def _alert(text: str, key: str) -> None:
     try:
         from app.services.alerts import send_admin_alert
@@ -231,7 +237,7 @@ async def _apply_receipt(db, deal_id: int, tx_id: int, receipt: dict) -> Transfe
         await db.commit()
         await _alert(
             f"🔴 <b>Escrow {tx.type.value} FAILED</b> — deal #{deal.id}\n"
-            f"Reason: <code>{reason}</code>\nTX: <code>{tx.tx_hash}</code>\n"
+            f"Reason: <code>{_e(reason)}</code>\nTX: <code>{_e(tx.tx_hash)}</code>\n"
             f"Статус: {deal.status.value}",
             f"payout_failed_{tx.id}",
         )
@@ -256,7 +262,7 @@ async def precheck_gas(deal: Deal, to_address: str, amount_units: int, *, allow_
         return res
     reason = res.get("reason") or "GAS_UNKNOWN"
     await _alert(
-        f"⛽ <b>Master TRX: виплату не розпочато</b> — deal #{deal.id}\n{res.get('message')}",
+        f"⛽ <b>Master TRX: виплату не розпочато</b> — deal #{deal.id}\n{_e(res.get('message'))}",
         f"master_trx_{reason}",
     )
     raise PayoutError(
@@ -330,7 +336,7 @@ async def process_queued(db, tx_id: int, *, receipt_timeout: float | None = None
         t.receipt_reason = msg
         await db.commit()
         await _alert(
-            f"⚠️ <b>Escrow {tx_type.value} NOT SENT</b> — deal #{deal_id}\n{msg}\nНічого не відправлено.",
+            f"⚠️ <b>Escrow {tx_type.value} NOT SENT</b> — deal #{deal_id}\n{_e(msg)}\nНічого не відправлено.",
             f"payout_refused_{deal_id}_{code}",
         )
         if sweep:
@@ -378,7 +384,7 @@ async def process_queued(db, tx_id: int, *, receipt_timeout: float | None = None
     outcome = await _apply_receipt(db, deal_id, tx_id, receipt)
     if outcome.status == "pending":
         await _alert(
-            f"⏳ <b>Escrow {tx_type.value} PENDING</b> — deal #{deal_id}\nTX: <code>{tx_hash}</code>\n"
+            f"⏳ <b>Escrow {tx_type.value} PENDING</b> — deal #{deal_id}\nTX: <code>{_e(tx_hash)}</code>\n"
             f"Немає квитанції за {int(timeout)}s; claim збережено, worker фіналізує за квитанцією.",
             f"payout_pending_{tx_id}",
         )
@@ -456,8 +462,8 @@ async def reconcile_pending_transfers(db, now=None) -> int:
                 if bal is None or bal < need:
                     await db.commit()
                     await _alert(
-                        f"🟠 <b>Escrow tx unresolved</b> — deal #{deal_id}\nTX: <code>{tx.tx_hash}</code>\n"
-                        f"Немає квитанції > {PENDING_STALE_AFTER}, баланс escrow={bal}. Claim НЕ знято — перевірте вручну.",
+                        f"🟠 <b>Escrow tx unresolved</b> — deal #{deal_id}\nTX: <code>{_e(tx.tx_hash)}</code>\n"
+                        f"Немає квитанції &gt; {PENDING_STALE_AFTER}, баланс escrow={bal}. Claim НЕ знято — перевірте вручну.",
                         f"payout_unresolved_{tx_id}",
                     )
                     continue

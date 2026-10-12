@@ -7,6 +7,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.services.alerts import telegram_html_safe
 from app.database import get_db
 from app.models.channel import Channel, ChannelPost, ChannelStats, ChannelStatus
 from app.models.user import User
@@ -646,7 +647,7 @@ async def create_channel(
                 f"Тип: {listing_label}\n"
                 f"Ціна: {channel.price} USDT"
             )
-            await bot.send_message(cfg.admin_group_id, admin_text, parse_mode=ParseMode.HTML)
+            await bot.send_message(cfg.admin_group_id, telegram_html_safe(admin_text), parse_mode=ParseMode.HTML)
             await bot.session.close()
             logger.info(f"[CHANNEL] Admin notified about new channel #{channel.id}")
     except Exception as e:

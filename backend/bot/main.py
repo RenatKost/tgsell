@@ -19,6 +19,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import selectinload
 
 from app.config import settings
+from app.services.alerts import telegram_html_safe
 from app.database import async_session
 from app.models.deal import Deal, DealStatus
 from app.models.user import User
@@ -332,7 +333,7 @@ async def notify_new_deal(bot: Bot, deal: Deal, buyer: User, seller: User):
             f"💰 Сума: {deal.amount_usdt} USDT"
         )
         try:
-            await bot.send_message(settings.admin_group_id, admin_text, parse_mode=ParseMode.HTML)
+            await bot.send_message(settings.admin_group_id, telegram_html_safe(admin_text), parse_mode=ParseMode.HTML)
             logger.info(f"[NOTIFY] Admin group {settings.admin_group_id} notified about deal #{deal.id}")
         except Exception as e:
             logger.error(f"[NOTIFY] Failed to notify admin: {e}", exc_info=True)
@@ -363,7 +364,7 @@ async def notify_payment_received(bot: Bot, deal: Deal, buyer: User, seller: Use
     if settings.admin_group_id:
         try:
             admin_text = f"💸 <b>Оплата отримана!</b> Угода #{deal.id} — {deal.amount_usdt} USDT"
-            await bot.send_message(settings.admin_group_id, admin_text, parse_mode=ParseMode.HTML)
+            await bot.send_message(settings.admin_group_id, telegram_html_safe(admin_text), parse_mode=ParseMode.HTML)
         except Exception as e:
             logger.error(f"[NOTIFY] Failed to notify admin group about payment: {e}")
 
@@ -469,7 +470,7 @@ async def notify_deal_completed(bot: Bot, deal: Deal, buyer: User, seller: User)
     if settings.admin_group_id:
         try:
             admin_text = f"🎉 <b>Угода #{deal.id} завершена!</b> Сума: {deal.amount_usdt} USDT"
-            await bot.send_message(settings.admin_group_id, admin_text, parse_mode=ParseMode.HTML)
+            await bot.send_message(settings.admin_group_id, telegram_html_safe(admin_text), parse_mode=ParseMode.HTML)
         except Exception as e:
             logger.error(f"[NOTIFY] Failed to notify admin group about completion: {e}")
 
@@ -486,7 +487,7 @@ async def notify_admin_called(bot: Bot, deal_id: int, channel_name: str, caller_
         f"Викликав: {caller_name}\n\n"
         f"<a href='{frontend_url}/deal/{deal_id}'>Перейти до чату угоди →</a>"
     )
-    await bot.send_message(settings.admin_group_id, text, parse_mode=ParseMode.HTML)
+    await bot.send_message(settings.admin_group_id, telegram_html_safe(text), parse_mode=ParseMode.HTML)
 
 
 async def notify_bundle_approved(bot: Bot, bundle, seller: User):
@@ -548,7 +549,7 @@ async def notify_new_bundle_deal(bot: Bot, deal, bundle, buyer: User, seller: Us
             f"Сума: {deal.amount_usdt} USDT"
         )
         try:
-            await bot.send_message(settings.admin_group_id, admin_text, parse_mode=ParseMode.HTML)
+            await bot.send_message(settings.admin_group_id, telegram_html_safe(admin_text), parse_mode=ParseMode.HTML)
         except Exception as e:
             logger.warning(f"[NOTIFY] Cannot send bundle deal to admin group: {e}")
 
