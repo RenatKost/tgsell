@@ -115,6 +115,12 @@ async def env(pg_orm, monkeypatch):
     monkeypatch.setattr(escrow, "sweep_trx_to_master", tron.sweep)
     monkeypatch.setattr(escrow, "check_gas_funding", tron.gas)
     monkeypatch.setattr(escrow, "get_usdt_balance", lambda a: tron.fetch_units(a) / 1e6)
+    tron.resources = {"trx_sun": 500_000_000, "energy_available": 0, "bandwidth_available": 600, "energy_fee_sun": 100}
+    monkeypatch.setattr(escrow, "get_account_resources", lambda a: tron.resources)
+    gm = importlib.import_module("app.services.gas_monitor")
+    gm._cache.update(at=0.0, payload=None)
+    gm._alert_state["level"] = None
+    payouts._precheck_refusals.clear()
     alert = AsyncMock()
     monkeypatch.setattr(alerts, "send_admin_alert", alert)
     monkeypatch.setattr(settings, "tron_master_wallet_address", MASTER)

@@ -170,6 +170,14 @@ export const adminAPI = {
 	setUserRole: (id, role) => api.post(`/admin/users/${id}/role`, null, { params: { role } }),
 	dealBlockedParty: (dealId, action, note) => api.post(`/admin/deals/${dealId}/blocked-party`, { action, note }),
 	auditLog: (params) => api.get('/admin/audit-log', { params }),
+	transactions: (params) => api.get('/admin/transactions', { params }),
+	transactionsCsv: (params) => api.get('/admin/transactions', { params: { ...params, format: 'csv', limit: 500 }, responseType: 'blob' }),
+	payoutQueue: () => api.get('/admin/payout-queue'),
+	recheckTx: (id) => api.post(`/admin/transactions/${id}/recheck`),
+	markTxFailed: (id, note) => api.post(`/admin/transactions/${id}/mark-failed`, { note }),
+	escrowOverview: (refresh = false) => api.get('/admin/escrow/overview', { params: { refresh } }),
+	gas: (params) => api.get('/admin/gas', { params }),
+	summary: (date) => api.get('/admin/summary', { params: date ? { date } : {} }),
 
 	getDashboardStats: () =>
 		api.get('/admin/dashboard-stats'),

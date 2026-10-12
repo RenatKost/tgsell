@@ -17,6 +17,7 @@ from app.models.auction import Auction, AuctionBid  # noqa: F401
 from app.models.settings import TelethonSession  # noqa: F401
 from app.models.bundle import ChannelBundle, BundleChannel  # noqa: F401
 from app.models.support import SupportMessage  # noqa: F401
+from app.models.monitoring import MasterWalletSnapshot  # noqa: F401
 
 config = context.config
 

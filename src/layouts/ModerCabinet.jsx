@@ -3,6 +3,7 @@ import { adminAPI, dealsAPI, bundlesAPI } from '../services/api';
 import { useAuth } from '../context/AppContext';
 import UsersPanel from '../components/Admin/UsersPanel';
 import AuditLogPanel from '../components/Admin/AuditLogPanel';
+import { GasCard, SummaryCard, TransactionsPanel, PayoutQueuePanel, EscrowOverview } from '../components/Admin/MoneyPanels';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import {
 	faCheck,
@@ -46,6 +47,8 @@ const SECTIONS = [
 	{ id: 'auctions', label: 'Аукціони', icon: faGavel },
 	{ id: 'activity', label: 'Активність', icon: faChartLine },
 	{ id: 'escrow', label: 'Ескроу', icon: faWallet },
+	{ id: 'transactions', label: 'Транзакції', icon: faList, adminOnly: true },
+	{ id: 'queue', label: 'Черга виплат', icon: faClock, adminOnly: true },
 	{ id: 'users', label: 'Користувачі', icon: faUsers, adminOnly: true },
 	{ id: 'audit', label: 'Журнал дій', icon: faList, adminOnly: true },
 ];
@@ -627,6 +630,7 @@ const ModerCabinet = () => {
 				{section === 'dashboard' && (
 					<div>
 						<h1 className='text-2xl font-bold text-gray-800 dark:text-white mb-6'>Дашборд</h1>
+						{isAdmin && <div className='grid lg:grid-cols-2 gap-4 mb-6'><GasCard /><SummaryCard /></div>}
 						{loading || !dashStats ? <Loader /> : (
 							<>
 								<div className='grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8'>
@@ -1455,6 +1459,7 @@ const ModerCabinet = () => {
 				{section === 'escrow' && (
 					<div>
 						<h1 className='text-2xl font-bold text-gray-800 dark:text-white mb-6'>Ескроу гаманці</h1>
+						{isAdmin && <EscrowOverview />}
 						<div className='bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-900/20 dark:to-indigo-900/20 border border-blue-200 dark:border-blue-800 rounded-2xl p-6 mb-6'>
 							<div className='flex items-center justify-between flex-wrap gap-4'>
 								<div>
@@ -1540,6 +1545,8 @@ const ModerCabinet = () => {
 					</div>
 				)}
 
+				{isAdmin && section === 'transactions' && <TransactionsPanel />}
+				{isAdmin && section === 'queue' && <PayoutQueuePanel />}
 				{isAdmin && section === 'users' && <UsersPanel />}
 				{isAdmin && section === 'audit' && <AuditLogPanel />}
 

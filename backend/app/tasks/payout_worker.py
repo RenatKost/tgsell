@@ -7,7 +7,8 @@
   instance waits until the old one exits (lock released with its connection).
 * Each cycle: (1) process queued jobs, (2) reconcile broadcast-but-pending txs by receipt
   (never resends), (3) alert on payout_in_progress deals without a tracked job, and
-  (4) periodically check master TRX against ``master_trx_low_threshold``.
+  (4) every ~5 min: master gas coverage alerts, 15-min snapshots, 09:00 daily summary
+  (app.services.gas_monitor).
   The first cycle after start is the restart recovery.
 * All blocking tronpy calls run in ``asyncio.to_thread`` (inside app.services.payouts).
 """
@@ -113,8 +114,27 @@ class PayoutWorker:
         async with self.session_factory() as db:
             reconciled = await payouts.reconcile_pending_transfers(db, utcnow_naive())
         if (self.cycles - 1) % MASTER_CHECK_EVERY_N_CYCLES == 0:
-            await check_master_trx()
+            await self.gas_cycle()
         return {"leader": True, "processed": processed, "reconciled": reconciled}
+
+
+async def _gas_cycle(worker: "PayoutWorker", now=None) -> None:
+    """Gas alerts + 15-min snapshot + 09:00 daily summary — all under the worker lock."""
+    from app.services import gas_monitor
+
+    try:
+        st = await gas_monitor.check_and_alert()
+        async with worker.session_factory() as db:
+            await gas_monitor.maybe_snapshot(db, st, now)
+    except Exception as e:
+        logger.error(f"[PAYOUT-WORKER] gas check failed: {e}", exc_info=True)
+    try:
+        await gas_monitor.maybe_send_daily_summary(worker.session_factory, now)
+    except Exception as e:
+        logger.error(f"[PAYOUT-WORKER] daily summary failed: {e}", exc_info=True)
+
+
+PayoutWorker.gas_cycle = lambda self, now=None: _gas_cycle(self, now)
 
 
 async def master_trx_status() -> dict:
