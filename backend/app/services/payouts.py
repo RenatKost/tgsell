@@ -192,9 +192,9 @@ async def _finalize_success(db, deal: Deal, tx: Transaction) -> None:
         if channel is not None:
             channel.status = ChannelStatus.approved
     if tx.type == TransactionType.release:
-        _add_deal_message(db, deal, f"Виплата {tx.amount} USDT підтверджена мережею ✅\nTX: {tx.tx_hash}")
+        _add_deal_message(db, deal, f"Виплата {tx.amount} USDT підтверджена мережею ✅\nTX: {tx.tx_hash}", event="payout_done")
     elif tx.type == TransactionType.refund:
-        _add_deal_message(db, deal, f"Повернення {tx.amount} USDT покупцю підтверджено ✅\nTX: {tx.tx_hash}")
+        _add_deal_message(db, deal, f"Повернення {tx.amount} USDT покупцю підтверджено ✅\nTX: {tx.tx_hash}", event="refund_done")
     logger.info(f"[PAYOUT] Deal #{deal.id}: {tx.type.value} SUCCESS tx={tx.tx_hash}")
 
 
@@ -207,7 +207,7 @@ async def _finalize_failure(db, deal: Deal, tx: Transaction, reason: str) -> Non
             and deal.status == DealStatus.payout_in_progress and tx.restore_status):
         release_payout_claim(deal, restore_status=DealStatus(tx.restore_status))
     if tx.type in (TransactionType.release, TransactionType.refund):
-        _add_deal_message(db, deal, "Виплату не виконано (кошти лишаються в escrow). Адміністратора повідомлено.")
+        _add_deal_message(db, deal, "Виплату не виконано (кошти лишаються в escrow). Адміністратора повідомлено.", event="payout_failed")
     logger.error(f"[PAYOUT] Deal #{deal.id}: {tx.type.value} FAILED tx={tx.tx_hash}: {reason}")
 
 
@@ -315,13 +315,16 @@ def enqueue_transfer(
         restore_status=restore_status.value if restore_status is not None else None,
     )
     db.add(tx)
+    if tx_type in (TransactionType.release, TransactionType.refund):
+        what = "Виплату продавцю" if tx_type == TransactionType.release else "Повернення покупцю"
+        _add_deal_message(db, deal, f"{what} {tx.amount} USDT поставлено в чергу ⏳", event="payout_queued")
     return tx
 
 
-def _add_deal_message(db, deal: Deal, text: str) -> None:
-    from app.models.deal import DealMessage
+def _add_deal_message(db, deal: Deal, text: str, event: str = "payout") -> None:
+    import app.services.chat as chat_svc
 
-    db.add(DealMessage(deal_id=deal.id, sender_id=deal.seller_id, text=text, is_system=True))
+    chat_svc.system(db, deal, event, text)
 
 
 async def process_queued(db, tx_id: int, *, receipt_timeout: float | None = None) -> TransferOutcome:

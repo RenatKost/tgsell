@@ -148,7 +148,7 @@ async def create_deal(
             f"Продавець отримає: {payout:.2f} USDT\n\n"
             f"Підтвердіть готовність, щоб перейти до оплати."
         )
-        await _add_system_message(db, deal.id, user.id, init_msg)
+        await _add_system_message(db, deal.id, user.id, init_msg, event="deal_created")
         await db.commit()
 
         try:
@@ -227,7 +227,7 @@ async def create_deal(
         f"Продавець отримає: {payout:.2f} USDT\n\n"
         f"Підтвердіть готовність, щоб перейти до оплати."
     )
-    await _add_system_message(db, deal.id, user.id, init_msg)
+    await _add_system_message(db, deal.id, user.id, init_msg, event="deal_created")
     await db.commit()
 
     # Notify via Telegram
@@ -338,6 +338,7 @@ async def open_dispute(
 
     deal.status = DealStatus.disputed
     deal.dispute_reason = body.reason
+    await _add_system_message(db, deal.id, user.id, "Відкрито спір. Гарант розгляне угоду.", event="dispute_opened")
     logger.warning(f"[DEAL] Deal #{deal.id}: DISPUTE opened by user={user.id}, reason='{body.reason}'")
     await db.commit()
     await db.refresh(deal)
@@ -347,10 +348,11 @@ async def open_dispute(
 
 # ===== Deal Flow Actions =====
 
-async def _add_system_message(db: AsyncSession, deal_id: int, user_id: int, text: str):
-    """Add a system message to deal chat."""
-    msg = DealMessage(deal_id=deal_id, sender_id=user_id, text=text, is_system=True)
-    db.add(msg)
+async def _add_system_message(db: AsyncSession, deal_id: int, user_id: int, text: str, event: str = "deal_step"):
+    """Add a system message to deal chat (chat v2 helper; actor kept in meta)."""
+    import app.services.chat as chat_svc
+
+    chat_svc.system(db, deal_id, event, text, actor_id=user_id)
 
 
 @router.post("/{deal_id}/confirm-ready", response_model=DealResponse)
@@ -376,11 +378,11 @@ async def confirm_ready(
     if deal.buyer_id == user.id:
         deal.buyer_ready = True
         logger.info(f"[DEAL] Deal #{deal.id}: BUYER READY (user={user.id})")
-        await _add_system_message(db, deal.id, user.id, f"Покупець підтвердив готовність")
+        await _add_system_message(db, deal.id, user.id, "Покупець підтвердив готовність", event="ready_confirmed")
     else:
         deal.seller_ready = True
         logger.info(f"[DEAL] Deal #{deal.id}: SELLER READY (user={user.id})")
-        await _add_system_message(db, deal.id, user.id, f"Продавець підтвердив готовність")
+        await _add_system_message(db, deal.id, user.id, "Продавець підтвердив готовність", event="ready_confirmed")
 
     # Both ready → move to payment_pending
     if deal.buyer_ready and deal.seller_ready:
@@ -393,7 +395,7 @@ async def confirm_ready(
             f"Обидві сторони готові! Очікуємо оплату {deal.amount_usdt} USDT.\n"
             f"Адреса для оплати вказана вище."
         )
-        await _add_system_message(db, deal.id, user.id, payment_msg)
+        await _add_system_message(db, deal.id, user.id, payment_msg, event="payment_requested")
 
     await db.commit()
     await db.refresh(deal)
@@ -443,17 +445,17 @@ async def _confirm_transfer_impl(deal_id: int, user: User, db: AsyncSession) -> 
     if side == checklist_svc.SIDE_BUYER:
         deal.buyer_confirmed_transfer = True
         logger.info(f"[DEAL] Deal #{deal.id}: BUYER CONFIRMED TRANSFER (user={user.id})")
-        await _add_system_message(db, deal.id, user.id, "Покупець підтвердив отримання каналу")
+        await _add_system_message(db, deal.id, user.id, "Покупець підтвердив отримання каналу", event="transfer_confirmed")
     else:
         deal.seller_confirmed_transfer = True
         logger.info(f"[DEAL] Deal #{deal.id}: SELLER CONFIRMED TRANSFER (user={user.id})")
-        await _add_system_message(db, deal.id, user.id, "Продавець підтвердив передачу каналу")
+        await _add_system_message(db, deal.id, user.id, "Продавець підтвердив передачу каналу", event="transfer_confirmed")
     checklist_svc.mark_transferring(deal)
     checklist_svc.record_checklist_activity(deal, now)
 
     if checklist_svc.can_advance_to_awaiting_payout(deal, items):
         await checklist_svc.advance_to_awaiting_payout(db, deal)
-        await _add_system_message(db, deal.id, user.id, checklist_svc.payout_request_message(deal))
+        await _add_system_message(db, deal.id, user.id, checklist_svc.payout_request_message(deal), event="awaiting_payout")
 
     await db.commit()
     await db.refresh(deal)
@@ -638,17 +640,23 @@ async def toggle_deal_checklist_item(
         logger.info(
             f"[CHECKLIST] deal #{deal.id} {side} {'✓' if new_done else '✗'} {key} (user={user.id})"
         )
+        await _add_system_message(
+            db, deal.id, user.id,
+            f"{checklist_svc.SIDE_LABELS[side]} {'відмітив' if new_done else 'зняв позначку'}: {_item_def.label}",
+            event="checklist_item",
+        )
         if not was_side_complete and not checklist_svc.open_required_defs(items, side):
             label = checklist_svc.SIDE_LABELS[side]
             await _add_system_message(
                 db, deal.id, user.id,
                 f"{label} виконав усі обов’язкові пункти чек-листа передачі ✅",
+                event="checklist_side_done",
             )
 
         # Legacy/edge: both already confirmed earlier → last tick completes the gate.
         if checklist_svc.can_advance_to_awaiting_payout(deal, items):
             await checklist_svc.advance_to_awaiting_payout(db, deal)
-            await _add_system_message(db, deal.id, user.id, checklist_svc.payout_request_message(deal))
+            await _add_system_message(db, deal.id, user.id, checklist_svc.payout_request_message(deal), event="awaiting_payout")
 
     await db.commit()
     await db.refresh(deal)
@@ -783,13 +791,10 @@ async def call_admin(
     moderation.ensure_deal_action_allowed(user, deal)
 
     # Add system message
-    msg = DealMessage(
-        deal_id=deal_id,
-        sender_id=user.id,
-        text=f"{user.first_name} викликав адміністратора. Очікуйте відповіді.",
-        is_system=True,
-    )
-    db.add(msg)
+    import app.services.chat as chat_svc
+
+    msg = chat_svc.system(db, deal_id, "admin_called",
+                          f"{user.first_name} викликав адміністратора. Очікуйте відповіді.", actor_id=user.id)
     await db.commit()
     await db.refresh(msg)
 

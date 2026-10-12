@@ -53,6 +53,7 @@ const DEAL_FILTERS = [
 const CabinetPage = () => {
 	const { user } = useAuth();
 	const navigate = useNavigate();
+	const [unread, setUnread] = useState({});
 	const [activeTab, setActiveTab] = useState(TABS[0]);
 	const [activeFilter, setActiveFilter] = useState(STATUS_FILTERS[0]);
 	const [dealFilter, setDealFilter] = useState(DEAL_FILTERS[0]);
@@ -95,6 +96,7 @@ const CabinetPage = () => {
 				} else if (activeTab.value === 'deals') {
 					const { data } = await dealsAPI.getMy();
 					setDeals(Array.isArray(data) ? data : []);
+					dealsAPI.chatUnread().then(r => setUnread(r.data.unread || {})).catch(() => {});
 				} else {
 					const { data } = await favoritesAPI.getAll();
 					setFavorites(data);
@@ -512,6 +514,7 @@ const CabinetPage = () => {
 													</h3>
 													<p className='text-gray-500 dark:text-gray-400 text-sm'>
 													Угода #{deal.id} · {isBuyer ? 'Ви покупець' : 'Ви продавець'}
+													{unread[deal.id] > 0 && <span className='ml-2 inline-block bg-blue-500 text-white text-[11px] font-semibold px-2 py-0.5 rounded-full'>💬 {unread[deal.id]}</span>}
 												</p>
 											</div>
 											<div className='flex items-center gap-3'>

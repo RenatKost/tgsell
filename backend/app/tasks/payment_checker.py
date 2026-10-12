@@ -186,7 +186,7 @@ async def _mark_paid(db, deal: Deal, balance: float, now: datetime) -> None:
 
     db.add(DealMessage(
         deal_id=deal.id,
-        sender_id=deal.buyer_id,
+        sender_id=None, kind="system", event="payment_received",
         text=(
             f"Оплата {balance} USDT отримана!\n"
             f"Продавець, передайте канал покупцю через Telegram і відмічайте "
@@ -261,7 +261,7 @@ async def _cancel_for_timeout(db, deal: Deal, now: datetime) -> None:
         return
     db.add(DealMessage(
         deal_id=deal.id,
-        sender_id=deal.buyer_id,
+        sender_id=None, kind="system", event="cancelled",
         text=(
             "Угоду автоматично скасовано: оплату не отримано вчасно "
             "(баланс ескроу — 0 USDT). Якщо ви все ж надіслали кошти — напишіть у підтримку."

@@ -14,6 +14,7 @@ from app.config import settings
 from app.routers import auth, channels, deals, admin, users, favorites, auctions, activity, media, support
 from app.routers import bundles as bundles_router
 from app.routers import admin_money
+from app.routers import chat as chat_router
 from app.tasks.payment_checker import run_payment_checker
 from app.tasks.payout_worker import run_payout_worker
 from app.tasks.stats_collector import run_stats_collector, run_view_tracker
@@ -124,6 +125,7 @@ app.add_middleware(
 # Routers
 app.include_router(auth.router, prefix="/api")
 app.include_router(channels.router, prefix="/api")
+app.include_router(chat_router.router, prefix="/api")
 app.include_router(deals.router, prefix="/api")
 app.include_router(admin.router, prefix="/api")
 app.include_router(admin_money.router, prefix="/api")

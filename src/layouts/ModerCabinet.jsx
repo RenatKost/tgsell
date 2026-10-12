@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { adminAPI, dealsAPI, bundlesAPI } from '../services/api';
 import { useAuth } from '../context/AppContext';
 import UsersPanel from '../components/Admin/UsersPanel';
+import DealChat from '../components/DealChat/DealChat';
 import AuditLogPanel from '../components/Admin/AuditLogPanel';
 import { GasCard, SummaryCard, TransactionsPanel, PayoutQueuePanel, EscrowOverview } from '../components/Admin/MoneyPanels';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
@@ -158,99 +159,16 @@ const Loader = () => (
 	</div>
 );
 
-const DealChatModal = ({ dealId, userId, onClose }) => {
-	const [messages, setMessages] = useState([]);
-	const [newMessage, setNewMessage] = useState('');
-	const [sending, setSending] = useState(false);
-	const messagesEndRef = useRef(null);
-
-	const fetchMessages = async () => {
-		try {
-			const { data } = await dealsAPI.getMessages(dealId);
-			setMessages(data);
-		} catch (err) { /* silent */ }
-	};
-
-	useEffect(() => {
-		fetchMessages();
-		const interval = setInterval(fetchMessages, 5000);
-		return () => clearInterval(interval);
-	}, [dealId]);
-
-	useEffect(() => {
-		messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-	}, [messages]);
-
-	const handleSend = async (e) => {
-		e.preventDefault();
-		const text = newMessage.trim();
-		if (!text || sending) return;
-		setSending(true);
-		try {
-			await dealsAPI.sendMessage(dealId, text);
-			setNewMessage('');
-			await fetchMessages();
-		} catch (err) { /* silent */ }
-		finally { setSending(false); }
-	};
-
-	return (
-		<div className='fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4' onClick={onClose}>
-			<div className='bg-white dark:bg-slate-800 rounded-2xl shadow-2xl w-full max-w-2xl max-h-[80vh] flex flex-col' onClick={e => e.stopPropagation()}>
-				<div className='bg-gradient-to-r from-[#3498db] to-[#2980b9] text-white p-5 rounded-t-2xl flex items-center justify-between'>
-					<h3 className='font-bold text-lg'>Чат угоди #{dealId}</h3>
-					<button onClick={onClose} className='text-white/80 hover:text-white text-xl font-bold'>X</button>
-				</div>
-				<div className='flex-1 overflow-y-auto p-4 bg-gray-50 dark:bg-slate-700/60 min-h-[300px]'>
-					{messages.length === 0 && (
-						<p className='text-gray-400 text-center mt-20 text-sm'>Повідомлень ще немає</p>
-					)}
-					{messages.map(msg => {
-						if (msg.is_system) {
-							return (
-								<div key={msg.id} className='mb-3 flex justify-center'>
-									<div className='bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400 text-xs px-4 py-2 rounded-full font-medium'>
-										{msg.text}
-									</div>
-								</div>
-							);
-						}
-						const isOwn = msg.sender_id === userId;
-						return (
-							<div key={msg.id} className={`mb-3 flex ${isOwn ? 'justify-end' : 'justify-start'}`}>
-								<div className={`max-w-[75%] px-4 py-2 rounded-lg ${isOwn ? 'bg-[#3498db] text-white rounded-br-none' : 'bg-white dark:bg-slate-700 text-gray-800 dark:text-gray-200 rounded-bl-none shadow-sm'}`}>
-									{!isOwn && <p className='text-xs font-bold mb-1 opacity-70'>{msg.sender_name || 'Користувач'}</p>}
-									<p className='text-sm whitespace-pre-wrap break-words'>{msg.text}</p>
-									<p className={`text-xs mt-1 ${isOwn ? 'text-blue-100' : 'text-gray-400'}`}>
-										{new Date(msg.created_at).toLocaleString('uk-UA', { hour: '2-digit', minute: '2-digit', day: '2-digit', month: '2-digit' })}
-									</p>
-								</div>
-							</div>
-						);
-					})}
-					<div ref={messagesEndRef} />
-				</div>
-				<form onSubmit={handleSend} className='p-4 border-t border-gray-200 dark:border-slate-600 flex gap-2'>
-					<input
-						type='text'
-						value={newMessage}
-						onChange={e => setNewMessage(e.target.value)}
-						placeholder='Написати як адмін...'
-						maxLength={2000}
-						className='flex-1 border border-gray-200 dark:border-slate-600 rounded-xl px-4 py-2.5 bg-white dark:bg-slate-700 text-gray-800 dark:text-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-300 focus:border-transparent'
-					/>
-					<button
-						type='submit'
-						disabled={sending || !newMessage.trim()}
-						className='bg-[#3498db] text-white px-6 py-2.5 rounded-xl font-semibold hover:bg-[#2980b9] duration-300 disabled:opacity-50'
-					>
-						{sending ? '...' : 'Надіслати'}
-					</button>
-				</form>
+const DealChatModal = ({ dealId, userId, onClose }) => (
+	<div className='fixed inset-0 z-50 bg-black/50 flex items-end sm:items-center justify-center p-0 sm:p-4' onClick={onClose}>
+		<div className='w-full sm:max-w-2xl bg-white dark:bg-slate-800 rounded-t-2xl sm:rounded-2xl overflow-hidden shadow-2xl' onClick={e => e.stopPropagation()}>
+			<div className='flex justify-end px-3 pt-2'>
+				<button onClick={onClose} className='text-gray-400 hover:text-gray-600 text-lg px-2' aria-label='Закрити'>✕</button>
 			</div>
+			<DealChat dealId={dealId} userId={userId} compact height='h-[70vh] sm:h-[32rem]' />
 		</div>
-	);
-};
+	</div>
+);
 
 const ModerCabinet = () => {
 	const { user } = useAuth();
@@ -284,6 +202,7 @@ const ModerCabinet = () => {
 	const [refreshResult, setRefreshResult] = useState({});
 
 	const [allDeals, setAllDeals] = useState([]);
+	const [dealUnread, setDealUnread] = useState({});
 	const [dealStatusFilter, setDealStatusFilter] = useState('');
 	const [disputes, setDisputes] = useState([]);
 	const [chatDealId, setChatDealId] = useState(null);
@@ -351,6 +270,7 @@ const ModerCabinet = () => {
 					items = items.filter(d => ['created', 'payment_pending', 'paid', 'channel_transferring'].includes(d.status));
 				}
 				setAllDeals(items);
+				if (items.length) dealsAPI.chatUnread(items.slice(0, 200).map(d => d.id)).then(r => setDealUnread(r.data.unread || {})).catch(() => {});
 			} else if (section === 'disputes') {
 				const { data } = await adminAPI.getAllDeals({ deal_status: 'disputed' });
 				setDisputes(Array.isArray(data) ? data : data.items || []);
@@ -1180,6 +1100,7 @@ const ModerCabinet = () => {
 													<h3 className='font-bold text-gray-800 dark:text-white text-lg'>
 														<FontAwesomeIcon icon={faHandshake} className='mr-2 text-blue-400' />
 														Угода #{deal.id} — {deal.channel_name || ('Канал #' + deal.channel_id)}
+														{dealUnread[deal.id] > 0 && <span className='ml-2 align-middle bg-blue-500 text-white text-xs px-2 py-0.5 rounded-full'>💬 {dealUnread[deal.id]}</span>}
 													</h3>
 													<p className='text-gray-500 dark:text-gray-400 text-sm mt-1'>
 														Покупець: <strong className='text-gray-700 dark:text-gray-300'>{deal.buyer_name || '—'}</strong> · Продавець: <strong className='text-gray-700 dark:text-gray-300'>{deal.seller_name || '—'}</strong>

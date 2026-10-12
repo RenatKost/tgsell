@@ -85,7 +85,7 @@ async def _create_deal_for_auction(db: AsyncSession, auction: Auction) -> Deal |
     )
     db.add(DealMessage(
         deal_id=deal.id,
-        sender_id=auction.seller_id,
+        sender_id=None, kind="system", event="deal_created",
         text=init_msg,
         is_system=True,
     ))
