@@ -225,8 +225,10 @@ async def cb_deal_confirm(callback: CallbackQuery):
             )
             return
 
-        # Money-safety: never mark completed here. Seller must enter wallet on site
-        # (POST /deals/{id}/seller-wallet) which performs transfer_usdt then completed.
+        # Money-safety: never mark completed here. Seller enters the wallet on site
+        # (POST /deals/{id}/seller-wallet): claim + queued job; the payout worker
+        # (app.tasks.payout_worker → services.payouts) sends USDT and sets completed
+        # only after the on-chain receipt is SUCCESS.
         deal.buyer_confirmed_transfer = True
         checklist_svc.mark_transferring(deal)
         checklist_svc.record_checklist_activity(deal, now)

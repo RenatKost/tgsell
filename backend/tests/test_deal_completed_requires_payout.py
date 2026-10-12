@@ -140,4 +140,4 @@ def test_admin_resolve_no_longer_has_todo_without_transfer():
     admin = (BACKEND_ROOT / "app/routers/admin.py").read_text(encoding="utf-8")
     assert "# TODO: refund USDT to buyer" not in admin
     assert "# TODO: release USDT to seller" not in admin
-    assert "execute_transfer" in admin
+    assert "enqueue_transfer" in admin

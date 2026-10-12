@@ -3,7 +3,7 @@ import logging
 from datetime import datetime, timedelta, timezone
 import os
 
-from fastapi import APIRouter, Body, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Body, Depends, HTTPException, Query, Response, status
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
@@ -261,24 +261,29 @@ def _resolve_wallet(preferred: str | None, user_wallet: str | None, override: st
     return None
 
 
-def _outcome_http(outcome, fail_detail: str):
-    """Map a TransferOutcome to the HTTP result. pending → 202 (claim kept)."""
-    if outcome.status == "pending":
-        raise HTTPException(status_code=202, detail=outcome.error)
-    raise HTTPException(status_code=502, detail=f"{fail_detail} {outcome.error or ''}".strip())
+async def _precheck_gas_or_http(db: AsyncSession, deal: Deal, wallet: str, units: int, **kw) -> None:
+    """Master TRX must cover gas BEFORE claim; otherwise rollback (no claim) + 503."""
+    from app.services import payouts
+
+    try:
+        await payouts.precheck_gas(deal, wallet, units, **kw)
+    except payouts.PayoutError as e:
+        await db.rollback()
+        raise HTTPException(status_code=e.http_status, detail=e.message)
 
 
 @router.post("/deals/{deal_id}/resolve", response_model=DealResponse)
 async def resolve_deal(
     deal_id: int,
     body: DealResolveRequest,
+    response: Response,
     admin: User = Depends(get_admin_user),
     db: AsyncSession = Depends(get_db),
 ):
     """Resolve a disputed deal: on-chain refund to buyer or release to seller.
 
     Money-safety: FOR UPDATE claim → payout_in_progress + commit BEFORE broadcast;
-    transfer via payouts.execute_transfer (receipt-checked; PENDING keeps the claim).
+    the job row is enqueued in the same commit; the payout worker executes it (202).
     """
     from app.services import payouts
     from app.services.deal_lifecycle import PayoutClaimError, has_payout_tx
@@ -334,29 +339,21 @@ async def resolve_deal(
         await db.rollback()
         raise HTTPException(status_code=e.http_status, detail=e.message)
 
-    # 4) Claim: must still be disputed → payout_in_progress, then COMMIT.
+    await _precheck_gas_or_http(db, deal, wallet, units)
+
+    # 4) Claim (disputed → payout_in_progress) + enqueue job in ONE commit.
     try:
         await payouts.claim_for_payout(db, deal, expected_status=DealStatus.disputed)
     except PayoutClaimError as e:
         await db.rollback()
         raise HTTPException(status_code=e.http_status, detail=e.message)
-
-    await db.commit()  # claim visible — second double-click gets 409
-    logger.info(f"[ADMIN] Deal #{deal.id}: CLAIMED payout_in_progress for {body.resolution}")
-
-    # 5) On-chain transfer AFTER claim.
-    outcome = await payouts.execute_transfer(
+    payouts.enqueue_transfer(
         db, deal, tx_type=tx_type, to_address=wallet, amount_units=units,
         restore_status=DealStatus.disputed,
     )
-    if not outcome.ok:
-        _outcome_http(
-            outcome,
-            "Ончейн-refund не вдався. Статус угоди: disputed."
-            if body.resolution == "refund_buyer"
-            else "Ончейн-release не вдався. Статус угоди: disputed.",
-        )
-    logger.info(f"[ADMIN] Deal #{deal.id}: {body.resolution} OK tx={outcome.tx_hash}")
+    await db.commit()  # claim + job visible — second double-click gets 409
+    logger.info(f"[ADMIN] Deal #{deal.id}: CLAIMED + queued {body.resolution}")
+    response.status_code = 202
     return _admin_deal_response(await _load_deal_full(db, deal_id))
 
 
@@ -373,6 +370,7 @@ _FUNDED_DEAL_STATUSES = (
 @router.post("/deals/{deal_id}/cancel", response_model=DealResponse)
 async def admin_cancel_deal(
     deal_id: int,
+    response: Response,
     admin: User = Depends(get_admin_user),
     db: AsyncSession = Depends(get_db),
 ):
@@ -421,22 +419,20 @@ async def admin_cancel_deal(
             await db.rollback()
             raise HTTPException(status_code=e.http_status, detail=e.message)
         prev_status = deal.status
+        units = payouts.refund_units(deal)
+        await _precheck_gas_or_http(db, deal, wallet, units)
         try:
             await payouts.claim_for_payout(db, deal, expected_status=prev_status)
         except PayoutClaimError as e:
             await db.rollback()
             raise HTTPException(status_code=e.http_status, detail=e.message)
-        await db.commit()
-        outcome = await payouts.execute_transfer(
+        payouts.enqueue_transfer(
             db, deal, tx_type=TransactionType.refund, to_address=wallet,
-            amount_units=payouts.refund_units(deal), restore_status=prev_status,
+            amount_units=units, restore_status=prev_status,
         )
-        if not outcome.ok:
-            _outcome_http(
-                outcome,
-                "Ончейн-refund не вдався — угоду НЕ скасовано. Кошти лишаються в escrow; використайте resolve_deal.",
-            )
-        logger.info(f"[ADMIN] Deal #{deal.id}: cancel-with-refund OK tx={outcome.tx_hash}")
+        await db.commit()
+        logger.info(f"[ADMIN] Deal #{deal.id}: cancel-with-refund queued")
+        response.status_code = 202
         return _admin_deal_response(await _load_deal_full(db, deal_id))
 
     deal.status = DealStatus.cancelled
@@ -449,6 +445,7 @@ async def admin_cancel_deal(
 @router.post("/deals/{deal_id}/collect-fee")
 async def collect_fee(
     deal_id: int,
+    response: Response,
     admin: User = Depends(get_admin_user),
     db: AsyncSession = Depends(get_db),
 ):
@@ -501,18 +498,19 @@ async def collect_fee(
         await db.rollback()
         raise
 
-    outcome = await payouts.execute_transfer(
+    await _precheck_gas_or_http(db, deal, master, units, allow_master=True)
+    job = payouts.enqueue_transfer(
         db, deal, tx_type=TransactionType.fee_collection, to_address=master,
-        amount_units=units, restore_status=None, allow_master=True,
+        amount_units=units, restore_status=None,
     )
+    await db.commit()
+    response.status_code = 202
     return {
-        "ok": outcome.ok,
-        "status": outcome.status,
+        "ok": True,
+        "status": "queued",
         "deal_id": deal_id,
         "amount_usdt": payouts.units_to_usdt(units),
-        "tx": outcome.tx_hash,
-        "error": outcome.error,
-        "reason": outcome.reason,
+        "transaction_id": job.id,
     }
 
 
@@ -759,6 +757,7 @@ async def recollect_all_channels_stats(
 @router.post("/escrow/sweep/{deal_id}")
 async def sweep_escrow_wallet(
     deal_id: int,
+    response: Response,
     to_address: str = Body(..., embed=True),
     admin: User = Depends(get_admin_user),
     db: AsyncSession = Depends(get_db),
@@ -767,7 +766,7 @@ async def sweep_escrow_wallet(
 
     Row lock + guards: only cancelled deals, no unresolved outgoing tx, destination is a
     real TRON address that is neither master nor any escrow. Fee collection from completed
-    deals is POST /admin/deals/{id}/collect-fee. Transfer via payouts.execute_transfer.
+    deals is POST /admin/deals/{id}/collect-fee. Queued for the payout worker (202).
     """
     import asyncio
     from app.services import payouts
@@ -804,23 +803,47 @@ async def sweep_escrow_wallet(
     if units <= 0:
         return await fail(f"Escrow {escrow_addr} has 0 USDT")
 
-    outcome = await payouts.execute_transfer(
+    try:
+        await payouts.precheck_gas(deal, to_address, units)
+    except payouts.PayoutError as e:
+        return await fail(e.message)
+    job = payouts.enqueue_transfer(
         db, deal, tx_type=TransactionType.sweep, to_address=to_address,
         amount_units=units, restore_status=None,
     )
-    resp = {
-        "ok": outcome.ok,
-        "status": outcome.status,
+    await db.commit()
+    response.status_code = 202
+    return {
+        "ok": True,
+        "status": "queued",
         "deal_id": deal_id,
         "escrow": escrow_addr,
         "to": to_address,
         "amount_usdt": payouts.units_to_usdt(units),
-        "usdt_tx": outcome.tx_hash,
+        "transaction_id": job.id,
     }
-    if not outcome.ok:
-        resp["error"] = outcome.error or "USDT transfer failed"
-        resp["reason"] = outcome.reason
-    return resp
+
+
+@router.get("/deals/{deal_id}/payout-status")
+async def admin_payout_status(
+    deal_id: int,
+    admin: User = Depends(get_admin_user),
+    db: AsyncSession = Depends(get_db),
+):
+    from app.services import payouts
+
+    deal = await db.get(Deal, deal_id)
+    if not deal:
+        raise HTTPException(status_code=404, detail="Deal not found")
+    return await payouts.payout_status(db, deal)
+
+
+@router.get("/escrow/master-balance")
+async def master_wallet_balance(admin: User = Depends(get_admin_user)):
+    """Master TRX balance (gas source). trx=None → unknown. Low → throttled admin alert."""
+    from app.tasks.payout_worker import check_master_trx
+
+    return await check_master_trx()
 
 
 ESCROW_BALANCES_CACHE_TTL_SEC = 60

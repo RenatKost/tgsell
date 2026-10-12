@@ -170,16 +170,44 @@ def get_usdt_balance(wallet_address: str) -> float | None:
         return None
 
 
-def get_trx_balance(wallet_address: str) -> float:
-    """Check TRX balance of a wallet. Returns TRX amount."""
+def get_trx_balance(wallet_address: str) -> float | None:
+    """TRX balance of a wallet, or None if it could not be determined (NEVER 0.0 on error)."""
+    if not wallet_address:
+        return None
     try:
         client = _get_tron_client()
-        balance_sun = client.get_account_balance(wallet_address)
-        logger.info(f"[ESCROW] TRX balance: {wallet_address} = {balance_sun} TRX")
-        return float(balance_sun)
+        sun = _account_balance_sun(client, wallet_address)
     except Exception as e:
-        logger.error(f"[ESCROW] TRX balance check failed for {wallet_address}: {e}")
-        return 0.0
+        logger.error(f"[ESCROW] TRX balance UNKNOWN for {wallet_address}: {e}")
+        return None
+    return sun / SUN_PER_TRX
+
+
+def check_gas_funding(escrow_address: str, to_address: str, amount_units: int) -> dict:
+    """Pre-claim check: can master cover the gas top-up for this transfer? Never raises.
+
+    {ok, reason, message, need_sun, topup_sun, master_sun, escrow_sun, estimate}.
+    Unknown balances → ok False (reason TRX_BALANCE_UNKNOWN).
+    """
+    master = (settings.tron_master_wallet_address or "").strip()
+    try:
+        client = _get_tron_client()
+        est = estimate_usdt_transfer_cost_sun(escrow_address, to_address, int(amount_units), client)
+        escrow_sun = _account_balance_sun(client, escrow_address)
+        topup = max(0, est["required_sun"] - escrow_sun)
+        need = topup + MASTER_TRANSFER_RESERVE_SUN if topup > 0 else 0
+        master_sun = _account_balance_sun(client, master) if topup > 0 else None
+    except Exception as e:
+        logger.error(f"[ESCROW] gas funding check failed: {e}")
+        return {"ok": False, "reason": "TRX_BALANCE_UNKNOWN",
+                "message": f"Не вдалося перевірити баланс TRX (TronGrid): {e}"}
+    out = {"need_sun": need, "topup_sun": topup, "master_sun": master_sun,
+           "escrow_sun": escrow_sun, "estimate": est}
+    if topup > 0 and master_sun < need:
+        return {**out, "ok": False, "reason": "MASTER_INSUFFICIENT_TRX",
+                "message": (f"Master {master}: {master_sun / SUN_PER_TRX:.2f} TRX, потрібно "
+                            f"≈{need / SUN_PER_TRX:.2f} TRX (газ {topup / SUN_PER_TRX:.2f} + резерв).")}
+    return {**out, "ok": True, "reason": None, "message": None}
 
 
 def sweep_trx_to_master(from_encrypted_private_key: str) -> str | None:

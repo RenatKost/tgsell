@@ -1,6 +1,6 @@
 from datetime import datetime, timezone
 
-from fastapi import APIRouter, Body, Depends, HTTPException, status
+from fastapi import APIRouter, Body, Depends, HTTPException, Response, status
 from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
@@ -648,6 +648,7 @@ async def toggle_deal_checklist_item(
 async def set_seller_wallet(
     deal_id: int,
     body: SellerWalletRequest,
+    response: Response,
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
@@ -690,7 +691,24 @@ async def set_seller_wallet(
         await db.rollback()
         raise HTTPException(status_code=e.http_status, detail=e.message)
 
-    # 3) Atomic claim: status must still be awaiting_payout, no unresolved outgoing tx.
+    current_status = deal.status
+    if current_status != DealStatus.awaiting_payout:
+        await db.rollback()
+        if current_status == DealStatus.payout_in_progress:
+            raise HTTPException(status_code=409, detail="Виплата вже обробляється")
+        raise HTTPException(status_code=400, detail="Deal is not awaiting_payout")
+
+    units = payouts.release_units(deal)
+    payout_amount = payouts.units_to_usdt(units)
+
+    # 3) Master TRX must cover gas BEFORE claim (insufficient/unknown → no claim, 503).
+    try:
+        await payouts.precheck_gas(deal, wallet, units)
+    except payouts.PayoutError as e:
+        await db.rollback()
+        raise HTTPException(status_code=e.http_status, detail=e.message)
+
+    # 4) Atomic claim + job row in ONE commit (no unresolved outgoing tx allowed).
     try:
         await payouts.claim_for_payout(db, deal, expected_status=DealStatus.awaiting_payout)
     except PayoutClaimError as e:
@@ -698,35 +716,38 @@ async def set_seller_wallet(
         raise HTTPException(status_code=e.http_status, detail=e.message)
 
     deal.seller_payout_address = wallet
-    units = payouts.release_units(deal)
-    payout_amount = payouts.units_to_usdt(units)
-    logger.info(
-        f"[PAYOUT] Deal #{deal.id}: CLAIMED payout_in_progress, wallet={wallet}, "
-        f"payout_amount={payout_amount} USDT"
-    )
-    await _add_system_message(
-        db, deal.id, user.id, "Продавець вказав гаманець. Виконуємо переказ..."
-    )
-    # Commit claim FIRST so the second request no longer sees awaiting_payout.
-    await db.commit()
-
-    # 4) On-chain work AFTER claim — unified, receipt-checked payout.
-    outcome = await payouts.execute_transfer(
+    payouts.enqueue_transfer(
         db, deal, tx_type=TransactionType.release, to_address=wallet, amount_units=units,
         restore_status=DealStatus.awaiting_payout,
     )
-    if outcome.status == "success":
-        text = f"Виплата {payout_amount} USDT відправлена!\nTX: {outcome.tx_hash}"
-    elif outcome.status == "pending":
-        text = (
-            f"Транзакцію виплати відправлено, очікуємо підтвердження мережі.\nTX: {outcome.tx_hash}"
-        )
-    else:
-        text = "Автоматична виплата не вдалася. Спробуйте ще раз або зверніться до адміністратора."
-    logger.info(f"[PAYOUT] Deal #{deal.id}: payout outcome={outcome}")
-    await _add_system_message(db, deal.id, user.id, text)
+    await _add_system_message(
+        db, deal.id, user.id,
+        f"Продавець вказав гаманець. Виплату {payout_amount} USDT поставлено в чергу — "
+        "статус оновиться після підтвердження мережею.",
+    )
     await db.commit()
+    logger.info(
+        f"[PAYOUT] Deal #{deal.id}: CLAIMED + queued release {payout_amount} USDT → {wallet}"
+    )
+    response.status_code = 202
     return await _respond()
+
+
+@router.get("/{deal_id}/payout-status")
+async def get_payout_status(
+    deal_id: int,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Poll payout progress (buyer/seller of the deal)."""
+    from app.services import payouts
+
+    deal = await db.get(Deal, deal_id)
+    if not deal:
+        raise HTTPException(status_code=404, detail="Deal not found")
+    if user.id not in (deal.buyer_id, deal.seller_id):
+        raise HTTPException(status_code=403, detail="Forbidden")
+    return await payouts.payout_status(db, deal)
 
 
 @router.post("/{deal_id}/call-admin", response_model=DealMessageResponse)

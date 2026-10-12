@@ -458,7 +458,7 @@ async def test_sweep_with_unknown_balance_moves_nothing(env, monkeypatch):
 
     async with env.orm.session() as db:
         r = await admin_router.sweep_escrow_wallet(
-            deal_id, to_address="TUExqjcYXyftLqRWzBBigkeXyzY8pTGAkn", admin=None, db=db
+            deal_id, response=__import__("fastapi").Response(), to_address="TUExqjcYXyftLqRWzBBigkeXyzY8pTGAkn", admin=None, db=db
         )
     assert r["ok"] is False and "Не вдалося отримати баланс" in r["error"]
     gas.assert_not_called()

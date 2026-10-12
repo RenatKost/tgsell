@@ -134,6 +134,7 @@ export const dealsAPI = {
 	confirmChannelTransfer: (id) =>
 		api.post(`/deals/${id}/confirm-channel-transfer`),
 
+	payoutStatus: (id) => api.get(`/deals/${id}/payout-status`),
 	setSellerWallet: (id, walletAddress) =>
 		api.post(`/deals/${id}/seller-wallet`, { wallet_address: walletAddress }),
 
@@ -196,6 +197,8 @@ export const adminAPI = {
 		api.get('/admin/escrow/balances', { params: refresh ? { refresh: true } : {} }),
 
 	collectFee: (dealId) => api.post(`/admin/deals/${dealId}/collect-fee`),
+	payoutStatus: (dealId) => api.get(`/admin/deals/${dealId}/payout-status`),
+	masterBalance: () => api.get('/admin/escrow/master-balance'),
 	sweepEscrow: (dealId, toAddress) =>
 		api.post(`/admin/escrow/sweep/${dealId}`, { to_address: toAddress }),
 

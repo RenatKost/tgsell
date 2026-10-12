@@ -14,6 +14,7 @@ from app.config import settings
 from app.routers import auth, channels, deals, admin, users, favorites, auctions, activity, media, support
 from app.routers import bundles as bundles_router
 from app.tasks.payment_checker import run_payment_checker
+from app.tasks.payout_worker import run_payout_worker
 from app.tasks.stats_collector import run_stats_collector, run_view_tracker
 from app.tasks.auction_manager import run_auction_manager
 from app.tasks.health_monitor import run_health_monitor
@@ -83,6 +84,7 @@ async def lifespan(app: FastAPI):
     from app.services.channel_stats import delayed_telethon_startup
     background_tasks.append(loop.create_task(delayed_telethon_startup()))
     background_tasks.append(loop.create_task(run_payment_checker(interval_seconds=30)))
+    background_tasks.append(loop.create_task(run_payout_worker(interval_seconds=5)))
     background_tasks.append(loop.create_task(run_stats_collector(interval_hours=3)))
     background_tasks.append(loop.create_task(run_view_tracker(interval_hours=3)))
     background_tasks.append(loop.create_task(run_auction_manager(interval_seconds=60)))

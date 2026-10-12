@@ -77,6 +77,8 @@ const DEAL_STATUS_LABELS = {
 	payment_pending: { text: 'Очікує оплати', color: 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400' },
 	paid: { text: 'Оплачено', color: 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400' },
 	channel_transferring: { text: 'Передача каналу', color: 'bg-indigo-100 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-400' },
+	awaiting_payout: { text: 'Очікує виплати', color: 'bg-cyan-100 text-cyan-700 dark:bg-cyan-900/30 dark:text-cyan-400' },
+	payout_in_progress: { text: 'Виплата обробляється', color: 'bg-cyan-100 text-cyan-700 dark:bg-cyan-900/30 dark:text-cyan-400' },
 	completed: { text: 'Завершено', color: 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400' },
 	disputed: { text: 'Спір', color: 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400' },
 	cancelled: { text: 'Скасовано', color: 'bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-300' },
@@ -287,6 +289,8 @@ const ModerCabinet = () => {
 	const [escrowUnknown, setEscrowUnknown] = useState([]);
 	const [escrowMeta, setEscrowMeta] = useState(null);
 	const [escrowRefresh, setEscrowRefresh] = useState(false);
+	const [masterTrx, setMasterTrx] = useState(null);
+	const [collecting, setCollecting] = useState({});
 	const [sweepTarget, setSweepTarget] = useState({});
 	const [sweeping, setSweeping] = useState({});
 
@@ -356,6 +360,7 @@ const ModerCabinet = () => {
 				setEscrowTotal(data.total || 0);
 				setEscrowUnknown(data.unknown || []);
 				setEscrowMeta({ checkedAt: data.checked_at, cached: data.cached, checked: data.checked_count });
+				adminAPI.masterBalance().then(r => setMasterTrx(r.data)).catch(() => setMasterTrx({ unknown: true }));
 			}
 		} catch (err) {
 			console.error('Failed to load admin data:', err);
@@ -434,9 +439,32 @@ const ModerCabinet = () => {
 		}
 	};
 
+	// Payouts run in the background worker: poll until the transfer is final.
+	const pollPayout = (dealId, label) => {
+		let tries = 0;
+		const t = setInterval(async () => {
+			tries += 1;
+			try {
+				const { data } = await adminAPI.payoutStatus(dealId);
+				if (!data.in_progress) {
+					clearInterval(t);
+					const lt = data.last_transfer;
+					if (lt?.state === 'confirmed') alert(`✅ ${label} #${dealId}: підтверджено\nTX: ${lt.tx_hash}`);
+					else alert(`❌ ${label} #${dealId}: не виконано (${lt?.receipt_status || '?'})\n${lt?.reason || ''}`);
+					loadData();
+				}
+			} catch { /* keep polling */ }
+			if (tries >= 60) clearInterval(t);
+		}, 5000);
+	};
+
 	const handleResolve = async (dealId, resolution) => {
 		try {
-			await adminAPI.resolveDeal(dealId, { resolution });
+			const res = await adminAPI.resolveDeal(dealId, { resolution });
+			if (res.status === 202) {
+				alert('Виплату поставлено в чергу. Результат з’явиться після підтвердження мережею.');
+				pollPayout(dealId, resolution === 'refund_buyer' ? 'Refund' : 'Release');
+			}
 			setDisputes(prev => prev.filter(d => d.id !== dealId));
 			setAllDeals(prev => prev.filter(d => d.id !== dealId));
 		} catch (err) { alert(err.response?.data?.detail || 'Помилка'); }
@@ -445,8 +473,13 @@ const ModerCabinet = () => {
 	const handleCancelDeal = async (dealId) => {
 		if (!confirm('Скасувати цю угоду?')) return;
 		try {
-			await adminAPI.cancelDeal(dealId);
-			setAllDeals(prev => prev.map(d => d.id === dealId ? { ...d, status: 'cancelled' } : d));
+			const res = await adminAPI.cancelDeal(dealId);
+			const newStatus = res.data?.status || 'cancelled';
+			setAllDeals(prev => prev.map(d => d.id === dealId ? { ...d, status: newStatus } : d));
+			if (res.status === 202) {
+				alert('Refund поставлено в чергу. Угоду буде скасовано після підтвердження мережею.');
+				pollPayout(dealId, 'Refund');
+			}
 			setDisputes(prev => prev.filter(d => d.id !== dealId));
 		} catch (err) { alert(err.response?.data?.detail || 'Помилка скасування'); }
 	};
@@ -485,12 +518,26 @@ const ModerCabinet = () => {
 		setSweeping(prev => ({ ...prev, [dealId]: true }));
 		try {
 			const { data } = await adminAPI.sweepEscrow(dealId, toAddr.trim());
-			if (data.ok) {
-				alert('Переведено ' + data.amount_usdt + ' USDT!\nTx: ' + data.usdt_tx);
+			if (data.ok && data.status === 'queued') {
+				alert('Переказ ' + data.amount_usdt + ' USDT поставлено в чергу.');
+				pollPayout(dealId, 'Sweep');
+			} else if (data.ok) {
+				alert('Переведено ' + data.amount_usdt + ' USDT!');
 				loadData();
 			} else { alert('Помилка: ' + data.error); }
 		} catch (err) { alert(err.response?.data?.detail || 'Помилка переводу'); }
 		finally { setSweeping(prev => ({ ...prev, [dealId]: false })); }
+	};
+
+	const handleCollectFee = async (dealId) => {
+		if (!confirm('Зібрати комісію угоди #' + dealId + ' на master-гаманець?')) return;
+		setCollecting(prev => ({ ...prev, [dealId]: true }));
+		try {
+			const { data } = await adminAPI.collectFee(dealId);
+			alert('Збір комісії ' + data.amount_usdt + ' USDT поставлено в чергу.');
+			pollPayout(dealId, 'Комісія');
+		} catch (err) { alert(err.response?.data?.detail || 'Помилка збору комісії'); }
+		finally { setCollecting(prev => ({ ...prev, [dealId]: false })); }
 	};
 
 	const handleActConfigChange = (key, value) => {
@@ -1431,6 +1478,13 @@ const ModerCabinet = () => {
 								</ul>
 							</div>
 						)}
+						{masterTrx && (
+							<div className={`mb-4 p-4 rounded-2xl border text-sm ${masterTrx.unknown ? 'bg-yellow-50 border-yellow-200 text-yellow-800' : masterTrx.low ? 'bg-red-50 border-red-200 text-red-700' : 'bg-green-50 border-green-200 text-green-700'}`}>
+								⛽ Master TRX: <span className='font-bold'>{masterTrx.unknown ? 'невідомо' : Number(masterTrx.trx).toFixed(2) + ' TRX'}</span>
+								{masterTrx.low && <span> — нижче порогу {masterTrx.threshold} TRX, поповніть для газу виплат</span>}
+								{masterTrx.address && <code className='ml-2 font-mono text-xs break-all'>{masterTrx.address}</code>}
+							</div>
+						)}
 						{loading ? <Loader /> : escrowWallets.length === 0 ? (
 							<EmptyState icon='💳' title={escrowUnknown.length > 0 ? 'Підтверджених коштів не знайдено (є невідомі баланси)' : 'Усі ескроу порожні'} />
 						) : (
@@ -1463,7 +1517,12 @@ const ModerCabinet = () => {
 														{sweeping[w.deal_id] ? '...' : 'Перевести'}
 													</button>
 												</div>
-												<p className='text-xs text-gray-400 dark:text-gray-500 mt-1.5'>TRX потрібен на мастер-гаманці для газу</p>
+												<p className='text-xs text-gray-400 dark:text-gray-500 mt-1.5'>TRX потрібен на мастер-гаманці для газу. Sweep — лише для скасованих угод.</p>
+												{w.status === 'completed' && (
+													<button onClick={() => handleCollectFee(w.deal_id)} disabled={collecting[w.deal_id]} className='mt-2 bg-[#27ae60] text-white px-4 py-2 rounded-xl text-sm font-semibold hover:bg-green-600 duration-300 disabled:opacity-50'>
+														{collecting[w.deal_id] ? '...' : 'Зібрати комісію на master'}
+													</button>
+												)}
 											</div>
 										</div>
 									</div>

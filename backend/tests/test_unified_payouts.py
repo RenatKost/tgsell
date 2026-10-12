@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import asyncio
 import importlib
+import inspect
 import sys
 import threading
 import time
@@ -24,7 +25,7 @@ BACKEND_ROOT = Path(__file__).resolve().parents[1]
 if str(BACKEND_ROOT) not in sys.path:
     sys.path.insert(0, str(BACKEND_ROOT))
 
-from fastapi import HTTPException  # noqa: E402
+from fastapi import HTTPException, Response  # noqa: E402
 from sqlalchemy import select  # noqa: E402
 from tronpy.keys import PrivateKey  # noqa: E402
 
@@ -54,6 +55,7 @@ class FakeTron:
         self.prepare_delay = 0.0
         self.sweeps: list[str] = []
         self._lock = threading.Lock()
+        self.gas_result = {"ok": True, "reason": None, "message": None}
 
     def fetch_units(self, address):
         from app.services.escrow import BalanceUnavailable
@@ -85,6 +87,9 @@ class FakeTron:
             return script.pop(0) if len(script) > 1 else script[0]
         return dict(self.default_receipt)
 
+    def gas(self, escrow, to, units):
+        return dict(self.gas_result)
+
     def sweep(self, enc):
         self.sweeps.append(enc)
         return "sweep"
@@ -100,6 +105,7 @@ async def env(pg_orm, monkeypatch):
     admin_router = importlib.import_module("app.routers.admin")
     deals_router = importlib.import_module("app.routers.deals")
     pc = importlib.import_module("app.tasks.payment_checker")
+    pw = importlib.import_module("app.tasks.payout_worker")
 
     tron = FakeTron()
     monkeypatch.setattr(escrow, "fetch_usdt_balance_units", tron.fetch_units)
@@ -107,6 +113,7 @@ async def env(pg_orm, monkeypatch):
     monkeypatch.setattr(escrow, "broadcast_prepared", tron.broadcast)
     monkeypatch.setattr(escrow, "get_receipt", tron.receipt)
     monkeypatch.setattr(escrow, "sweep_trx_to_master", tron.sweep)
+    monkeypatch.setattr(escrow, "check_gas_funding", tron.gas)
     monkeypatch.setattr(escrow, "get_usdt_balance", lambda a: tron.fetch_units(a) / 1e6)
     alert = AsyncMock()
     monkeypatch.setattr(alerts, "send_admin_alert", alert)
@@ -156,37 +163,74 @@ async def env(pg_orm, monkeypatch):
                 select(Transaction).where(Transaction.deal_id == deal_id).order_by(Transaction.id)
             )).scalars())
 
-    async def seller_wallet(deal_id, wallet=SELLER_W):
+    workers = []
+
+    def new_worker():
+        w = pw.PayoutWorker(engine_=pg_orm.engine, session_factory=pg_orm.session, receipt_timeout=0)
+        workers.append(w)
+        return w
+
+    async def work():
+        w = new_worker()
+        assert await w.acquire()
+        try:
+            return await w.run_once()
+        finally:
+            await w.release()
+
+    async def fresh(result, http):
+        if isinstance(result, dict):
+            return {**result, "http": http}
+        d = await get(result.id)
+        return SimpleNamespace(status=d.status.value, payout_tx_hash=d.payout_tx_hash, http=http, id=d.id)
+
+    async def invoke(fn, *a, run_worker=True, user=None, **kw):
+        resp = Response()
+        if "response" in inspect.signature(fn).parameters:
+            kw["response"] = resp
+        async with pg_orm.session() as db:
+            if user is not None:
+                kw["user"] = await db.get(User, user)
+            elif "admin" in inspect.signature(fn).parameters:
+                kw["admin"] = None
+            result = await fn(*a, db=db, **kw)
+        http = resp.status_code or 200
+        if run_worker:
+            await work()
+        return await fresh(result, http)
+
+    async def seller_wallet(deal_id, wallet=SELLER_W, run_worker=True):
         from app.schemas.deal import SellerWalletRequest
 
-        async with pg_orm.session() as db:
-            user = await db.get(User, ids.seller)
-            return await deals_router.set_seller_wallet(
-                deal_id, SellerWalletRequest(wallet_address=wallet), user=user, db=db
-            )
+        return await invoke(
+            deals_router.set_seller_wallet, deal_id, SellerWalletRequest(wallet_address=wallet),
+            user=ids.seller, run_worker=run_worker,
+        )
 
-    async def resolve(deal_id, resolution, wallet=None):
+    async def resolve(deal_id, resolution, wallet=None, run_worker=True):
         from app.schemas.deal import DealResolveRequest
 
-        async with pg_orm.session() as db:
-            return await admin_router.resolve_deal(
-                deal_id, DealResolveRequest(resolution=resolution, wallet_address=wallet), admin=None, db=db
-            )
+        return await invoke(
+            admin_router.resolve_deal, deal_id,
+            DealResolveRequest(resolution=resolution, wallet_address=wallet), run_worker=run_worker,
+        )
 
-    async def call(fn, *a, **kw):
-        async with pg_orm.session() as db:
-            return await fn(*a, admin=None, db=db, **kw)
+    async def call(fn, *a, run_worker=True, **kw):
+        return await invoke(fn, *a, run_worker=run_worker, **kw)
 
     async def reconcile(now=None):
         async with pg_orm.session() as db:
             return await payouts.reconcile_pending_transfers(db, now)
 
-    yield SimpleNamespace(
+    yield_ns = SimpleNamespace(
         orm=pg_orm, tron=tron, alert=alert, payouts=payouts, admin=admin_router, deals=deals_router,
-        pc=pc, ids=ids, make_deal=make_deal, get=get, txs=txs, seller_wallet=seller_wallet,
+        pc=pc, pw=pw, work=work, new_worker=new_worker, ids=ids, make_deal=make_deal, get=get, txs=txs, seller_wallet=seller_wallet,
         resolve=resolve, call=call, reconcile=reconcile, S=DealStatus, TS=TransactionStatus,
         TT=TransactionType, Tx=Transaction, Deal=Deal, Channel=Channel, CS=ChannelStatus,
     )
+    yield yield_ns
+    for w in workers:
+        await w.release()
 
 
 # ── amounts / addresses ──
@@ -285,7 +329,13 @@ async def test_broadcast_raised_unknown_keeps_claim_and_no_resend(env):
 async def test_concurrent_seller_requests_single_transfer(env):
     deal_id, _ = await env.make_deal(env.S.awaiting_payout)
     env.tron.prepare_delay = 0.3
-    results = await asyncio.gather(env.seller_wallet(deal_id), env.seller_wallet(deal_id), return_exceptions=True)
+    results = await asyncio.gather(
+        env.seller_wallet(deal_id, run_worker=False), env.seller_wallet(deal_id, run_worker=False),
+        return_exceptions=True,
+    )
+    assert len(await env.txs(deal_id)) == 1  # exactly one job
+    await env.work()
+    await env.work()
     assert len(env.tron.prepared) == 1
     errors = [r for r in results if isinstance(r, HTTPException)]
     assert len(errors) == 1 and errors[0].status_code in (400, 409)
@@ -314,8 +364,10 @@ async def test_unknown_or_insufficient_balance_refused(env, balance):
     env.tron.balances[escrow_addr] = balance
     resp = await env.seller_wallet(deal_id)
     assert resp.status == "awaiting_payout"
-    assert env.tron.prepared == [] and await env.txs(deal_id) == []
-    assert any("REFUSED" in c.args[0] for c in env.alert.await_args_list)
+    (tx,) = await env.txs(deal_id)
+    assert tx.status == env.TS.failed and tx.receipt_status in ("BALANCE_UNKNOWN", "INSUFFICIENT_ESCROW")
+    assert env.tron.prepared == []
+    assert any("NOT SENT" in c.args[0] for c in env.alert.await_args_list)
 
 
 # ── admin resolve / cancel ──
@@ -344,20 +396,18 @@ async def test_admin_release_seller_completed_and_channel_sold(env):
 async def test_admin_resolve_pending_keeps_claim(env):
     deal_id, _ = await env.make_deal(env.S.disputed)
     env.tron.default_receipt = {"status": "PENDING", "reason": "not found"}
-    with pytest.raises(HTTPException) as ei:
-        await env.resolve(deal_id, "refund_buyer")
-    assert ei.value.status_code == 202
-    assert (await env.get(deal_id)).status == env.S.payout_in_progress  # NOT disputed
+    resp = await env.resolve(deal_id, "refund_buyer")
+    assert resp.http == 202 and resp.status == "payout_in_progress"  # NOT disputed
 
 
 @pytest.mark.asyncio
 async def test_admin_resolve_failed_restores_disputed(env):
     deal_id, _ = await env.make_deal(env.S.disputed)
     env.tron.default_receipt = {"status": "FAILED", "reason": "OUT_OF_ENERGY"}
-    with pytest.raises(HTTPException) as ei:
-        await env.resolve(deal_id, "release_seller")
-    assert ei.value.status_code == 502 and "OUT_OF_ENERGY" in ei.value.detail
-    assert (await env.get(deal_id)).status == env.S.disputed
+    resp = await env.resolve(deal_id, "release_seller")
+    assert resp.http == 202 and resp.status == "disputed"
+    (tx,) = await env.txs(deal_id)
+    assert tx.receipt_status == "OUT_OF_ENERGY"
 
 
 @pytest.mark.asyncio
@@ -389,10 +439,8 @@ async def test_cancel_funded_refunds_then_cancelled(env):
 async def test_cancel_funded_failed_restores_status(env):
     deal_id, _ = await env.make_deal(env.S.paid)
     env.tron.default_receipt = {"status": "FAILED", "reason": "REVERT"}
-    with pytest.raises(HTTPException) as ei:
-        await env.call(env.admin.admin_cancel_deal, deal_id)
-    assert ei.value.status_code == 502
-    assert (await env.get(deal_id)).status == env.S.paid
+    resp = await env.call(env.admin.admin_cancel_deal, deal_id)
+    assert resp.status == "paid"
 
 
 # ── sweep endpoint guards ──
@@ -407,7 +455,7 @@ async def test_sweep_only_cancelled_and_not_to_master(env):
     assert r["ok"] is False and "master" in r["error"]
     assert env.tron.prepared == []
     r = await env.call(env.admin.sweep_escrow_wallet, c_id, to_address=BUYER_W)
-    assert r["ok"] is True
+    assert r["ok"] is True and r["status"] == "queued" and r["http"] == 202
     (tx,) = await env.txs(c_id)
     assert tx.type == env.TT.sweep and (await env.get(c_id)).status == env.S.cancelled
 
@@ -488,16 +536,6 @@ async def test_restart_payout_in_progress_without_tx_alert_only(env):
     assert (await env.get(deal_id)).status == env.S.payout_in_progress
     stuck = [c for c in env.alert.await_args_list if "stuck" in c.args[0]]
     assert len(stuck) == 1 and env.tron.prepared == []
-
-
-@pytest.mark.asyncio
-async def test_payment_checker_runs_reconcile(env, monkeypatch):
-    called = AsyncMock(return_value=0)
-    monkeypatch.setattr(env.payouts, "reconcile_pending_transfers", called)
-    monkeypatch.setattr(env.pc, "LATE_PAYMENT_CHECK_EVERY_N_CYCLES", 10**9)
-    monkeypatch.setattr(env.pc, "_cycle", 1)
-    await env.pc.check_payments_once()
-    assert called.await_count == 1
 
 
 async def env_commit(db):
