@@ -29,6 +29,9 @@ class User(Base):
     # Moderation block (migration 0027). is_active stays the hard deactivation switch.
     is_blocked: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false")
     blocked_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # Alerts-bot dialog (migration 0033): /start seen; last "chat not found"/blocked on send.
+    tg_bot_started_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    tg_bot_unreachable_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     blocked_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     blocked_by_id: Mapped[int | None] = mapped_column(
         Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True

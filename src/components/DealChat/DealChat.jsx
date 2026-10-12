@@ -83,9 +83,17 @@ const Attachment = ({ dealId, att, own }) => {
 };
 
 const Ticks = ({ id, peerRead, peerDelivered }) => {
-	if (id <= peerRead) return <span className='text-sky-300' title='Прочитано'>✓✓</span>;
-	if (id <= peerDelivered) return <span className='opacity-80' title='Доставлено'>✓✓</span>;
-	return <span className='opacity-80' title='Надіслано'>✓</span>;
+	// Inline SVG: Montserrat has no ✓ glyph and the fallback glyph + sky-300 on blue-500
+	// was practically invisible on iPhone. Read = bright, bold; sent/delivered = dimmer.
+	const Tick = ({ double, read }) => (
+		<svg viewBox={double ? '0 0 22 12' : '0 0 14 12'} className={`inline-block h-3 ${double ? 'w-[18px]' : 'w-3'} ${read ? 'text-white' : 'text-white/60'}`} aria-hidden='true'>
+			<path d='M1 6.5l3.5 3.5L12 2' fill='none' stroke='currentColor' strokeWidth={read ? 2.2 : 1.8} strokeLinecap='round' strokeLinejoin='round' />
+			{double && <path d='M8 9.5l0.5 0.5L19 2' fill='none' stroke='currentColor' strokeWidth={read ? 2.2 : 1.8} strokeLinecap='round' strokeLinejoin='round' />}
+		</svg>
+	);
+	if (id <= peerRead) return <span className='inline-flex items-center' title='Прочитано' aria-label='Прочитано'><Tick double read /></span>;
+	if (id <= peerDelivered) return <span className='inline-flex items-center' title='Доставлено' aria-label='Доставлено'><Tick double /></span>;
+	return <span className='inline-flex items-center' title='Надіслано' aria-label='Надіслано'><Tick /></span>;
 };
 
 const SystemCard = ({ m }) => (
@@ -131,10 +139,10 @@ const Header = ({ deal, presence, onCallAdmin, compact }) => {
 					})}
 				</div>
 			)}
-			<div className='text-[11px] text-gray-400 mt-1 min-h-[16px]'>
+			<div className='text-xs leading-snug text-gray-500 dark:text-gray-400 mt-1 min-h-[16px] flex flex-wrap gap-x-3'>
 				{typing.length
 					? <span className='text-blue-500'>{typing.map(p => ROLE_LABEL[p.role] || p.name).join(', ')} друкує…</span>
-					: parties.map(p => <span key={p.user_id} className='mr-3'>{ROLE_LABEL[p.role]}: {p.online ? <span className='text-green-600'>онлайн</span> : `був(ла) ${ago(p.last_seen_at)}`}</span>)}
+					: parties.map(p => <span key={p.user_id} className='whitespace-nowrap'>{ROLE_LABEL[p.role]}: {p.online ? <span className='text-green-600 font-semibold'>● онлайн</span> : `був(ла) ${ago(p.last_seen_at)}`}</span>)}
 			</div>
 		</div>
 	);
@@ -180,8 +188,8 @@ const Composer = ({ disabled, onSend, onUpload, onTyping }) => {
 					onChange={e => { setText(e.target.value); onTyping(); e.target.style.height = 'auto'; e.target.style.height = Math.min(e.target.scrollHeight, 140) + 'px'; }}
 					onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); submit(); } }}
 					onPaste={e => { const f = [...(e.clipboardData?.files || [])][0]; if (f) { e.preventDefault(); pick(f); } }}
-					placeholder={disabled ? 'Надсилання недоступне' : (file ? 'Підпис (необовʼязково)…' : 'Повідомлення…')}
-					className='flex-1 resize-none border border-gray-200 dark:border-slate-600 bg-gray-50 dark:bg-slate-700/60 dark:text-gray-100 rounded-xl px-4 py-2.5 text-[15px] sm:text-sm focus:outline-none focus:ring-2 focus:ring-blue-100 focus:border-blue-400' />
+					placeholder={disabled ? 'Надсилання недоступне' : (file ? 'Підпис…' : 'Написати…')}
+					className='flex-1 min-w-0 resize-none border border-gray-200 dark:border-slate-600 bg-gray-50 dark:bg-slate-700/60 dark:text-gray-100 rounded-xl px-3 sm:px-4 py-2.5 text-base sm:text-sm focus:outline-none focus:ring-2 focus:ring-blue-100 focus:border-blue-400' />
 				<button type='submit' disabled={disabled || (!text.trim() && !file)} className='w-10 h-10 rounded-xl bg-blue-500 hover:bg-blue-600 text-white shrink-0 disabled:opacity-30'>➤</button>
 			</div>
 		</form>
@@ -286,7 +294,7 @@ const DealChat = ({ dealId, userId, onCallAdmin, compact = false, height = 'h-[6
 									{!own && <div className={`text-[11px] font-semibold mb-0.5 ${m.sender_role === 'guarantor' ? 'text-purple-600' : 'text-blue-600'}`}>{m.sender_name || 'Користувач'}{m.sender_role ? ` · ${ROLE_LABEL[m.sender_role]}` : ''}</div>}
 									{m.attachment && <Attachment dealId={dealId} att={m.attachment} own={own} />}
 									{!(m.attachment && m.text === `📎 ${m.attachment.filename}`) && <div className='text-[15px] sm:text-sm whitespace-pre-wrap break-words'><Linkified text={m.text} /></div>}
-									<div className={`text-[10px] mt-0.5 flex justify-end gap-1 ${own ? 'text-blue-100' : 'text-gray-400'}`}>
+									<div className={`text-[11px] leading-none mt-1 flex items-center justify-end gap-1 ${own ? 'text-blue-50' : 'text-gray-400'}`}>
 										{fmtTime(m.created_at)}
 										{own && <Ticks id={m.id} peerRead={chat.peer_read_id} peerDelivered={chat.peer_delivered_id} />}
 									</div>

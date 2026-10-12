@@ -79,11 +79,18 @@ export default function useDealChat(dealId) {
 			if (document.visibilityState === 'hidden') clearTimeout(timerRef.current);
 			else if (intervalRef.current) poll();
 		};
+		// iOS Safari: returning from another app / bfcache often fires pageshow/focus but not
+		// visibilitychange — without this, polling (and presence/read sync) stayed stopped.
+		const onShow = () => { if (document.visibilityState !== 'hidden' && intervalRef.current) poll(); };
 		document.addEventListener('visibilitychange', onVis);
+		window.addEventListener('pageshow', onShow);
+		window.addEventListener('focus', onShow);
 		return () => {
 			aliveRef.current = false;
 			clearTimeout(timerRef.current);
 			document.removeEventListener('visibilitychange', onVis);
+			window.removeEventListener('pageshow', onShow);
+			window.removeEventListener('focus', onShow);
 		};
 	}, [dealId]); // eslint-disable-line react-hooks/exhaustive-deps
 

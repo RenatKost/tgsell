@@ -116,6 +116,7 @@ export const channelsAPI = {
 
 // ===== Deals =====
 export const dealsAPI = {
+	tgNotify: (id) => api.get(`/deals/${id}/tg-notify`),
 	chatPoll: (id, afterId = 0) => api.get(`/deals/${id}/chat`, { params: { after_id: afterId } }),
 	chatHistory: (id, beforeId) => api.get(`/deals/${id}/chat/history`, { params: { before_id: beforeId } }),
 	chatSend: (id, text, clientId) => api.post(`/deals/${id}/chat/messages`, { text, client_id: clientId }),

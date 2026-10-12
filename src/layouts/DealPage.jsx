@@ -7,11 +7,11 @@ import { useAuth } from '../context/AppContext';
 import TransferChecklist from '../components/Deal/TransferChecklist';
 
 const STEPS = [
-	{ key: 'created',         label: 'Готовність', LIcon: Handshake,    preset: 'blue'   },
+	{ key: 'created',         label: 'Готовність', short: 'Старт', LIcon: Handshake,    preset: 'blue'   },
 	{ key: 'payment_pending', label: 'Оплата',     LIcon: DollarSign,   preset: 'gold'   },
 	{ key: 'paid',            label: 'Передача',    LIcon: Send,         preset: 'purple' },
 	{ key: 'awaiting_payout', label: 'Виплата',     LIcon: CreditCard,   preset: 'cyan'   },
-	{ key: 'completed',       label: 'Завершено',   LIcon: CheckCircle2, preset: 'green'  },
+	{ key: 'completed',       label: 'Завершено', short: 'Готово', LIcon: CheckCircle2, preset: 'green'  },
 ];
 
 const STATUS_META = {
@@ -33,13 +33,13 @@ const StepProgress = ({ status }) => {
 	if (currentIdx === -1) return null;
 
 	return (
-		<div className='flex items-center justify-between mb-8 px-2'>
+		<div className='grid grid-cols-5 sm:flex sm:items-center sm:justify-between mb-8 sm:px-2'>
 			{STEPS.map((step, i) => {
 				const done = i < currentIdx;
 				const active = i === currentIdx;
 				const IconCmp = step.LIcon;
 				return (
-					<div key={step.key} className='flex items-center flex-1 min-w-0 last:flex-none'>
+					<div key={step.key} className='flex items-center min-w-0 sm:flex-1 sm:last:flex-none'>
 						<div className='flex flex-col items-center min-w-0 w-full'>
 							<div className={`w-8 h-8 sm:w-10 sm:h-10 rounded-full flex items-center justify-center transition-all duration-500 flex-shrink-0 ${
 								done   ? 'shadow-md' :
@@ -51,14 +51,15 @@ const StepProgress = ({ status }) => {
 									: <IconCmp size={18} color={active ? '#fff' : '#9CA3AF'} strokeWidth={1.8} />
 								}
 							</div>
-							<span className={`text-[10px] sm:text-xs mt-1.5 font-medium text-center leading-tight break-words px-0.5 ${
+							<span className={`text-[10px] sm:text-xs mt-1.5 font-medium text-center leading-tight w-full whitespace-nowrap tracking-tight ${
 								active ? 'text-sky-400' : done ? 'text-emerald-500' : 'text-gray-400'
 							}`}>
-								{step.label}
+								<span className='sm:hidden'>{step.short || step.label}</span>
+								<span className='hidden sm:inline'>{step.label}</span>
 							</span>
 						</div>
 						{i < STEPS.length - 1 && (
-							<div className={`flex-1 h-0.5 mx-1 sm:mx-2 mt-[-14px] sm:mt-[-16px] rounded-full transition-all duration-500 ${
+							<div className={`hidden sm:block flex-1 h-0.5 mx-1 sm:mx-2 mt-[-14px] sm:mt-[-16px] rounded-full transition-all duration-500 ${
 								i < currentIdx ? 'bg-green-400' : 'bg-gray-200'
 							}`} />
 						)}
@@ -83,6 +84,8 @@ const DealPage = () => {
 	const [payoutStatus, setPayoutStatus] = useState(null);
 	const [notice, setNotice] = useState(null);
 	const [refundAddress, setRefundAddress] = useState('');
+	const [tgNotify, setTgNotify] = useState(null);
+	const chatAnchorDone = useRef(false);
 
 	const refreshDeal = async () => {
 		try {
@@ -99,6 +102,7 @@ const DealPage = () => {
 			setLoading(false);
 		};
 		fetchDeal();
+		dealsAPI.tgNotify(id).then(({ data }) => setTgNotify(data)).catch(() => {});
 		const interval = setInterval(refreshDeal, 10000);
 		return () => clearInterval(interval);
 	}, [id]);
@@ -124,6 +128,13 @@ const DealPage = () => {
 			setTimeout(() => setNotice(null), 8000);
 		});
 	};
+
+	// /deal/:id#chat (link from the Telegram bot) → scroll to the chat once it is rendered.
+	useEffect(() => {
+		if (!deal || chatAnchorDone.current || window.location.hash !== '#chat') return;
+		chatAnchorDone.current = true;
+		setTimeout(() => document.getElementById('chat')?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 150);
+	}, [deal]);
 
 	const handleConfirmReady = () => handleAction(() => dealsAPI.confirmReady(id));
 	const handleConfirmTransfer = () => handleAction(() => dealsAPI.confirmChannelTransfer(id));
@@ -199,7 +210,7 @@ const DealPage = () => {
 	};
 
 	return (
-		<section className='my-28 max-w-3xl mx-auto px-4'>
+		<section className='my-24 sm:my-28 max-w-3xl mx-auto px-3 sm:px-4 overflow-x-hidden'>
 
 			{/* Error toast */}
 			{error && (
@@ -209,18 +220,18 @@ const DealPage = () => {
 			)}
 
 			{/* Hero header */}
-			<div className='bg-gradient-to-br from-[#3498db] to-[#1a6fb5] rounded-2xl p-6 mb-6 text-white shadow-lg overflow-hidden relative'>
+			<div className='bg-gradient-to-br from-[#3498db] to-[#1a6fb5] rounded-2xl p-4 sm:p-6 mb-6 text-white shadow-lg overflow-hidden relative'>
 				<div className='absolute top-0 right-0 w-40 h-40 bg-white/5 rounded-full -mr-10 -mt-10' />
 				<div className='absolute bottom-0 left-0 w-24 h-24 bg-white/5 rounded-full -ml-6 -mb-6' />
-				<div className='relative flex items-center gap-5'>
+				<div className='relative flex items-center gap-3 sm:gap-5 min-w-0'>
 					{deal.channel_avatar_url ? (
 						<img
 							src={deal.channel_avatar_url}
 							alt={deal.channel_name}
-							className='w-16 h-16 rounded-2xl object-cover border-2 border-white/20 shadow-md flex-shrink-0'
+							className='w-12 h-12 sm:w-16 sm:h-16 rounded-2xl object-cover border-2 border-white/20 shadow-md flex-shrink-0'
 						/>
 					) : (
-						<div className='w-16 h-16 rounded-2xl bg-white/15 backdrop-blur-sm border-2 border-white/20 flex items-center justify-center flex-shrink-0 shadow-md'>
+						<div className='w-12 h-12 sm:w-16 sm:h-16 rounded-2xl bg-white/15 backdrop-blur-sm border-2 border-white/20 flex items-center justify-center flex-shrink-0 shadow-md'>
 							<svg className='w-7 h-7 text-white/80' fill='none' viewBox='0 0 24 24' stroke='currentColor' strokeWidth={1.5}>
 								<path strokeLinecap='round' strokeLinejoin='round' d='M6 12L3.269 3.126A59.768 59.768 0 0121.485 12 59.77 59.77 0 013.27 20.876L5.999 12zm0 0h7.5' />
 							</svg>
@@ -230,7 +241,7 @@ const DealPage = () => {
 						<p className='text-blue-200 text-xs font-medium uppercase tracking-wider mb-1'>
 							{isBuyer ? 'Ви купуєте' : 'Ви продаєте'}
 						</p>
-						<h1 className='text-xl md:text-2xl font-bold truncate'>
+						<h1 className='text-lg sm:text-xl md:text-2xl font-bold truncate'>
 							{deal.channel_name || `Канал #${deal.channel_id}`}
 						</h1>
 						<p className='text-blue-200 text-sm mt-0.5'>
@@ -238,7 +249,7 @@ const DealPage = () => {
 						</p>
 					</div>
 					<div className='text-right flex-shrink-0'>
-						<p className='text-3xl md:text-4xl font-extrabold tracking-tight'>{deal.amount_usdt}</p>
+						<p className='text-2xl sm:text-3xl md:text-4xl font-extrabold tracking-tight'>{deal.amount_usdt}</p>
 						<p className='text-blue-200 text-xs font-semibold uppercase tracking-wider mt-0.5'>USDT</p>
 					</div>
 				</div>
@@ -276,7 +287,7 @@ const DealPage = () => {
 
 			{/* Step 1: Confirm Readiness */}
 			{deal.status === 'created' && (
-				<div className='bg-white dark:bg-slate-800 rounded-2xl shadow-lg border border-gray-100 dark:border-slate-700 p-6 mb-6'>
+				<div className='bg-white dark:bg-slate-800 rounded-2xl shadow-lg border border-gray-100 dark:border-slate-700 p-4 sm:p-6 mb-6'>
 					<h3 className='font-bold text-lg mb-2'>Підтвердіть готовність до угоди</h3>
 					<p className='text-gray-500 text-sm mb-5'>
 						Обидві сторони повинні підтвердити готовність. Після цього покупець зможе оплатити.
@@ -343,16 +354,16 @@ const DealPage = () => {
 
 			{/* Overpayment refund */}
 			{deal.overpay_units > 0 && (isBuyer || isSeller) && (
-				<div className='bg-white dark:bg-slate-800 rounded-2xl shadow-lg border border-gray-100 dark:border-slate-700 p-6 mb-6'>
+				<div className='bg-white dark:bg-slate-800 rounded-2xl shadow-lg border border-gray-100 dark:border-slate-700 p-4 sm:p-6 mb-6'>
 					<h3 className='font-bold text-lg mb-2'>Переплата {deal.overpay_units / 1e6} USDT</h3>
 					{deal.overpay_status === 'awaiting_address' && isBuyer && !deal.overpay_refund_address && (
 						<>
 							<p className='text-gray-500 text-sm mb-3'>
 								Переплату буде повернено після виплати продавцю. Вкажіть свою TRON-адресу (TRC-20 USDT). Адресу відправника (біржі) не використовуємо.
 							</p>
-							<div className='flex gap-2'>
+							<div className='flex flex-col sm:flex-row gap-2'>
 								<input value={refundAddress} onChange={(e) => setRefundAddress(e.target.value)} placeholder='T...'
-									className='flex-1 border border-gray-200 dark:border-slate-600 dark:bg-slate-700 rounded-xl px-3 py-2 font-mono text-sm' />
+									className='flex-1 min-w-0 border border-gray-200 dark:border-slate-600 dark:bg-slate-700 rounded-xl px-3 py-2 font-mono text-base sm:text-sm' />
 								<button onClick={handleSubmitRefundAddress} disabled={actionLoading}
 									className='bg-[#3498db] text-white rounded-xl px-4 py-2 text-sm font-semibold disabled:opacity-50'>Зберегти</button>
 							</div>
@@ -370,32 +381,32 @@ const DealPage = () => {
 
 			{/* Step 2: Payment */}
 			{deal.status === 'payment_pending' && isBuyer && (
-				<div className='bg-white dark:bg-slate-800 rounded-2xl shadow-lg border border-gray-100 dark:border-slate-700 p-6 mb-6'>
+				<div className='bg-white dark:bg-slate-800 rounded-2xl shadow-lg border border-gray-100 dark:border-slate-700 p-4 sm:p-6 mb-6'>
 					<h3 className='font-bold text-lg mb-2'>Оплата</h3>
 					<p className='text-gray-500 text-sm mb-5'>
 						Переведіть <strong className='text-gray-800 dark:text-white'>{deal.amount_usdt} USDT</strong> через мережу <strong className='text-gray-800 dark:text-white'>TRC-20</strong>
 					</p>
 					<div className='bg-blue-50 dark:bg-blue-900/20 border border-blue-200 rounded-xl p-4 mb-4'>
-						<div className='flex justify-between text-sm mb-1'>
+						<div className='flex flex-col sm:flex-row sm:justify-between gap-0.5 text-sm mb-2 sm:mb-1'>
 							<span className='text-gray-600 dark:text-gray-300'>Вартість каналу:</span>
 							<span className='font-semibold text-gray-800 dark:text-white'>{deal.amount_usdt} USDT</span>
 						</div>
-						<div className='flex justify-between text-sm mb-1'>
+						<div className='flex flex-col sm:flex-row sm:justify-between gap-0.5 text-sm mb-2 sm:mb-1'>
 							<span className='text-gray-600 dark:text-gray-300'>Комісія сервісу (3%):</span>
 							<span className='text-gray-500'>{deal.service_fee} USDT — утримується при виплаті продавцю</span>
 						</div>
-						<div className='flex justify-between text-sm'>
+						<div className='flex flex-col sm:flex-row sm:justify-between gap-0.5 text-sm'>
 							<span className='text-gray-600 dark:text-gray-300'>Комісія мережі:</span>
 							<span className='text-gray-500'>~1-2 TRX (~0.1-0.2 USDT)</span>
 						</div>
 					</div>
-					<div className='relative bg-gray-50 dark:bg-slate-700/60 border border-gray-200 dark:border-slate-600 p-4 rounded-xl mb-4 group'>
-						<p className='font-mono text-sm break-all pr-10 select-all text-gray-700 dark:text-gray-200'>
+					<div className='bg-gray-50 dark:bg-slate-700/60 border border-gray-200 dark:border-slate-600 p-3 sm:p-4 rounded-xl mb-4 flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3'>
+						<p className='font-mono text-[13px] sm:text-sm break-all [overflow-wrap:anywhere] min-w-0 flex-1 select-all text-gray-700 dark:text-gray-200'>
 							{deal.escrow_wallet_address}
 						</p>
 						<button
 							onClick={() => copyToClipboard(deal.escrow_wallet_address)}
-							className='absolute top-3 right-3 bg-white border border-gray-200 dark:border-slate-600 rounded-lg px-2.5 py-1.5 text-xs font-medium text-gray-500 hover:text-[#3498db] hover:border-[#3498db] transition-all'
+							className='self-start sm:self-auto shrink-0 bg-white border border-gray-200 dark:border-slate-600 rounded-lg px-2.5 py-1.5 text-xs font-medium text-gray-500 hover:text-[#3498db] hover:border-[#3498db] transition-all'
 						>
 							{copied ? '✓' : 'Копіювати'}
 						</button>
@@ -410,7 +421,7 @@ const DealPage = () => {
 				</div>
 			)}
 			{deal.status === 'payment_pending' && isSeller && (
-				<div className='bg-white dark:bg-slate-800 rounded-2xl shadow-lg border border-gray-100 dark:border-slate-700 p-6 mb-6'>
+				<div className='bg-white dark:bg-slate-800 rounded-2xl shadow-lg border border-gray-100 dark:border-slate-700 p-4 sm:p-6 mb-6'>
 					<div className='flex items-center gap-3'>
 						<div className='w-10 h-10 rounded-full bg-yellow-50 flex items-center justify-center'>
 							<span className='text-xl'>⏳</span>
@@ -425,7 +436,7 @@ const DealPage = () => {
 
 			{/* Step 3: Channel Transfer */}
 			{isTransferStatus && (
-				<div className='bg-white dark:bg-slate-800 rounded-2xl shadow-lg border border-gray-100 dark:border-slate-700 p-6 mb-6'>
+				<div className='bg-white dark:bg-slate-800 rounded-2xl shadow-lg border border-gray-100 dark:border-slate-700 p-4 sm:p-6 mb-6'>
 					<h3 className='font-bold text-lg mb-2'>Передача каналу</h3>
 					{isSeller && (
 						<p className='text-gray-500 text-sm mb-5'>
@@ -513,17 +524,17 @@ const DealPage = () => {
 
 			{/* Step 4: Seller Wallet */}
 			{deal.status === 'awaiting_payout' && isSeller && (
-				<div className='bg-white dark:bg-slate-800 rounded-2xl shadow-lg border border-gray-100 dark:border-slate-700 p-6 mb-6'>
+				<div className='bg-white dark:bg-slate-800 rounded-2xl shadow-lg border border-gray-100 dark:border-slate-700 p-4 sm:p-6 mb-6'>
 					<h3 className='font-bold text-lg mb-2'>Отримання коштів</h3>
 					<p className='text-gray-500 text-sm mb-1'>
 						Канал успішно передано! Вкажіть вашу USDT (TRC-20) адресу.
 					</p>
 					<div className='bg-green-50 border border-green-200 rounded-xl p-4 mb-4'>
-						<div className='flex justify-between text-sm mb-1'>
+						<div className='flex flex-col sm:flex-row sm:justify-between gap-0.5 text-sm mb-2 sm:mb-1'>
 							<span className='text-gray-600 dark:text-gray-300'>Вартість каналу:</span>
 							<span className='font-semibold text-gray-800 dark:text-white'>{deal.amount_usdt} USDT</span>
 						</div>
-						<div className='flex justify-between text-sm mb-1'>
+						<div className='flex flex-col sm:flex-row sm:justify-between gap-0.5 text-sm mb-2 sm:mb-1'>
 							<span className='text-gray-600 dark:text-gray-300'>Комісія сервісу (3%):</span>
 							<span className='text-red-500'>−{deal.service_fee} USDT</span>
 						</div>
@@ -532,14 +543,14 @@ const DealPage = () => {
 							<span className='text-green-700'>{(deal.amount_usdt - deal.service_fee).toFixed(2)} USDT</span>
 						</div>
 					</div>
-					<div className='flex gap-2 mb-3'>
+					<div className='flex flex-col sm:flex-row gap-2 mb-3'>
 						<input
 							type='text'
 							value={walletAddress}
 							onChange={(e) => setWalletAddress(e.target.value)}
 							placeholder='TRC-20 адреса (T...)'
 							maxLength={100}
-							className='flex-1 border border-gray-200 dark:border-slate-600 rounded-xl px-4 py-3.5 focus:border-[#3498db] focus:ring-2 focus:ring-blue-100 focus:outline-none font-mono text-sm transition-all'
+							className='flex-1 min-w-0 border border-gray-200 dark:border-slate-600 rounded-xl px-4 py-3.5 focus:border-[#3498db] focus:ring-2 focus:ring-blue-100 focus:outline-none font-mono text-base sm:text-sm transition-all'
 						/>
 						<button
 							onClick={handleSubmitWallet}
@@ -578,7 +589,7 @@ const DealPage = () => {
 				<div className='bg-cyan-50 dark:bg-cyan-900/20 text-cyan-700 text-sm font-medium px-4 py-3 rounded-xl text-center mb-6'>{notice}</div>
 			)}
 			{deal.status === 'awaiting_payout' && isBuyer && (
-				<div className='bg-white dark:bg-slate-800 rounded-2xl shadow-lg border border-gray-100 dark:border-slate-700 p-6 mb-6'>
+				<div className='bg-white dark:bg-slate-800 rounded-2xl shadow-lg border border-gray-100 dark:border-slate-700 p-4 sm:p-6 mb-6'>
 					<div className='flex items-center gap-3'>
 						<div className='w-10 h-10 rounded-full bg-purple-50 flex items-center justify-center'>
 							<span className='text-xl'>💳</span>
@@ -608,7 +619,23 @@ const DealPage = () => {
 			)}
 
 			{/* Deal Chat */}
-			<DealChat dealId={deal.id} userId={user?.id} onCallAdmin={handleCallAdmin} deal={deal} />
+			{tgNotify && (isBuyer || isSeller) && !['completed', 'cancelled'].includes(deal.status) && (tgNotify.bot_unreachable || !tgNotify.bot_started) && (
+				<div className={`rounded-2xl p-4 mb-4 flex flex-col sm:flex-row sm:items-center gap-3 border ${tgNotify.bot_unreachable ? 'bg-amber-50 border-amber-200 text-amber-800' : 'bg-blue-50 border-blue-200 text-blue-800'}`}>
+					<p className='text-sm flex-1'>
+						{tgNotify.bot_unreachable
+							? 'Не вдалося доставити повідомлення чату в Telegram — запустіть бота, щоб отримувати їх.'
+							: 'Отримуйте нові повідомлення цього чату в Telegram і відповідайте прямо з бота.'}
+						{!tgNotify.telegram_bound && ' Спершу увійдіть на сайт через Telegram.'}
+					</p>
+					<a href={tgNotify.deep_link} target='_blank' rel='noopener noreferrer'
+						className='shrink-0 text-center bg-[#2AABEE] text-white text-sm font-semibold px-4 py-2 rounded-xl hover:opacity-90'>
+						Отримувати повідомлення в Telegram
+					</a>
+				</div>
+			)}
+			<div id='chat' className='scroll-mt-24'>
+				<DealChat dealId={deal.id} userId={user?.id} onCallAdmin={handleCallAdmin} deal={deal} />
+			</div>
 		</section>
 	);
 };

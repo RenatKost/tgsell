@@ -122,6 +122,11 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+from app.utils.http_cache import api_no_store  # noqa: E402
+
+app.middleware("http")(api_no_store)
+
+
 # Routers
 app.include_router(auth.router, prefix="/api")
 app.include_router(channels.router, prefix="/api")
