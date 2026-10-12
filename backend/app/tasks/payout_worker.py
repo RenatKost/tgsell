@@ -14,6 +14,7 @@
 from __future__ import annotations
 
 import asyncio
+import html
 import logging
 
 from sqlalchemy import select, text
@@ -139,8 +140,8 @@ async def check_master_trx() -> dict:
             from app.services.alerts import send_admin_alert
 
             await send_admin_alert(
-                f"⛽ <b>Master TRX низький</b>: {st['trx']:.2f} TRX < {st['threshold']:.0f} TRX\n"
-                f"<code>{st['address']}</code>\nПоповніть для газу виплат.",
+                f"⛽ <b>Master TRX низький</b>: {st['trx']:.2f} TRX &lt; {st['threshold']:.0f} TRX\n"
+                f"<code>{html.escape(str(st['address']))}</code>\nПоповніть для газу виплат.",
                 alert_key="master_trx_low",
                 throttle_minutes=360,
             )

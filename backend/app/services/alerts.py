@@ -1,5 +1,7 @@
 """Utility for sending admin alerts to the Telegram admin group."""
+import html
 import logging
+import re
 from datetime import datetime, timezone
 
 from aiogram import Bot
@@ -31,6 +33,52 @@ _TELETHON_REASON_UA: dict[str, str] = {
 }
 
 
+# Telegram HTML parse_mode: only these tags are allowed; any other '<', '>' or '&'
+# must be escaped, otherwise Telegram rejects the whole message ("can't parse entities").
+_ALLOWED_TAG_RE = re.compile(
+    r"</?(?:b|strong|i|em|u|ins|s|strike|del|code|pre|tg-spoiler|blockquote)>"
+    r"|<a href=\"[^\"<>]*\">|</a>"
+    r"|<span class=\"tg-spoiler\">|</span>"
+)
+_ENTITY_RE = re.compile(r"&(?:lt|gt|amp|quot|#\d{1,7}|#x[0-9a-fA-F]{1,6});")
+_TOKEN_RE = re.compile(_ALLOWED_TAG_RE.pattern + "|" + _ENTITY_RE.pattern)
+
+
+def telegram_html_safe(text) -> str:
+    """Keep allowed Telegram HTML tags / entities, escape every other '<', '>', '&'."""
+    text = "" if text is None else str(text)
+    out, pos = [], 0
+    for m in _TOKEN_RE.finditer(text):
+        out.append(html.escape(text[pos:m.start()], quote=False))
+        out.append(m.group(0))
+        pos = m.end()
+    out.append(html.escape(text[pos:], quote=False))
+    return "".join(out)
+
+
+def is_valid_telegram_html(text: str) -> bool:
+    """True if text has no bare < > & outside allowed tags/entities and tags are balanced."""
+    stack = []
+    pos = 0
+    for m in _TOKEN_RE.finditer(text):
+        chunk = text[pos:m.start()]
+        if any(c in chunk for c in "<>&"):
+            return False
+        tok = m.group(0)
+        pos = m.end()
+        if tok.startswith("&"):
+            continue
+        name = re.match(r"</?([a-z-]+)", tok).group(1)
+        if tok.startswith("</"):
+            if not stack or stack.pop() != name:
+                return False
+        else:
+            stack.append(name)
+    if any(c in text[pos:] for c in "<>&"):
+        return False
+    return not stack
+
+
 async def send_admin_alert(text: str, alert_key: str | None = None, throttle_minutes: int = _THROTTLE_MINUTES):
     """Send alert message to admin Telegram group.
 
@@ -51,26 +99,31 @@ async def send_admin_alert(text: str, alert_key: str | None = None, throttle_min
             return False  # Suppress duplicate
         _last_alerts[alert_key] = now
 
+    bot = None
     try:
         bot = Bot(token=settings.bot_token_alerts)
         await bot.send_message(
             settings.admin_group_id,
-            text,
+            telegram_html_safe(text),
             parse_mode=ParseMode.HTML,
         )
-        await bot.session.close()
         return True
     except Exception as e:
         logger.error(f"[ALERT] Failed to send admin alert: {e}")
         return False
+    finally:
+        if bot is not None:
+            try:
+                await bot.session.close()
+            except Exception:
+                pass
 
 
 async def alert_service_down(service_name: str, error: str):
     """Alert that a critical service is down."""
-    import html
     safe_error = html.escape(str(error)[:500])
     await send_admin_alert(
-        f"🔴 <b>{service_name} — НЕ ПРАЦЮЄ</b>\n\n"
+        f"🔴 <b>{html.escape(str(service_name))} — НЕ ПРАЦЮЄ</b>\n\n"
         f"<code>{safe_error}</code>\n\n"
         f"Потрібна увага адміна.",
         alert_key=f"down_{service_name}",
@@ -80,7 +133,7 @@ async def alert_service_down(service_name: str, error: str):
 async def alert_service_recovered(service_name: str):
     """Alert that a service has recovered."""
     await send_admin_alert(
-        f"🟢 <b>{service_name} — відновлено</b>\n\n"
+        f"🟢 <b>{html.escape(str(service_name))} — відновлено</b>\n\n"
         f"Сервіс знову працює нормально.",
         alert_key=f"up_{service_name}",
         throttle_minutes=5,

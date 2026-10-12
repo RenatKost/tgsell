@@ -9,6 +9,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
+from app.services.alerts import telegram_html_safe
 from app.database import async_session
 from app.models.auction import Auction, AuctionBid
 from app.models.channel import Channel
@@ -119,7 +120,7 @@ async def _notify_auction_ended(deal: Deal, auction: Auction, channel_name: str,
                 f"📦 Угода #{deal.id} створена"
             )
             try:
-                await bot.send_message(settings.admin_group_id, admin_text, parse_mode=ParseMode.HTML)
+                await bot.send_message(settings.admin_group_id, telegram_html_safe(admin_text), parse_mode=ParseMode.HTML)
             except Exception as e:
                 logger.error(f"[AUCTION] Failed to notify admin group: {e}")
 
