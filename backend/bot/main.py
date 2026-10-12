@@ -20,6 +20,12 @@ from sqlalchemy.orm import selectinload
 
 from app.config import settings
 from app.services.alerts import telegram_html_safe
+from html import escape as _html_escape
+
+
+def _u(value) -> str:
+    """Escape user-controlled content (names, channel titles) for Telegram HTML."""
+    return _html_escape("" if value is None else str(value), quote=False)
 from app.database import async_session
 from app.models.deal import Deal, DealStatus
 from app.models.user import User
@@ -324,7 +330,7 @@ async def notify_new_deal(bot: Bot, deal: Deal, buyer: User, seller: User):
         f"Покупець бажає придбати ваш канал.\n"
         f"💰 Сума: {deal.amount_usdt} USDT\n"
         f"Очікуємо оплату від покупця…\n\n"
-        f"<a href='{frontend_url}/deal/{deal.id}'>Перейти до чату угоди →</a>"
+        f"<a href=\"{frontend_url}/deal/{deal.id}\">Перейти до чату угоди →</a>"
     )
     if seller.telegram_id:
         try:
@@ -339,8 +345,8 @@ async def notify_new_deal(bot: Bot, deal: Deal, buyer: User, seller: User):
     if settings.admin_group_id:
         admin_text = (
             f"🆕 <b>Нова угода #{deal.id}</b>\n\n"
-            f"Покупець: {buyer.first_name} (id={buyer.id})\n"
-            f"Продавець: {seller.first_name} (id={seller.id})\n"
+            f"Покупець: {_u(buyer.first_name)} (id={buyer.id})\n"
+            f"Продавець: {_u(seller.first_name)} (id={seller.id})\n"
             f"💰 Сума: {deal.amount_usdt} USDT"
         )
         try:
@@ -494,9 +500,9 @@ async def notify_admin_called(bot: Bot, deal_id: int, channel_name: str, caller_
     frontend_url = settings.frontend_url.rstrip("/")
     text = (
         f"🛡️ <b>Виклик адміністратора!</b>\n\n"
-        f"Угода #{deal_id} — {channel_name}\n"
-        f"Викликав: {caller_name}\n\n"
-        f"<a href='{frontend_url}/deal/{deal_id}'>Перейти до чату угоди →</a>"
+        f"Угода #{deal_id} — {_u(channel_name)}\n"
+        f"Викликав: {_u(caller_name)}\n\n"
+        f"<a href=\"{frontend_url}/deal/{deal_id}\">Перейти до чату угоди →</a>"
     )
     await bot.send_message(settings.admin_group_id, telegram_html_safe(text), parse_mode=ParseMode.HTML)
 
@@ -541,10 +547,10 @@ async def notify_new_bundle_deal(bot: Bot, deal, bundle, buyer: User, seller: Us
     if seller and seller.telegram_id:
         text = (
             f"🎉 <b>Нова угода на вашу сітку!</b>\n\n"
-            f"📡 «{bundle.name}»\n"
+            f"📡 «{_u(bundle.name)}»\n"
             f"💰 Сума: <b>{deal.amount_usdt} USDT</b>\n"
-            f"👤 Покупець: {buyer.first_name or 'Анонім'}\n\n"
-            f"<a href='{frontend_url}/deal/{deal.id}'>Перейти до угоди →</a>"
+            f"👤 Покупець: {_u(buyer.first_name or 'Анонім')}\n\n"
+            f"<a href=\"{frontend_url}/deal/{deal.id}\">Перейти до угоди →</a>"
         )
         try:
             await bot.send_message(seller.telegram_id, text, parse_mode=ParseMode.HTML)
@@ -554,9 +560,9 @@ async def notify_new_bundle_deal(bot: Bot, deal, bundle, buyer: User, seller: Us
     if settings.admin_group_id:
         admin_text = (
             f"📡 <b>Нова угода на сітку</b>\n\n"
-            f"Сітка: «{bundle.name}» #{bundle.id}\n"
+            f"Сітка: «{_u(bundle.name)}» #{bundle.id}\n"
             f"Угода: #{deal.id}\n"
-            f"Покупець: {buyer.first_name or 'Анонім'} (id={buyer.id})\n"
+            f"Покупець: {_u(buyer.first_name or 'Анонім')} (id={buyer.id})\n"
             f"Сума: {deal.amount_usdt} USDT"
         )
         try:
