@@ -205,19 +205,15 @@ def test_migration_0021_adds_enum_value():
 
 def test_seller_wallet_uses_for_update_and_claim():
     src = (BACKEND_ROOT / "app/routers/deals.py").read_text(encoding="utf-8")
-    assert "with_for_update()" in src
-    assert "claim_deal_for_transfer" in src
-    assert "payout_in_progress" in src or "claim_deal_for_transfer" in src
-    # sleep must not precede claim
     fn_start = src.index("async def set_seller_wallet")
     fn_end = src.index("async def call_admin", fn_start)
     body = src[fn_start:fn_end]
-    claim_pos = body.index("claim_deal_for_transfer")
+    assert "with_for_update()" in body
+    claim_pos = body.index("claim_for_payout")
     commit_claim_pos = body.index("await db.commit()", claim_pos)
-    sleep_pos = body.index("asyncio.sleep", commit_claim_pos)
-    transfer_pos = body.index("transfer_usdt(", commit_claim_pos)
-    assert claim_pos < commit_claim_pos < sleep_pos
-    assert commit_claim_pos < transfer_pos
+    transfer_pos = body.index("execute_transfer(", commit_claim_pos)
+    assert claim_pos < commit_claim_pos < transfer_pos
+    assert "transfer_usdt" not in body and "send_trx_for_gas" not in body
 
 
 def test_admin_resolve_uses_for_update_and_claim():
@@ -226,9 +222,9 @@ def test_admin_resolve_uses_for_update_and_claim():
     fn_end = src.index("_FUNDED_DEAL_STATUSES", fn_start)
     body = src[fn_start:fn_end]
     assert "with_for_update()" in body
-    assert "claim_deal_for_transfer" in body
+    assert "claim_for_payout" in body
     assert "DealStatus.disputed" in body
-    claim_pos = body.index("claim_deal_for_transfer")
+    claim_pos = body.index("claim_for_payout")
     commit_pos = body.index("await db.commit()", claim_pos)
-    transfer_pos = body.index("_escrow_transfer_usdt", commit_pos)
+    transfer_pos = body.index("execute_transfer(", commit_pos)
     assert claim_pos < commit_pos < transfer_pos

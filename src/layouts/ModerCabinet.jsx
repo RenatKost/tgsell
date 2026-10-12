@@ -586,7 +586,8 @@ const ModerCabinet = () => {
 									<StatCard label='Аукціони' value={dashStats.active_auctions} icon={faGavel} color='text-orange-600' onClick={() => setSection('auctions')} />
 									<StatCard label='Користувачі' value={dashStats.total_users} icon={faUsers} />
 									<StatCard label='Угод за тиждень' value={dashStats.deals_this_week} icon={faChartLine} />
-									<StatCard label='Дохід (USDT)' value={dashStats.total_revenue} icon={faWallet} color='text-green-600' />
+									<StatCard label='Комісія нарахована (USDT)' value={dashStats.fee_accrued ?? dashStats.total_revenue} icon={faWallet} color='text-green-600' />
+									<StatCard label='Комісія зібрана (USDT)' value={dashStats.fee_collected ?? 0} icon={faWallet} color='text-green-600' />
 								</div>
 
 								{/* ── Telethon re-auth panel ── */}

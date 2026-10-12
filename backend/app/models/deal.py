@@ -26,6 +26,8 @@ class TransactionType(str, enum.Enum):
     deposit = "deposit"
     release = "release"
     refund = "refund"
+    fee_collection = "fee_collection"  # admin-manual service fee → master (migration 0026)
+    sweep = "sweep"  # admin-manual sweep of stray funds from a cancelled deal (0026)
 
 
 class TransactionStatus(str, enum.Enum):
@@ -111,6 +113,17 @@ class Transaction(Base):
         Enum(TransactionStatus), default=TransactionStatus.pending
     )
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+
+    # Outgoing-transfer bookkeeping (migration 0026, all nullable; legacy rows keep NULL).
+    # A row is inserted as `pending` BEFORE broadcast; tx_hash (known pre-broadcast) is
+    # written before broadcasting. status=confirmed only when receipt_status == SUCCESS.
+    amount_units: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
+    restore_status: Mapped[str | None] = mapped_column(String(30), nullable=True)
+    receipt_status: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    receipt_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
+    fee_limit_sun: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
+    broadcast_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    finalized_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
 
     deal = relationship("Deal", back_populates="transactions")
 

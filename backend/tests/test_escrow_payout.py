@@ -27,6 +27,8 @@ RECEIVER = PrivateKey(bytes.fromhex("33" * 32)).public_key.to_base58check_addres
 class FakeTxn:
     def __init__(self, chain, kind, **kw):
         self.chain, self.kind, self.kw = chain, kind, kw
+        chain.built += 1
+        self.txid = f"tx{chain.built}"
 
     def fee_limit(self, v):
         self.kw["fee_limit"] = v
@@ -43,7 +45,7 @@ class FakeTxn:
         return self
 
     def broadcast(self):
-        txid = f"tx{len(self.chain.broadcasts) + 1}"
+        txid = self.txid
         self.chain.broadcasts.append((self.kind, txid, dict(self.kw)))
         if self.kind == "trx":
             self.chain.balances[self.kw["frm"]] -= self.kw["amount"]
@@ -55,6 +57,7 @@ class FakeChain:
     def __init__(self):
         self.balances = {MASTER: 50_000_000, ESCROW: 0}
         self.broadcasts: list = []
+        self.built = 0
         self.requests: list = []
         self.energy_fee = 100
         self.estimate = 130_285
@@ -164,78 +167,89 @@ def test_transfer_parameter_encoding():
     assert len(p) == 128 and p.endswith(format(4_000_000, "x").rjust(64, "0"))
 
 
-# ── payout flow ──
+# ── prepare / broadcast / receipt (escrow layer) ──
 
-def test_payout_tops_up_only_difference_and_succeeds(env):
+def test_prepare_tops_up_only_difference_and_builds_without_broadcast(env):
     env.chain.balances[ESCROW] = 5_000_000
-    r = env.escrow.escrow_usdt_payout("enc", RECEIVER, 4.0)
-    assert r["ok"] is True and r["tx_hash"] and r["error"] is None
+    p = env.escrow.prepare_usdt_transfer("enc", RECEIVER, 4_000_000)
     gas = [b for b in env.chain.broadcasts if b[0] == "trx"]
-    assert len(gas) == 1
-    assert gas[0][2]["amount"] == r["estimate"]["required_sun"] - 5_000_000
+    assert len(gas) == 1 and gas[0][2]["amount"] == p["estimate"]["required_sun"] - 5_000_000
+    assert not [b for b in env.chain.broadcasts if b[0] == "usdt"]  # USDT not broadcast yet
+    assert p["fee_limit_sun"] >= 30_000_000 and p["txid"]
+    env.escrow.broadcast_prepared(p)
     usdt = [b for b in env.chain.broadcasts if b[0] == "usdt"][0]
-    assert usdt[2]["fee_limit"] >= 30_000_000 and usdt[2]["amount"] == 4_000_000
-    assert env.sweeps == ["enc"]
+    assert usdt[2]["fee_limit"] == p["fee_limit_sun"] and usdt[2]["amount"] == 4_000_000
 
 
-def test_payout_no_topup_when_escrow_has_enough(env):
+def test_prepare_no_topup_when_escrow_has_enough(env):
     env.chain.balances[ESCROW] = 40_000_000
-    r = env.escrow.escrow_usdt_payout("enc", RECEIVER, 4.0)
-    assert r["ok"] is True and r["gas_tx"] is None
-    assert [b[0] for b in env.chain.broadcasts] == ["usdt"]
+    p = env.escrow.prepare_usdt_transfer("enc", RECEIVER, 4_000_000)
+    assert p["gas_tx"] is None and env.chain.broadcasts == []
 
 
-def test_receipt_out_of_energy_is_failure_and_sweeps(env):
+def _usdt_tx(env):
+    p = env.escrow.prepare_usdt_transfer("enc", RECEIVER, 4_000_000)
+    env.escrow.broadcast_prepared(p)
+    return [b for b in env.chain.broadcasts if b[0] == "usdt"][0][1]
+
+
+def test_receipt_out_of_energy_is_failed(env):
+    env.chain.balances[ESCROW] = 40_000_000
     env.chain.usdt_receipt = "OUT_OF_ENERGY"
-    r = env.escrow.escrow_usdt_payout("enc", RECEIVER, 4.0)
-    assert r["ok"] is False and r["reason"] == "OUT_OF_ENERGY"
-    assert "OUT_OF_ENERGY" in r["error"] and r["tx_hash"]
-    assert env.sweeps == ["enc"]
+    txid = _usdt_tx(env)
+    r = env.escrow.get_receipt(txid, 60)
+    assert r["status"] == "FAILED" and r["reason"] == "OUT_OF_ENERGY"
 
 
 def test_receipt_polled_until_available(env):
     env.chain.balances[ESCROW] = 40_000_000
+    txid = _usdt_tx(env)
     env.chain.receipt_delay_polls = 3
-    r = env.escrow.escrow_usdt_payout("enc", RECEIVER, 4.0)
-    assert r["ok"] is True
+    assert env.escrow.get_receipt(txid, 60)["status"] == "SUCCESS"
     assert env.chain.requests.count("wallet/gettransactioninfobyid") == 4
 
 
-def test_receipt_timeout_is_not_success(env):
+def test_receipt_timeout_is_pending_not_failure(env):
     env.chain.balances[ESCROW] = 40_000_000
+    txid = _usdt_tx(env)
     env.chain.receipt_delay_polls = 10_000
-    r = env.escrow.escrow_usdt_payout("enc", RECEIVER, 4.0)
-    assert r["ok"] is False and "PENDING" in r["error"]
+    assert env.escrow.get_receipt(txid, 60)["status"] == "PENDING"
 
 
 def test_destination_master_rejected_nothing_sent(env):
-    r = env.escrow.escrow_usdt_payout("enc", MASTER, 4.0)
-    assert r["ok"] is False and "master" in r["error"]
+    with pytest.raises(env.escrow.EscrowTransferRefused) as ei:
+        env.escrow.prepare_usdt_transfer("enc", MASTER, 4_000_000)
+    assert ei.value.reason == "MASTER_DESTINATION"
     assert env.chain.broadcasts == [] and env.chain.requests == []
+
+
+def test_master_allowed_only_with_flag(env):
+    env.chain.balances[ESCROW] = 40_000_000
+    p = env.escrow.prepare_usdt_transfer("enc", MASTER, 1_000_000, allow_master=True)
+    assert p["txid"]
 
 
 def test_master_insufficient_trx_fails_early_no_partial_gas(env):
     env.chain.balances[MASTER] = 8_640_000  # ~8.64 TRX
-    r = env.escrow.escrow_usdt_payout("enc", RECEIVER, 4.0)
-    assert r["ok"] is False and r["reason"] == "MASTER_INSUFFICIENT_TRX"
-    assert "Нічого не відправлено" in r["error"]
+    with pytest.raises(env.escrow.EscrowTransferRefused) as ei:
+        env.escrow.prepare_usdt_transfer("enc", RECEIVER, 4_000_000)
+    assert ei.value.reason == "MASTER_INSUFFICIENT_TRX" and "Нічого не відправлено" in ei.value.message
     assert env.chain.broadcasts == []
 
 
-# ── admin endpoints ──
-
-@pytest.mark.asyncio
-async def test_admin_escrow_transfer_returns_error_on_failed_receipt(pg_orm, env):
-    admin_router = importlib.import_module("app.routers.admin")
-    env.chain.usdt_receipt = "OUT_OF_ENERGY"
-    deal = SimpleNamespace(id=1, escrow_private_key_encrypted="enc", escrow_wallet_address=ESCROW)
-    tx, err = await admin_router._escrow_transfer_usdt(deal, RECEIVER, 4.0)
-    assert tx is None and "OUT_OF_ENERGY" in err
-
-
-@pytest.mark.asyncio
-async def test_admin_escrow_transfer_rejects_master(pg_orm, env):
-    admin_router = importlib.import_module("app.routers.admin")
-    deal = SimpleNamespace(id=1, escrow_private_key_encrypted="enc", escrow_wallet_address=ESCROW)
-    tx, err = await admin_router._escrow_transfer_usdt(deal, MASTER, 4.0)
-    assert tx is None and "master" in err and env.chain.broadcasts == []
+def test_old_transfer_functions_removed_and_unused():
+    """Money leaves escrow only through payouts.execute_transfer."""
+    escrow = importlib.import_module("app.services.escrow")
+    assert not hasattr(escrow, "transfer_usdt")
+    assert not hasattr(escrow, "send_trx_for_gas")
+    assert not hasattr(escrow, "escrow_usdt_payout")
+    offenders = []
+    for path in list((BACKEND_ROOT / "app").rglob("*.py")) + list((BACKEND_ROOT / "bot").rglob("*.py")):
+        if path.name in ("escrow.py", "payouts.py"):
+            continue
+        src = path.read_text(encoding="utf-8")
+        for name in ("transfer_usdt(", "send_trx_for_gas(", "escrow_usdt_payout(",
+                     "prepare_usdt_transfer", "broadcast_prepared", ".trx.transfer("):
+            if name in src:
+                offenders.append(f"{path.relative_to(BACKEND_ROOT)}: {name}")
+    assert offenders == []

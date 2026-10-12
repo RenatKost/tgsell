@@ -453,12 +453,13 @@ async def test_sweep_with_unknown_balance_moves_nothing(env, monkeypatch):
     deal_id, addr = await env.make_deal(env.S.cancelled, age_hours=1)
     env.chain.balances[addr] = RuntimeError("429")
     gas, transfer = MagicMock(), MagicMock()
-    monkeypatch.setattr(escrow, "send_trx_for_gas", gas)
-    monkeypatch.setattr(escrow, "transfer_usdt", transfer)
-    monkeypatch.setattr(escrow, "escrow_usdt_payout", transfer)
+    monkeypatch.setattr(escrow, "prepare_usdt_transfer", gas)
+    monkeypatch.setattr(escrow, "broadcast_prepared", transfer)
 
     async with env.orm.session() as db:
-        r = await admin_router.sweep_escrow_wallet(deal_id, to_address="TTARGET", admin=None, db=db)
+        r = await admin_router.sweep_escrow_wallet(
+            deal_id, to_address="TUExqjcYXyftLqRWzBBigkeXyzY8pTGAkn", admin=None, db=db
+        )
     assert r["ok"] is False and "Не вдалося отримати баланс" in r["error"]
     gas.assert_not_called()
     transfer.assert_not_called()
