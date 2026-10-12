@@ -37,7 +37,8 @@ const AppContextProvider = ({ children }) => {
 				.then(({ data }) => {
 					setUser(data);
 					setIsAuthenticated(true);
-					return favoritesAPI.getIds();
+					// Blocked accounts can't use favorites (403) — don't treat that as logout.
+					return data.is_blocked ? { data: [] } : favoritesAPI.getIds();
 				})
 				.then(({ data }) => setFavoriteIds(new Set(data)))
 				.catch(() => {

@@ -32,6 +32,7 @@ class UserResponse(BaseModel):
     role: str
     usdt_wallet: str | None
     created_at: datetime
+    is_blocked: bool = False
 
     @model_validator(mode="after")
     def _sanitize_avatar(self):
@@ -47,3 +48,9 @@ class TokenResponse(BaseModel):
     refresh_token: str
     token_type: str = "bearer"
     user: UserResponse
+
+
+class MeResponse(UserResponse):
+    """Own profile: includes the block reason (never exposed on public profiles)."""
+
+    blocked_reason: str | None = None

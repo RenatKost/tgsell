@@ -210,6 +210,9 @@ async def cb_deal_confirm(callback: CallbackQuery):
         if not deal or deal.buyer_id != user.id:
             await callback.answer("Тільки покупець може підтвердити.", show_alert=True)
             return
+        if user.is_blocked and not deal.blocked_party_allowed:
+            await callback.answer("Акаунт заблоковано — дії по угоді вимкнено адміністратором.", show_alert=True)
+            return
 
         if deal.status not in checklist_svc.TRANSFER_STATUSES:
             await callback.answer("Угоду неможливо підтвердити в поточному статусі.", show_alert=True)
@@ -267,6 +270,9 @@ async def cb_deal_dispute(callback: CallbackQuery):
         deal = (await db.execute(select(Deal).where(Deal.id == deal_id))).scalar_one_or_none()
         if not deal or deal.buyer_id != user.id:
             await callback.answer("Тільки покупець може відкрити спір.", show_alert=True)
+            return
+        if user.is_blocked:
+            await callback.answer("Акаунт заблоковано — відкриття спору недоступне. Зверніться до підтримки.", show_alert=True)
             return
 
         if deal.status not in (DealStatus.paid, DealStatus.channel_transferring):

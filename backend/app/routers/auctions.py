@@ -22,6 +22,7 @@ from app.schemas.auction import (
     AuctionListResponse,
     AuctionResponse,
 )
+from app.services.moderation import not_blocked_seller
 from app.utils.security import get_current_user
 from app.utils.avatars import public_channel_avatar_url
 
@@ -76,6 +77,7 @@ async def list_auctions(
         query = query.where(Auction.seller_id == seller_id)
     else:
         query = query.where(Auction.status == status_filter)
+        query = query.where(not_blocked_seller(Auction.seller_id))
 
     if category:
         query = query.join(Channel).where(Channel.category == category)
@@ -200,6 +202,7 @@ async def get_auction(auction_id: int, db: AsyncSession = Depends(get_db)):
         select(Auction)
         .options(selectinload(Auction.channel), selectinload(Auction.bids))
         .where(Auction.id == auction_id)
+        .where(not_blocked_seller(Auction.seller_id))
     )
     auction = result.scalar_one_or_none()
     if not auction:
@@ -248,6 +251,9 @@ async def place_bid(
 
     if user.id == auction.seller_id:
         raise HTTPException(status_code=400, detail="Продавець не може робити ставки")
+    seller = await db.get(User, auction.seller_id)
+    if seller is not None and seller.is_blocked:
+        raise HTTPException(status_code=400, detail="Аукціон призупинено")
 
     min_bid = auction.current_price + auction.bid_step
     if body.amount < min_bid:

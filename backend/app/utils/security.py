@@ -56,10 +56,15 @@ def verify_telegram_auth(data: dict) -> bool:
     return hmac.compare_digest(computed_hash, received_hash)
 
 
-async def get_current_user(
+async def get_current_user_or_blocked(
     credentials: HTTPAuthorizationCredentials = Depends(security),
     db: AsyncSession = Depends(get_db),
 ) -> User:
+    """Authenticated active user, INCLUDING moderation-blocked ones.
+
+    Only for read-only own-data endpoints and deal actions that check
+    ``deal.blocked_party_allowed`` (see app.services.moderation).
+    """
     payload = verify_token(credentials.credentials)
     user_id = payload.get("sub")
     if user_id is None:
@@ -73,7 +78,28 @@ async def get_current_user(
     return user
 
 
+def blocked_detail(user: User) -> str:
+    reason = f": {user.blocked_reason}" if user.blocked_reason else ""
+    return f"Акаунт заблоковано{reason}"
+
+
+async def get_current_user(user: User = Depends(get_current_user_or_blocked)) -> User:
+    """Authenticated, active and NOT blocked (default for every action)."""
+    if getattr(user, "is_blocked", False):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=blocked_detail(user))
+    return user
+
+
 async def get_admin_user(user: User = Depends(get_current_user)) -> User:
+    """Staff (moderator or admin): listing moderation and read-only admin views."""
     if user.role not in ("admin", "moderator"):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Insufficient permissions")
+    return user
+
+
+async def get_superadmin_user(user: User = Depends(get_current_user)) -> User:
+    """Admin only: money actions (resolve, refunds, sweep, fee collection, payout queue)
+    and user blocking. Moderators are refused."""
+    if user.role != "admin":
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Лише для адміністратора")
     return user

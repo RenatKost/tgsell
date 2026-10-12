@@ -13,14 +13,18 @@ from app.schemas.auth import (
     TelegramAuthData,
     TokenResponse,
     UserResponse,
+    MeResponse,
 )
 from app.utils.security import (
     create_access_token,
     create_refresh_token,
     get_current_user,
+    get_current_user_or_blocked,
     verify_telegram_auth,
     verify_token,
 )
+
+from app.services.moderation import ensure_login_allowed
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
@@ -87,6 +91,7 @@ async def telegram_login(data: TelegramAuthData, db: AsyncSession = Depends(get_
         await db.commit()
         await db.refresh(user)
 
+    await ensure_login_allowed(db, user)
     access_token = create_access_token({"sub": str(user.id)})
     refresh_token = create_refresh_token({"sub": str(user.id)})
 
@@ -152,6 +157,7 @@ async def google_login(data: GoogleAuthData, db: AsyncSession = Depends(get_db))
         await db.commit()
         await db.refresh(user)
 
+    await ensure_login_allowed(db, user)
     access_token = create_access_token({"sub": str(user.id)})
     refresh_token = create_refresh_token({"sub": str(user.id)})
 
@@ -242,6 +248,7 @@ async def check_bot_auth(token: str, db: AsyncSession = Depends(get_db)):
         await db.commit()
         await db.refresh(user)
 
+    await ensure_login_allowed(db, user)
     access_token = create_access_token({"sub": str(user.id)})
     refresh_token = create_refresh_token({"sub": str(user.id)})
 
@@ -253,10 +260,10 @@ async def check_bot_auth(token: str, db: AsyncSession = Depends(get_db)):
     }
 
 
-@router.get("/me", response_model=UserResponse)
-async def get_me(user: User = Depends(get_current_user)):
-    """Get current authenticated user."""
-    return UserResponse.model_validate(user)
+@router.get("/me", response_model=MeResponse)
+async def get_me(user: User = Depends(get_current_user_or_blocked)):
+    """Get current authenticated user (blocked users see their block reason)."""
+    return MeResponse.model_validate(user)
 
 
 @router.post("/refresh", response_model=TokenResponse)
@@ -271,6 +278,7 @@ async def refresh_tokens(body: RefreshRequest, db: AsyncSession = Depends(get_db
     if not user or not user.is_active:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="User not found")
 
+    await ensure_login_allowed(db, user)
     access_token = create_access_token({"sub": str(user.id)})
     refresh_token = create_refresh_token({"sub": str(user.id)})
 

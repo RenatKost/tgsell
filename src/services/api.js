@@ -163,6 +163,14 @@ export const dealsAPI = {
 
 // ===== Admin =====
 export const adminAPI = {
+	listUsers: (params) => api.get('/admin/users', { params }),
+	getUser: (id) => api.get(`/admin/users/${id}`),
+	blockUser: (id, reason) => api.post(`/admin/users/${id}/block`, { reason }),
+	unblockUser: (id) => api.post(`/admin/users/${id}/unblock`),
+	setUserRole: (id, role) => api.post(`/admin/users/${id}/role`, null, { params: { role } }),
+	dealBlockedParty: (dealId, action, note) => api.post(`/admin/deals/${dealId}/blocked-party`, { action, note }),
+	auditLog: (params) => api.get('/admin/audit-log', { params }),
+
 	getDashboardStats: () =>
 		api.get('/admin/dashboard-stats'),
 
