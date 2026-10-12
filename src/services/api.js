@@ -157,6 +157,9 @@ export const dealsAPI = {
 	setSellerWallet: (id, walletAddress) =>
 		api.post(`/deals/${id}/seller-wallet`, { wallet_address: walletAddress }),
 
+	setOverpayRefundAddress: (id, walletAddress) =>
+		api.post(`/deals/${id}/overpay-refund-address`, { wallet_address: walletAddress }),
+
 	callAdmin: (id) =>
 		api.post(`/deals/${id}/call-admin`),
 

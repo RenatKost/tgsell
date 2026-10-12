@@ -30,6 +30,7 @@ class TransactionType(str, enum.Enum):
     refund = "refund"
     fee_collection = "fee_collection"  # admin-manual service fee → master (migration 0026)
     sweep = "sweep"  # admin-manual sweep of stray funds from a cancelled deal (0026)
+    overpay_refund = "overpay_refund"  # buyer overpayment → buyer-entered address (0032)
 
 
 class TransactionStatus(str, enum.Enum):
@@ -65,6 +66,13 @@ class Deal(Base):
     payout_tx_hash: Mapped[str | None] = mapped_column(String(100), nullable=True)
     # Admin: a blocked buyer/seller may still act on THIS deal (migration 0027).
     blocked_party_allowed: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false")
+    # Partial / over-payment (migration 0032). All NULL on legacy deals ⇒ no refund ever fires.
+    received_usdt: Mapped[float | None] = mapped_column(Float, nullable=True)
+    partial_notified_units: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
+    overpay_units: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
+    overpay_refund_address: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    # awaiting_address | queued | done | failed
+    overpay_status: Mapped[str | None] = mapped_column(String(20), nullable=True)
 
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
     paid_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)

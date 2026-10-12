@@ -49,6 +49,7 @@ OUTGOING_TYPES = (
     TransactionType.refund,
     TransactionType.fee_collection,
     TransactionType.sweep,
+    TransactionType.overpay_refund,
 )
 UNITS = Decimal("0.000001")
 # TRON txs expire 60s after build; a tx not on chain after this is dead for good.
@@ -194,8 +195,13 @@ async def _finalize_success(db, deal: Deal, tx: Transaction) -> None:
         deal.status = DealStatus.cancelled
         if channel is not None:
             channel.status = ChannelStatus.approved
+    elif tx.type == TransactionType.overpay_refund:
+        deal.overpay_status = "done"
+        _add_deal_message(db, deal, f"Переплату {tx.amount} USDT повернено покупцю ✅\nTX: {tx.tx_hash}",
+                          event="overpay_refund_done")
     if tx.type == TransactionType.release:
         _add_deal_message(db, deal, f"Виплата {tx.amount} USDT підтверджена мережею ✅\nTX: {tx.tx_hash}", event="payout_done")
+        maybe_enqueue_overpay_refund(db, deal)
     elif tx.type == TransactionType.refund:
         _add_deal_message(db, deal, f"Повернення {tx.amount} USDT покупцю підтверджено ✅\nTX: {tx.tx_hash}", event="refund_done")
     logger.info(f"[PAYOUT] Deal #{deal.id}: {tx.type.value} SUCCESS tx={tx.tx_hash}")
@@ -209,6 +215,10 @@ async def _finalize_failure(db, deal: Deal, tx: Transaction, reason: str) -> Non
     if (tx.type in (TransactionType.release, TransactionType.refund)
             and deal.status == DealStatus.payout_in_progress and tx.restore_status):
         release_payout_claim(deal, restore_status=DealStatus(tx.restore_status))
+    if tx.type == TransactionType.overpay_refund:
+        deal.overpay_status = "failed"  # no auto-retry (never duplicates); admin handles
+        _add_deal_message(db, deal, "Повернення переплати не виконано (кошти лишаються в escrow). "
+                                    "Адміністратора повідомлено.", event="overpay_refund_failed")
     if tx.type in (TransactionType.release, TransactionType.refund):
         _add_deal_message(db, deal, "Виплату не виконано (кошти лишаються в escrow). Адміністратора повідомлено.", event="payout_failed")
     logger.error(f"[PAYOUT] Deal #{deal.id}: {tx.type.value} FAILED tx={tx.tx_hash}: {reason}")
@@ -232,7 +242,8 @@ async def _apply_receipt(db, deal_id: int, tx_id: int, receipt: dict) -> Transfe
     if receipt["status"] == "SUCCESS":
         await _finalize_success(db, deal, tx)
         await db.commit()
-        await _sweep_trx(deal)
+        if deal.overpay_status != "queued":  # TRX left for the queued overpay refund
+            await _sweep_trx(deal)
         return TransferOutcome("success", tx.tx_hash, transaction_id=tx.id)
     if receipt["status"] == "FAILED":
         reason = receipt.get("reason") or "FAILED"
@@ -321,6 +332,31 @@ def enqueue_transfer(
     if tx_type in (TransactionType.release, TransactionType.refund):
         what = "Виплату продавцю" if tx_type == TransactionType.release else "Повернення покупцю"
         _add_deal_message(db, deal, f"{what} {tx.amount} USDT поставлено в чергу ⏳", event="payout_queued")
+    return tx
+
+
+def overpay_refund_ready(deal: Deal) -> bool:
+    """Overpay refund may be queued: recorded overpay (only set by payment_checker after
+    migration 0032 — legacy deals are NULL), buyer-entered address, seller payout done."""
+    return bool(
+        deal.overpay_units and deal.overpay_units > 0
+        and deal.overpay_refund_address
+        and deal.overpay_status == "awaiting_address"
+        and deal.status == DealStatus.completed
+    )
+
+
+def maybe_enqueue_overpay_refund(db, deal: Deal) -> Transaction | None:
+    """Queue the overpay refund once (caller holds the deal row lock and commits)."""
+    if not overpay_refund_ready(deal):
+        return None
+    deal.overpay_status = "queued"
+    tx = enqueue_transfer(
+        db, deal, tx_type=TransactionType.overpay_refund, to_address=deal.overpay_refund_address,
+        amount_units=int(deal.overpay_units), restore_status=None,
+    )
+    _add_deal_message(db, deal, f"Повернення переплати {units_to_usdt(deal.overpay_units)} USDT покупцю "
+                                f"поставлено в чергу ⏳", event="overpay_refund_queued")
     return tx
 
 

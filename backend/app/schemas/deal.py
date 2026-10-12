@@ -33,6 +33,10 @@ class DealResponse(BaseModel):
     seller_confirmed_transfer: bool = False
     seller_payout_address: str | None = None
     payout_tx_hash: str | None = None
+    received_usdt: float | None = None
+    overpay_units: int | None = None
+    overpay_refund_address: str | None = None
+    overpay_status: str | None = None
     created_at: datetime
     paid_at: datetime | None
     completed_at: datetime | None
@@ -122,3 +126,7 @@ class DealChecklistResponse(BaseModel):
 
 class ChecklistToggleRequest(BaseModel):
     done: bool | None = None  # None → toggle
+
+
+class OverpayRefundAddressRequest(BaseModel):
+    wallet_address: str
