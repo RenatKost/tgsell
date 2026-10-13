@@ -93,3 +93,34 @@ html.dark .apexcharts-tooltip-series-group {
 html.dark .apexcharts-gridline {
 	stroke: #243447;
 }
+
+/* ── Mobile layout guard (iOS Safari) ─────────────────────────────────────
+   Root cause of the "content in 45% of the screen" bug: grids with no explicit
+   column template on mobile get one implicit `auto` column sized to max-content,
+   and grid/flex items default to `min-width: auto`, so one long nowrap/truncate
+   line (e.g. a long channel name) made a card ~800px wide. The layout viewport
+   grew, and iOS Safari zoomed the whole page out. */
+.grid > * {
+	min-width: 0;
+}
+html {
+	overflow-x: clip;
+	-webkit-text-size-adjust: 100%;
+	text-size-adjust: 100%;
+}
+img, svg, video, canvas {
+	max-width: 100%;
+}
+@media (max-width: 640px) {
+	/* iOS zooms on focus if an input is < 16px */
+	input:not([type='checkbox']):not([type='radio']):not([type='range']),
+	select,
+	textarea {
+		font-size: 16px !important;
+	}
+	/* readable micro text on phones */
+	.text-\[8px\], .text-\[9px\], .text-\[10px\] { font-size: 11px !important; }
+	.text-\[11px\] { font-size: 12px !important; }
+	pre, code { white-space: pre-wrap; word-break: break-word; }
+	p, li, td, h1, h2, h3, h4, h5 { overflow-wrap: anywhere; }
+}
