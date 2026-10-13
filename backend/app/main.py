@@ -23,10 +23,8 @@ from app.tasks.health_monitor import run_health_monitor
 from app.tasks.checklist_reminders import run_checklist_reminders
 from bot.main import run_bots_background
 
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
-)
+from app.utils.logging_setup import setup_logging  # noqa: E402
+setup_logging()  # INFO → stdout, WARNING+ → stderr
 from app.utils.log_redact import setup_log_hygiene  # noqa: E402
 setup_log_hygiene()  # no bot tokens in logs (httpx logs full request URLs at INFO)
 logger = logging.getLogger(__name__)
