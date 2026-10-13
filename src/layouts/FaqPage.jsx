@@ -1,3 +1,4 @@
+import SocialLinks from '../components/SocialLinks';
 import { motion } from 'framer-motion';
 import { NavLink } from 'react-router-dom';
 
@@ -89,6 +90,7 @@ const FaqPage = () => (
 
       <Section title="7. Корисні посилання">
         <p><NavLink to="/oferta" className="text-accent hover:underline">Публічна оферта</NavLink> · <NavLink to="/privacy" className="text-accent hover:underline">Політика конфіденційності</NavLink> · <NavLink to="/contacts" className="text-accent hover:underline">Контакти</NavLink></p>
+        <SocialLinks title="" className="mt-4" />
       </Section>
     </div>
   </motion.div>
