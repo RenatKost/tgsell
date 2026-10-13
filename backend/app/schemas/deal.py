@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from pydantic import BaseModel, model_validator
+from pydantic import BaseModel, field_serializer, model_validator
 
 
 class DealCreate(BaseModel):
@@ -40,6 +40,12 @@ class DealResponse(BaseModel):
     created_at: datetime
     paid_at: datetime | None
     completed_at: datetime | None
+
+    @field_serializer("amount_usdt", "service_fee")
+    def _money2(self, v: float) -> float:
+        # Display only: DB value / on-chain math is untouched (task 15 item 3).
+        from app.utils.money_display import money2
+        return money2(v)
 
     @model_validator(mode="after")
     def _sanitize_avatar(self):

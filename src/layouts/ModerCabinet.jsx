@@ -1,3 +1,4 @@
+import { fmtUsdt } from '../utils/money';
 import { useEffect, useRef, useState } from 'react';
 import { adminAPI, dealsAPI, bundlesAPI } from '../services/api';
 import { useAuth } from '../context/AppContext';
@@ -1114,11 +1115,11 @@ const ModerCabinet = () => {
 											</div>
 											<div className='grid grid-cols-2 md:grid-cols-4 gap-2 text-sm mb-3'>
 												<div className='bg-gray-50 dark:bg-slate-700/60 p-2.5 rounded-xl'>
-													<span className='font-semibold text-green-600'>{deal.amount_usdt} USDT</span>
+													<span className='font-semibold text-green-600'>{fmtUsdt(deal.amount_usdt)} USDT</span>
 													<p className='text-gray-400 text-xs'>сума</p>
 												</div>
 												<div className='bg-gray-50 dark:bg-slate-700/60 p-2.5 rounded-xl'>
-													<span className='font-semibold text-gray-800 dark:text-gray-200'>{deal.service_fee} USDT</span>
+													<span className='font-semibold text-gray-800 dark:text-gray-200'>{fmtUsdt(deal.service_fee)} USDT</span>
 													<p className='text-gray-400 text-xs'>комісія</p>
 												</div>
 												<div className='bg-gray-50 dark:bg-slate-700/60 p-2.5 rounded-xl'>
@@ -1183,7 +1184,7 @@ const ModerCabinet = () => {
 											<span className='text-xs font-semibold text-yellow-700 dark:text-yellow-400 bg-yellow-100 dark:bg-yellow-900/30 px-3 py-1 rounded-full'>Спір</span>
 										</div>
 										<p className='text-gray-600 dark:text-gray-300 mb-2'>
-											<span className='font-semibold'>Канал:</span> {deal.channel_name || ('#' + deal.channel_id)} · <span className='font-semibold'>Сума:</span> {deal.amount_usdt} USDT
+											<span className='font-semibold'>Канал:</span> {deal.channel_name || ('#' + deal.channel_id)} · <span className='font-semibold'>Сума:</span> {fmtUsdt(deal.amount_usdt)} USDT
 										</p>
 										<p className='text-gray-600 dark:text-gray-300 mb-2'>
 											<span className='font-semibold'>Покупець:</span> {deal.buyer_name || '—'} · <span className='font-semibold'>Продавець:</span> {deal.seller_name || '—'}
