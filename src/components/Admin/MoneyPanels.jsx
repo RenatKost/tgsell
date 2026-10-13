@@ -126,7 +126,7 @@ export const TransactionsPanel = () => {
 		<div className='space-y-4'>
 			<h2 className='text-2xl font-bold text-gray-800 dark:text-gray-100'>Транзакції</h2>
 			<div className='flex flex-wrap gap-2'>
-				<select value={f.type} onChange={set('type')} className={inp}><option value=''>Усі типи</option>{['deposit', 'release', 'refund', 'fee_collection', 'sweep'].map(t => <option key={t}>{t}</option>)}</select>
+				<select value={f.type} onChange={set('type')} className={inp}><option value=''>Усі типи</option>{['deposit', 'release', 'refund', 'fee_collection', 'sweep', 'overpay_refund'].map(t => <option key={t}>{t}</option>)}</select>
 				<select value={f.status} onChange={set('status')} className={inp}><option value=''>Усі статуси</option>{['pending', 'confirmed', 'failed'].map(t => <option key={t}>{t}</option>)}</select>
 				<input value={f.deal_id} onChange={set('deal_id')} placeholder='Угода #' className={inp + ' w-24'} />
 				<input value={f.address} onChange={set('address')} placeholder='Адреса або tx hash' className={inp + ' flex-1 min-w-[200px]'} />
@@ -225,6 +225,12 @@ export const EscrowOverview = () => {
 	const [e, setE] = useState('');
 	const load = async (refresh = false) => { try { const { data } = await adminAPI.escrowOverview(refresh); setD(data); setE(''); } catch (x) { setE(err(x)); } };
 	useEffect(() => { load(); }, []);
+	const OP = { awaiting_address: 'чекає адресу', queued: 'в черзі', failed: 'НЕ ВИКОНАНО', done: 'повернено' };
+	const retryOverpay = async (i) => {
+		if (!window.confirm(`Повторити повернення переплати ${fmt(i.overpay_usdt, 6)} USDT по угоді #${i.deal_id} на адресу ${i.overpay_refund_address}?\n\nПереказ буде поставлено в чергу worker-а (одна спроба, без автоповторів).`)) return;
+		try { const { data } = await adminAPI.retryOverpayRefund(i.deal_id); alert(`Повернення ${data.amount_usdt} USDT поставлено в чергу (tx #${data.transaction_id}).`); load(); }
+		catch (x) { alert(err(x)); load(); }
+	};
 	const FEE = { collectable: 'можна зібрати', collecting: 'збирається', collected: 'зібрано', not_collectable: 'не збирається (до 0026)' };
 	return (
 		<div className={card + ' mb-6'}>
@@ -243,11 +249,13 @@ export const EscrowOverview = () => {
 						<div>В активних ескроу: <b>{fmt(d.totals.held_active)}</b></div>
 						<div>Залишки на скасованих: <b>{fmt(d.totals.stray_cancelled)}</b></div>
 						<div>Невідомий баланс: <b>{d.totals.unknown_wallets}</b></div>
+						<div>Переплати повернено: <b>{fmt(d.totals.overpay_refunded)}</b></div>
+						<div>Переплати до повернення: <b>{fmt(d.totals.overpay_open)}</b>{d.totals.overpay_failed ? <span className='text-red-600'> (невдалих: {d.totals.overpay_failed})</span> : null}</div>
 						<div className='text-xs text-gray-400'>баланси: {when(d.balances_checked_at)}</div>
 					</div>
 					<div className='overflow-x-auto'>
 						<table className='w-full text-xs'>
-							<thead><tr className='text-left text-gray-400 uppercase'><th className='p-2'>Угода</th><th className='p-2'>Статус</th><th className='p-2'>Факт USDT</th><th className='p-2'>Очікувано</th><th className='p-2'>Комісія</th><th className='p-2'></th></tr></thead>
+							<thead><tr className='text-left text-gray-400 uppercase'><th className='p-2'>Угода</th><th className='p-2'>Статус</th><th className='p-2'>Факт USDT</th><th className='p-2'>Очікувано</th><th className='p-2'>Комісія</th><th className='p-2'>Переплата</th><th className='p-2'></th></tr></thead>
 							<tbody>{d.items.map(i => (
 								<tr key={i.deal_id} className={`border-t border-gray-100 dark:border-slate-700 ${i.mismatch ? 'bg-red-50 dark:bg-red-900/20' : ''}`}>
 									<td className='p-2'><a href={'/deal/' + i.deal_id} target='_blank' rel='noopener noreferrer' className='text-[#3498db]'>#{i.deal_id}</a></td>
@@ -255,6 +263,11 @@ export const EscrowOverview = () => {
 									<td className='p-2'>{i.live_usdt === null ? 'невідомо' : fmt(i.live_usdt, 6)}</td>
 									<td className='p-2'>{i.expected_usdt === null ? '—' : fmt(i.expected_usdt, 6)}</td>
 									<td className='p-2'>{i.fee_state ? `${fmt(i.service_fee)} · ${FEE[i.fee_state] || i.fee_state}` : '—'}</td>
+									<td className='p-2'>{i.overpay_usdt ? (<>
+										{fmt(i.overpay_usdt, 6)} · <span className={i.overpay_status === 'failed' ? 'text-red-600 font-semibold' : ''}>{OP[i.overpay_status] || i.overpay_status}</span>
+										{i.overpay_tx?.tronscan_url && <> · <a href={i.overpay_tx.tronscan_url} target='_blank' rel='noopener noreferrer' className='text-[#3498db]'>{short(i.overpay_tx.tx_hash)}</a></>}
+										{i.overpay_retry_allowed && <button onClick={() => retryOverpay(i)} className='ml-2 px-2 py-0.5 rounded bg-orange-500 text-white'>Повторити</button>}
+									</>) : '—'}</td>
 									<td className='p-2'>{i.mismatch && <span className='text-red-600 font-semibold'>розбіжність</span>}{i.stray && <span className='text-orange-600'>залишок (лише перегляд)</span>}</td>
 								</tr>))}</tbody>
 						</table>

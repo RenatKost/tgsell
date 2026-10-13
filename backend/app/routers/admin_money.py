@@ -14,7 +14,7 @@ import csv
 import io
 from datetime import date, datetime, timedelta
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Response
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 from sqlalchemy import func, select
@@ -248,7 +248,7 @@ async def escrow_overview(
 ):
     """Per-deal escrow reconciliation. Read-only: nothing is moved from here."""
     from app.routers.admin import check_escrow_balances
-    from app.services.payouts import to_units
+    from app.services.payouts import to_units, units_to_usdt
 
     balances = await check_escrow_balances(refresh=refresh, admin=admin, db=db)
     live = {w["deal_id"]: w["balance_usdt"] for w in balances.get("wallets_with_funds", [])}
@@ -257,13 +257,15 @@ async def escrow_overview(
 
     deals = (await db.execute(select(Deal).order_by(Deal.id.desc()))).scalars().all()
     txs = (await db.execute(select(Transaction).where(Transaction.type.in_((
-        TransactionType.release, TransactionType.fee_collection, TransactionType.refund, TransactionType.sweep))))).scalars().all()
+        TransactionType.release, TransactionType.fee_collection, TransactionType.refund, TransactionType.sweep,
+        TransactionType.overpay_refund))))).scalars().all()
     by_deal: dict[int, list[Transaction]] = {}
     for t in txs:
         by_deal.setdefault(t.deal_id, []).append(t)
 
     totals = {"accrued": 0.0, "collected": 0.0, "collectable": 0.0, "not_collectable_legacy": 0.0,
-              "held_active": 0.0, "stray_cancelled": 0.0, "unknown_wallets": len(unknown)}
+              "held_active": 0.0, "stray_cancelled": 0.0, "unknown_wallets": len(unknown),
+              "overpay_refunded": 0.0, "overpay_open": 0.0, "overpay_failed": 0}
     items = []
     for d in deals:
         ts = by_deal.get(d.id, [])
@@ -297,16 +299,34 @@ async def escrow_overview(
             if bal:
                 stray = True
                 totals["stray_cancelled"] += bal
+        # Overpay refund (display/reconciliation only): an unrefunded overpay is still on escrow.
+        op_tx = [t for t in ts if t.type == TransactionType.overpay_refund]
+        op_usdt = units_to_usdt(d.overpay_units) if d.overpay_units else 0.0
+        if d.overpay_units and d.overpay_status:
+            if d.overpay_status == "done":
+                totals["overpay_refunded"] += sum(t.amount for t in op_tx if t.status == TransactionStatus.confirmed)
+            else:
+                totals["overpay_open"] += op_usdt
+                if expected is not None:
+                    expected += op_usdt
+                if d.overpay_status == "failed":
+                    totals["overpay_failed"] += 1
+        last_op = max(op_tx, key=lambda t: t.id) if op_tx else None
         mismatch = (expected is not None and bal is not None and not stray
                     and abs(to_units(bal) - to_units(expected)) > 0)
         notable = (bool(bal) or mismatch or bal is None or d.status in FUNDED_ACTIVE
-                   or fee_state in ("collectable", "collecting", "not_collectable"))
+                   or fee_state in ("collectable", "collecting", "not_collectable")
+                   or (d.overpay_status not in (None, "done")))
         if not notable:
             continue
         items.append({
             "deal_id": d.id, "status": d.status.value, "escrow": d.escrow_wallet_address,
             "amount_usdt": money2(d.amount_usdt), "service_fee": money2(fee), "live_usdt": bal, "expected_usdt": expected,
             "fee_state": fee_state, "mismatch": mismatch, "stray": stray, "read_only": stray,
+            "overpay_usdt": op_usdt or None, "overpay_status": d.overpay_status,
+            "overpay_refund_address": d.overpay_refund_address,
+            "overpay_tx": _tx_row(last_op) if last_op else None,
+            "overpay_retry_allowed": d.overpay_status == "failed",
         })
     return {"items": items, "totals": {k: round(v, 6) if isinstance(v, float) else v for k, v in totals.items()},
             "balances_checked_at": balances.get("checked_at"), "cached": balances.get("cached")}
@@ -345,3 +365,88 @@ async def daily_summary(
     else:
         day = gas_monitor.to_local(utcnow_naive()).date() - timedelta(days=1)
     return await gas_monitor.build_summary(db, day, gas_monitor._cache["payload"])
+
+
+@router.get("/overpay-refunds")
+async def list_overpay_refunds(
+    admin: User = Depends(get_superadmin_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Read-only: every deal with a recorded overpay (awaiting_address/queued/failed/done)."""
+    from app.services.payouts import units_to_usdt
+
+    deals = (await db.execute(
+        select(Deal).where(Deal.overpay_units.is_not(None), Deal.overpay_units > 0).order_by(Deal.id.desc())
+    )).scalars().all()
+    txs = (await db.execute(select(Transaction).where(
+        Transaction.type == TransactionType.overpay_refund,
+        Transaction.deal_id.in_([d.id for d in deals] or [-1]),
+    ).order_by(Transaction.id))).scalars().all()
+    by_deal: dict[int, list] = {}
+    for t in txs:
+        by_deal.setdefault(t.deal_id, []).append(_tx_row(t))
+    return {"items": [{
+        "deal_id": d.id, "deal_status": d.status.value, "overpay_usdt": units_to_usdt(d.overpay_units),
+        "overpay_units": d.overpay_units, "overpay_status": d.overpay_status,
+        "overpay_refund_address": d.overpay_refund_address, "transactions": by_deal.get(d.id, []),
+        "retry_allowed": d.overpay_status == "failed",
+    } for d in deals]}
+
+
+@router.post("/deals/{deal_id}/overpay-refund/retry")
+async def retry_overpay_refund(
+    deal_id: int,
+    response: Response,
+    admin: User = Depends(get_superadmin_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Admin-manual retry of a FAILED overpay refund (task 15 item 4). No automatic retries.
+
+    Re-queues a job for the single payout worker (PG advisory lock → process_queued →
+    execute path with balance/gas checks). Idempotent under the deal row lock: refused if
+    the refund is not 'failed', if any outgoing tx is queued/in progress, or if an
+    overpay_refund already succeeded. Nothing is sent from this handler.
+    """
+    from app.routers.admin import _precheck_gas_or_http
+    from app.services import payouts
+
+    deal = (await db.execute(select(Deal).where(Deal.id == deal_id).with_for_update())).scalar_one_or_none()
+    if not deal:
+        raise HTTPException(status_code=404, detail="Deal not found")
+    try:
+        if not deal.overpay_units or deal.overpay_units <= 0:
+            raise HTTPException(status_code=400, detail="По угоді немає переплати")
+        if deal.overpay_status != "failed":
+            raise HTTPException(status_code=409, detail=f"Повтор можливий лише для статусу failed (зараз: {deal.overpay_status})")
+        if deal.status != DealStatus.completed:
+            raise HTTPException(status_code=400, detail="Повернення переплати лише після завершення угоди")
+        done = (await db.execute(select(Transaction.id).where(
+            Transaction.deal_id == deal.id, Transaction.type == TransactionType.overpay_refund,
+            Transaction.status == TransactionStatus.confirmed,
+        ).limit(1))).scalar_one_or_none()
+        if done is not None:
+            raise HTTPException(status_code=409, detail="Переплату вже повернено (є підтверджена транзакція)")
+        if await payouts.open_outgoing_tx(db, deal.id) is not None:
+            raise HTTPException(status_code=409, detail="Є вихідна транзакція в черзі / в процесі")
+        try:
+            to = await payouts.validate_destination(db, deal.overpay_refund_address)
+        except payouts.PayoutError as e:
+            raise HTTPException(status_code=e.http_status, detail=e.message)
+    except HTTPException:
+        await db.rollback()
+        raise
+
+    units = int(deal.overpay_units)
+    await _precheck_gas_or_http(db, deal, to, units)
+    deal.overpay_status = "queued"
+    job = payouts.enqueue_transfer(
+        db, deal, tx_type=TransactionType.overpay_refund, to_address=to,
+        amount_units=units, restore_status=None,
+    )
+    payouts._add_deal_message(db, deal, f"Повернення переплати {payouts.units_to_usdt(units)} USDT покупцю "
+                                        f"повторно поставлено в чергу адміністратором ⏳", event="overpay_refund_queued")
+    audit(db, admin, "deal.overpay_refund_retry", "deal", deal.id, to_address=to, amount_units=units)
+    await db.commit()
+    response.status_code = 202
+    return {"ok": True, "status": "queued", "deal_id": deal_id,
+            "amount_usdt": payouts.units_to_usdt(units), "transaction_id": job.id}
