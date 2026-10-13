@@ -321,11 +321,11 @@ const CatalogPage = () => {
 						)}
 					</div>
 					{bundlesLoading ? (
-						<div className='grid xl:grid-cols-3 md:grid-cols-2 gap-6'>
+						<div className='grid grid-cols-1 xl:grid-cols-3 md:grid-cols-2 gap-6'>
 							{[1, 2].map(i => <div key={i} className='bg-card rounded-2xl border border-card-border h-64 animate-pulse' />)}
 						</div>
 					) : (
-						<div className='grid xl:grid-cols-3 md:grid-cols-2 gap-6'>
+						<div className='grid grid-cols-1 xl:grid-cols-3 md:grid-cols-2 gap-6'>
 							{bundles.map(b => <BundleCard key={b.id} bundle={b} />)}
 						</div>
 					)}
@@ -342,7 +342,7 @@ const CatalogPage = () => {
 
 			{/* Grid */}
 			{loading ? (
-				<div className='grid xl:grid-cols-3 md:grid-cols-2 gap-6'>
+				<div className='grid grid-cols-1 xl:grid-cols-3 md:grid-cols-2 gap-6'>
 					{[1, 2, 3, 4, 5, 6].map((i) => (
 						<div key={i} className='bg-white dark:bg-card rounded-2xl border border-gray-100 dark:border-card-border h-64 animate-pulse' />
 					))}
@@ -354,7 +354,7 @@ const CatalogPage = () => {
 					<p className='text-gray-400 dark:text-gray-500 text-sm mt-1'>Спробуйте змінити фільтри</p>
 				</div>
 			) : (
-				<div className='grid xl:grid-cols-3 md:grid-cols-2 gap-6'>
+				<div className='grid grid-cols-1 xl:grid-cols-3 md:grid-cols-2 gap-6'>
 					{channels.map(channel => (
 						<CatalogCard key={channel.id} channel={channel} />
 					))}
