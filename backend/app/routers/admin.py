@@ -1974,3 +1974,56 @@ async def reject_bundle(
 
     return {"ok": True, "bundle_id": bundle_id, "status": "rejected", "reason": reason}
 
+
+
+# ── Inactive channels (task 15 item 1) ─────────────────────────────────
+
+class ChannelRemoveRequest(BaseModel):
+    confirm: bool = False
+    reason: str | None = Field(default=None, max_length=500)
+
+
+@router.get("/channels/inactive")
+async def list_inactive_channels(
+    admin: User = Depends(get_admin_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Lots whose username no longer resolves / channel gone / bot lost access."""
+    from app.services.channel_availability import list_inactive
+
+    return {"items": await list_inactive(db)}
+
+
+@router.post("/channels/{channel_id}/remove")
+async def remove_channel_from_market(
+    channel_id: int,
+    body: ChannelRemoveRequest,
+    admin: User = Depends(get_admin_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """'Зняти з біржі': soft delete (status removed) + audit. Refused with an explanation
+    while the lot has an active deal or an auction with bids."""
+    from app.services.channel_availability import LISTED_STATUSES, removal_blockers
+
+    if not body.confirm:
+        raise HTTPException(status_code=400, detail="Підтвердіть зняття лота з біржі")
+    channel = (await db.execute(select(Channel).where(Channel.id == channel_id).with_for_update())).scalar_one_or_none()
+    if channel is None:
+        raise HTTPException(status_code=404, detail="Channel not found")
+    if channel.status == ChannelStatus.removed:
+        return {"id": channel.id, "status": channel.status.value}
+    if channel.status not in LISTED_STATUSES:
+        raise HTTPException(status_code=400, detail=f"Лот у статусі {channel.status.value} — знімати нічого")
+    blockers = await removal_blockers(db, channel.id)
+    if blockers:
+        raise HTTPException(status_code=409, detail="Неможливо зняти з біржі: " + "; ".join(blockers))
+    prev = channel.status.value
+    channel.status = ChannelStatus.removed
+    channel.removed_at = utcnow_naive()
+    channel.removed_by_id = admin.id
+    channel.removed_reason = (body.reason or channel.check_error or "Канал неактивний")[:500]
+    audit(db, admin, "channel.remove", "channel", channel.id, prev_status=prev,
+          reason=channel.removed_reason, check_error=channel.check_error)
+    await db.commit()
+    logger.info(f"[ADMIN] Channel #{channel.id} removed from market by admin #{admin.id}: {channel.removed_reason}")
+    return {"id": channel.id, "status": channel.status.value}

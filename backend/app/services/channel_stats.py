@@ -385,6 +385,10 @@ async def _save_session_to_db(session_string: str) -> None:
         logger.error(f"Failed to save Telethon session to DB: {e}")
 
 
+# username(lower) → last availability error text of the current check (Bot API / Telethon).
+last_check_errors: dict[str, str] = {}
+
+
 async def get_channel_info_bot_api(channel_username: str) -> dict | None:
     """Get basic channel info using Bot API (safe, no user account needed).
 
@@ -399,6 +403,11 @@ async def get_channel_info_bot_api(channel_username: str) -> dict | None:
             # getChat
             resp = await http.get(f"{base_url}/getChat", params={"chat_id": f"@{channel_username}"})
             if resp.status_code != 200:
+                try:
+                    desc = resp.json().get("description") or f"HTTP {resp.status_code}"
+                except Exception:
+                    desc = f"HTTP {resp.status_code}"
+                last_check_errors[channel_username.lower()] = f"Bot API: {desc}"[:300]
                 return None
             chat_data = resp.json().get("result", {})
 
@@ -619,6 +628,8 @@ async def get_channel_stats_telethon(channel_username: str, message_limit: int =
         }
     except Exception as e:
         logger.error(f"Telethon stats failed for @{channel_username}: {e}")
+        prev = last_check_errors.get(channel_username.lower())
+        last_check_errors[channel_username.lower()] = (f"{prev}; " if prev else "") + f"Telethon: {e}"[:200]
         return None
 
 
@@ -682,6 +693,7 @@ async def collect_channel_stats(telegram_link: str, message_limit: int = 5000) -
         return result
 
     # Step 1: Bot API (safe, always works)
+    last_check_errors.pop(username.lower(), None)
     bot_info = await get_channel_info_bot_api(username)
     if bot_info:
         result["channel_name"] = bot_info["name"] or username
@@ -713,4 +725,5 @@ async def collect_channel_stats(telegram_link: str, message_limit: int = 5000) -
     else:
         logger.warning(f"[STATS] @{username} Telethon failed — no views/ER/posts data")
 
+    result["check"] = {"ok": bool(bot_info or telethon_stats), "reason": last_check_errors.get(username.lower())}
     return result

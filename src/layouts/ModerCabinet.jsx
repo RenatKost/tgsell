@@ -4,6 +4,7 @@ import { useAuth } from '../context/AppContext';
 import UsersPanel from '../components/Admin/UsersPanel';
 import DealChat from '../components/DealChat/DealChat';
 import AuditLogPanel from '../components/Admin/AuditLogPanel';
+import InactiveChannelsPanel from '../components/Admin/InactiveChannelsPanel';
 import { GasCard, SummaryCard, TransactionsPanel, PayoutQueuePanel, EscrowOverview } from '../components/Admin/MoneyPanels';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import {
@@ -51,6 +52,7 @@ const SECTIONS = [
 	{ id: 'transactions', label: 'Транзакції', icon: faList, adminOnly: true },
 	{ id: 'queue', label: 'Черга виплат', icon: faClock, adminOnly: true },
 	{ id: 'users', label: 'Користувачі', icon: faUsers, adminOnly: true },
+	{ id: 'inactive', label: 'Неактивні канали', icon: faClock, adminOnly: true },
 	{ id: 'audit', label: 'Журнал дій', icon: faList, adminOnly: true },
 ];
 
@@ -1470,6 +1472,7 @@ const ModerCabinet = () => {
 				{isAdmin && section === 'queue' && <PayoutQueuePanel />}
 				{isAdmin && section === 'users' && <UsersPanel />}
 				{isAdmin && section === 'audit' && <AuditLogPanel />}
+				{isAdmin && section === 'inactive' && <InactiveChannelsPanel />}
 
 				{chatDealId && (
 					<DealChatModal dealId={chatDealId} userId={user?.id} onClose={() => setChatDealId(null)} />

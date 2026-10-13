@@ -47,6 +47,18 @@ async def collect_stats_once():
                 stats = await collect_channel_stats(channel.telegram_link)
                 if not stats.get("daily_stats"):
                     telethon_ok = False
+                check = stats.get("check")
+                if check is not None:
+                    from app.services.channel_availability import record_check
+
+                    was_inactive = channel.inactive_since is not None
+                    await record_check(db, channel, check)
+                    if not check.get("ok"):
+                        if channel.inactive_since is not None and not was_inactive:
+                            logger.warning(f"[STATS] Channel #{channel.id} ({channel.telegram_link}) INACTIVE: {channel.check_error}")
+                        await db.commit()
+                        failed += 1
+                        continue  # nothing to store from a failed check (no zero snapshots)
 
                 # Update channel with latest data
                 if stats.get("subscribers_count"):
