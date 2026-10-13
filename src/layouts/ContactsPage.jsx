@@ -30,13 +30,6 @@ const contacts = [
     hint: 'Питання користувачів, угоди, акаунт',
     icon: 'admin',
   },
-  {
-    title: 'Instagram',
-    label: 'instagram.com/tgsell.me',
-    href: 'https://instagram.com/tgsell.me',
-    hint: 'Соцмережі TgSell',
-    icon: 'ig',
-  },
 ];
 
 const Icon = ({ type }) => {
