@@ -1,7 +1,7 @@
 """Background task: Periodically collect channel stats for all approved channels."""
 import asyncio
 import logging
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -264,42 +264,51 @@ async def update_post_views_once():
     if not client:
         return
 
+    # Load plain column tuples only (no ORM instances shared across channels).
+    # Previously ORM ChannelPost objects were loaded once and reused across
+    # channels; a db.rollback() after one channel failed expired *all* of them,
+    # so touching e.g. post.telegram_msg_id for the next channel triggered a
+    # lazy refresh outside the async greenlet -> "greenlet_spawn has not been
+    # called" errors. Now each channel gets its own session and fresh rows.
+    from collections import defaultdict
+
+    cutoff = utcnow_naive().replace(hour=0, minute=0) - timedelta(hours=50)
     async with async_session() as db:
-        # Get all posts from last 48 hours that still need view snapshots
-        # ChannelPost.date is naive TIMESTAMP (UTC) — compare with a naive cutoff (asyncpg rejects aware)
-        cutoff = utcnow_naive().replace(hour=0, minute=0) - __import__('datetime').timedelta(hours=50)
-        result = await db.execute(
-            select(ChannelPost).join(Channel).where(
+        rows = (await db.execute(
+            select(ChannelPost.channel_id, ChannelPost.id, Channel.telegram_link)
+            .join(Channel, Channel.id == ChannelPost.channel_id)
+            .where(
                 ChannelPost.date >= cutoff,
                 Channel.status.in_([ChannelStatus.approved, ChannelStatus.pending]),
                 Channel.is_closed.is_(False),
             )
-        )
-        posts = result.scalars().all()
+        )).all()
 
-        if not posts:
-            return
+    if not rows:
+        return
 
-        # Group posts by channel
-        from collections import defaultdict
-        by_channel = defaultdict(list)
-        for post in posts:
-            by_channel[post.channel_id].append(post)
+    by_channel: dict[int, list[int]] = defaultdict(list)
+    links: dict[int, str] = {}
+    for channel_id, post_id, link in rows:
+        by_channel[channel_id].append(post_id)
+        links[channel_id] = link
 
-        now = datetime.now(timezone.utc)
+    now = datetime.now(timezone.utc)
 
-        for channel_id, channel_posts in by_channel.items():
-            try:
-                # Get channel entity
-                ch_result = await db.execute(
-                    select(Channel.telegram_link).where(Channel.id == channel_id)
-                )
-                link = ch_result.scalar_one_or_none()
-                if not link:
-                    continue
+    for channel_id, post_ids in by_channel.items():
+        try:
+            link = links.get(channel_id)
+            if not link:
+                continue
+            username, link_kind = parse_telegram_link(link)
+            if link_kind == "invite":
+                continue
 
-                username, link_kind = parse_telegram_link(link)
-                if link_kind == "invite":
+            async with async_session() as db:
+                channel_posts = (await db.execute(
+                    select(ChannelPost).where(ChannelPost.id.in_(post_ids))
+                )).scalars().all()
+                if not channel_posts:
                     continue
 
                 entity = await client.get_entity(username)
@@ -340,15 +349,11 @@ async def update_post_views_once():
                         post.views_48h = post.views
 
                 await db.commit()
-                logger.info(f"View tracking updated for channel #{channel_id} ({len(channel_posts)} posts)")
-                await asyncio.sleep(2)
+            logger.info(f"View tracking updated for channel #{channel_id} ({len(post_ids)} posts)")
+            await asyncio.sleep(2)
 
-            except Exception as e:
-                logger.error(f"View tracking failed for channel #{channel_id}: {e}")
-                try:
-                    await db.rollback()
-                except Exception:
-                    pass
+        except Exception as e:
+            logger.error(f"View tracking failed for channel #{channel_id}: {e}")
 
 
 async def run_view_tracker(interval_hours: int = 6):
