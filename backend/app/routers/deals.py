@@ -5,6 +5,7 @@ from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
+from app.utils.money_display import money2_str
 from app.config import settings
 from app.database import get_db
 from app.models.channel import Channel, ChannelStatus
@@ -147,9 +148,9 @@ async def create_deal(
         channel_count = len(bundle.bundle_channels)
         init_msg = (
             f"Угоду на сітку «{bundle.name}» створено! Каналів: {channel_count}\n"
-            f"Вартість: {deal.amount_usdt} USDT\n"
-            f"Комісія сервісу: 3% ({fee:.2f} USDT)\n"
-            f"Продавець отримає: {payout:.2f} USDT\n\n"
+            f"Вартість: {money2_str(deal.amount_usdt)} USDT\n"
+            f"Комісія сервісу: 3% ({money2_str(fee)} USDT)\n"
+            f"Продавець отримає: {money2_str(payout)} USDT\n\n"
             f"Підтвердіть готовність, щоб перейти до оплати."
         )
         await _add_system_message(db, deal.id, user.id, init_msg, event="deal_created")
@@ -226,9 +227,9 @@ async def create_deal(
     fee = deal.service_fee
     payout = deal.amount_usdt - fee
     init_msg = (
-        f"Угоду створено! Вартість каналу: {deal.amount_usdt} USDT\n"
-        f"Комісія сервісу: 3% ({fee:.2f} USDT)\n"
-        f"Продавець отримає: {payout:.2f} USDT\n\n"
+        f"Угоду створено! Вартість каналу: {money2_str(deal.amount_usdt)} USDT\n"
+        f"Комісія сервісу: 3% ({money2_str(fee)} USDT)\n"
+        f"Продавець отримає: {money2_str(payout)} USDT\n\n"
         f"Підтвердіть готовність, щоб перейти до оплати."
     )
     await _add_system_message(db, deal.id, user.id, init_msg, event="deal_created")

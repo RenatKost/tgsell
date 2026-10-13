@@ -1,3 +1,4 @@
+import { fmtUsdt } from '../utils/money';
 import { useAuth } from '../context/AppContext';
 import { useEffect, useState } from 'react';
 import { NavLink } from 'react-router-dom';
@@ -84,7 +85,7 @@ const ProfilePage = () => {
 									</p>
 								</div>
 								<div className='text-right'>
-									<p className='font-bold text-[#27ae60]'>{deal.amount_usdt} USDT</p>
+									<p className='font-bold text-[#27ae60]'>{fmtUsdt(deal.amount_usdt)} USDT</p>
 									<p className='text-gray-500 text-sm capitalize'>{deal.status}</p>
 								</div>
 							</NavLink>

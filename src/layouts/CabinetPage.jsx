@@ -1,3 +1,4 @@
+import { fmtUsdt } from '../utils/money';
 import { useEffect, useState } from 'react';
 import { NavLink, useNavigate } from 'react-router-dom';
 import { channelsAPI, favoritesAPI, dealsAPI, auctionsAPI, bundlesAPI } from '../services/api';
@@ -526,11 +527,11 @@ const CabinetPage = () => {
 										</div>
 										<div className='grid grid-cols-2 sm:grid-cols-4 gap-3 text-sm'>
 											<div className='bg-gray-50 dark:bg-slate-700/60 p-3 rounded-xl'>
-												<span className='font-semibold text-green-600'>{deal.amount_usdt} USDT</span>
+												<span className='font-semibold text-green-600'>{fmtUsdt(deal.amount_usdt)} USDT</span>
 												<p className='text-gray-400 dark:text-gray-500 text-xs mt-0.5'>сума</p>
 											</div>
 											<div className='bg-gray-50 dark:bg-slate-700/60 p-3 rounded-xl'>
-												<span className='font-semibold dark:text-gray-200'>{deal.service_fee} USDT</span>
+												<span className='font-semibold dark:text-gray-200'>{fmtUsdt(deal.service_fee)} USDT</span>
 												<p className='text-gray-400 dark:text-gray-500 text-xs mt-0.5'>комісія</p>
 											</div>
 											<div className='bg-gray-50 dark:bg-slate-700/60 p-3 rounded-xl'>

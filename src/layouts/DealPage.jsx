@@ -1,3 +1,4 @@
+import { fmtUsdt } from '../utils/money';
 import DealChat from '../components/DealChat/DealChat';
 import { useEffect, useRef, useState } from 'react';
 import { useParams } from 'react-router-dom';
@@ -249,7 +250,7 @@ const DealPage = () => {
 						</p>
 					</div>
 					<div className='text-right flex-shrink-0'>
-						<p className='text-2xl sm:text-3xl md:text-4xl font-extrabold tracking-tight'>{deal.amount_usdt}</p>
+						<p className='text-2xl sm:text-3xl md:text-4xl font-extrabold tracking-tight'>{fmtUsdt(deal.amount_usdt)}</p>
 						<p className='text-blue-200 text-xs font-semibold uppercase tracking-wider mt-0.5'>USDT</p>
 					</div>
 				</div>
@@ -344,7 +345,7 @@ const DealPage = () => {
 			{['created', 'payment_pending'].includes(deal.status) && deal.received_usdt > 0 && deal.received_usdt < deal.amount_usdt && (
 				<div className='bg-orange-50 dark:bg-orange-900/20 border border-orange-200 rounded-2xl p-5 mb-6'>
 					<p className='font-semibold text-orange-800 dark:text-orange-200'>
-						Отримано {deal.received_usdt} з {deal.amount_usdt} USDT, доплатіть {(Math.round((deal.amount_usdt - deal.received_usdt) * 1e6) / 1e6)} USDT
+						Отримано {deal.received_usdt} з {fmtUsdt(deal.amount_usdt)} USDT, доплатіть {(Math.round((deal.amount_usdt - deal.received_usdt) * 1e6) / 1e6)} USDT
 					</p>
 					<p className='text-xs text-orange-700 dark:text-orange-300 mt-1'>
 						⚠️ Біржа або гаманець можуть утримати комісію за виведення — надсилайте так, щоб на escrow надійшла повна сума.
@@ -384,16 +385,16 @@ const DealPage = () => {
 				<div className='bg-white dark:bg-slate-800 rounded-2xl shadow-lg border border-gray-100 dark:border-slate-700 p-4 sm:p-6 mb-6'>
 					<h3 className='font-bold text-lg mb-2'>Оплата</h3>
 					<p className='text-gray-500 text-sm mb-5'>
-						Переведіть <strong className='text-gray-800 dark:text-white'>{deal.amount_usdt} USDT</strong> через мережу <strong className='text-gray-800 dark:text-white'>TRC-20</strong>
+						Переведіть <strong className='text-gray-800 dark:text-white'>{fmtUsdt(deal.amount_usdt)} USDT</strong> через мережу <strong className='text-gray-800 dark:text-white'>TRC-20</strong>
 					</p>
 					<div className='bg-blue-50 dark:bg-blue-900/20 border border-blue-200 rounded-xl p-4 mb-4'>
 						<div className='flex flex-col sm:flex-row sm:justify-between gap-0.5 text-sm mb-2 sm:mb-1'>
 							<span className='text-gray-600 dark:text-gray-300'>Вартість каналу:</span>
-							<span className='font-semibold text-gray-800 dark:text-white'>{deal.amount_usdt} USDT</span>
+							<span className='font-semibold text-gray-800 dark:text-white'>{fmtUsdt(deal.amount_usdt)} USDT</span>
 						</div>
 						<div className='flex flex-col sm:flex-row sm:justify-between gap-0.5 text-sm mb-2 sm:mb-1'>
 							<span className='text-gray-600 dark:text-gray-300'>Комісія сервісу (3%):</span>
-							<span className='text-gray-500'>{deal.service_fee} USDT — утримується при виплаті продавцю</span>
+							<span className='text-gray-500'>{fmtUsdt(deal.service_fee)} USDT — утримується при виплаті продавцю</span>
 						</div>
 						<div className='flex flex-col sm:flex-row sm:justify-between gap-0.5 text-sm'>
 							<span className='text-gray-600 dark:text-gray-300'>Комісія мережі:</span>
@@ -532,15 +533,15 @@ const DealPage = () => {
 					<div className='bg-green-50 border border-green-200 rounded-xl p-4 mb-4'>
 						<div className='flex flex-col sm:flex-row sm:justify-between gap-0.5 text-sm mb-2 sm:mb-1'>
 							<span className='text-gray-600 dark:text-gray-300'>Вартість каналу:</span>
-							<span className='font-semibold text-gray-800 dark:text-white'>{deal.amount_usdt} USDT</span>
+							<span className='font-semibold text-gray-800 dark:text-white'>{fmtUsdt(deal.amount_usdt)} USDT</span>
 						</div>
 						<div className='flex flex-col sm:flex-row sm:justify-between gap-0.5 text-sm mb-2 sm:mb-1'>
 							<span className='text-gray-600 dark:text-gray-300'>Комісія сервісу (3%):</span>
-							<span className='text-red-500'>−{deal.service_fee} USDT</span>
+							<span className='text-red-500'>−{fmtUsdt(deal.service_fee)} USDT</span>
 						</div>
 						<div className='border-t border-green-200 mt-2 pt-2 flex justify-between text-sm font-bold'>
 							<span className='text-green-700'>До виплати:</span>
-							<span className='text-green-700'>{(deal.amount_usdt - deal.service_fee).toFixed(2)} USDT</span>
+							<span className='text-green-700'>{fmtUsdt(deal.amount_usdt - deal.service_fee)} USDT</span>
 						</div>
 					</div>
 					<div className='flex flex-col sm:flex-row gap-2 mb-3'>

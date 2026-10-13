@@ -20,6 +20,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.utils.money_display import money2
 from app.database import get_db
 from app.models.deal import Deal, DealStatus, Transaction, TransactionStatus, TransactionType
 from app.models.user import User
@@ -304,7 +305,7 @@ async def escrow_overview(
             continue
         items.append({
             "deal_id": d.id, "status": d.status.value, "escrow": d.escrow_wallet_address,
-            "amount_usdt": d.amount_usdt, "service_fee": fee, "live_usdt": bal, "expected_usdt": expected,
+            "amount_usdt": money2(d.amount_usdt), "service_fee": money2(fee), "live_usdt": bal, "expected_usdt": expected,
             "fee_state": fee_state, "mismatch": mismatch, "stray": stray, "read_only": stray,
         })
     return {"items": items, "totals": {k: round(v, 6) if isinstance(v, float) else v for k, v in totals.items()},

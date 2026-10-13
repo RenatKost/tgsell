@@ -1,3 +1,4 @@
+import { fmtUsdt } from '../../utils/money';
 import { useEffect, useState } from 'react';
 import { adminAPI } from '../../services/api';
 
@@ -100,7 +101,7 @@ const UsersPanel = () => {
 								<div key={d.deal_id} className='border border-gray-100 dark:border-slate-700 rounded-xl p-3 mb-2'>
 									<div>
 										<a href={'/deal/' + d.deal_id} target='_blank' rel='noopener noreferrer' className='text-[#3498db] font-semibold'>#{d.deal_id}</a>
-										{' '}{d.role === 'buyer' ? 'покупець' : 'продавець'} · {d.status} · {d.amount_usdt} USDT{d.funded ? ' (в ескроу)' : ''}
+										{' '}{d.role === 'buyer' ? 'покупець' : 'продавець'} · {d.status} · {fmtUsdt(d.amount_usdt)} USDT{d.funded ? ' (в ескроу)' : ''}
 										{d.blocked_party_allowed && <span className='ml-2 text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded'>дії дозволено</span>}
 									</div>
 									{d.status === 'payout_in_progress' && <div className='text-xs text-gray-500 mt-1'>Виплата в процесі — не переривається.</div>}
