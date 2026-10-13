@@ -1,3 +1,4 @@
+import SocialLinks from '../components/SocialLinks';
 import { motion } from 'framer-motion';
 
 const contacts = [
@@ -104,6 +105,10 @@ const ContactsPage = () => (
           </li>
         ))}
       </ul>
+    </div>
+
+    <div className="mt-6 bg-white dark:bg-card rounded-2xl border border-gray-100 dark:border-card-border p-6 sm:p-8 shadow-sm dark:shadow-neon">
+      <SocialLinks title="Соцмережі та боти" />
     </div>
   </motion.div>
 );

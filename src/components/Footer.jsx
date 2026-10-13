@@ -1,5 +1,6 @@
 import { NavLink } from 'react-router-dom';
 import { motion } from 'framer-motion';
+import SocialLinks from './SocialLinks';
 
 const Logo = () => (
   <svg width="32" height="32" viewBox="0 0 32 32" fill="none" aria-hidden="true">
@@ -118,6 +119,9 @@ const Footer = () => {
             </div>
           ))}
         </div>
+
+        {/* Social links */}
+        <SocialLinks className="mb-8" />
 
         {/* Stats strip */}
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 py-6 border-y border-gray-100 dark:border-card-border mb-8">
