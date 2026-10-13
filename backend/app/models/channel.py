@@ -15,6 +15,7 @@ class ChannelStatus(str, enum.Enum):
     approved = "approved"
     rejected = "rejected"
     sold = "sold"
+    removed = "removed"  # admin "Зняти з біржі" (soft delete, migration 0034)
 
 
 class ListingType(str, enum.Enum):
@@ -74,6 +75,15 @@ class Channel(Base):
 
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
     moderated_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+
+    # Availability checks by the stats collector (migration 0034)
+    last_check_ok_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    check_error: Mapped[str | None] = mapped_column(String(300), nullable=True)
+    check_error_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    inactive_since: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    removed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    removed_by_id: Mapped[int | None] = mapped_column(ForeignKey("users.id"), nullable=True)
+    removed_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     # Relationships
     seller = relationship("User", back_populates="channels", foreign_keys=[seller_id])
