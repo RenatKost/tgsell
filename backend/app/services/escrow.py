@@ -9,6 +9,7 @@ from tronpy.keys import PrivateKey
 from tronpy.providers import HTTPProvider
 
 from app.config import settings
+from app.services import catfee
 from app.utils.crypto import decrypt_private_key, encrypt_private_key
 
 logger = logging.getLogger(__name__)
@@ -461,8 +462,10 @@ def fetch_usdt_balance_units(wallet_address: str) -> int:
 class EscrowTransferRefused(Exception):
     """Transfer was not prepared — NOTHING broadcast (USDT). reason is a short code."""
 
-    def __init__(self, reason: str, message: str, *, retryable: bool = False, gas_tx: str | None = None):
+    def __init__(self, reason: str, message: str, *, retryable: bool = False, gas_tx: str | None = None,
+                 energy_order_id: str | None = None):
         super().__init__(message)
+        self.energy_order_id = energy_order_id
         self.reason = reason
         self.message = message
         # retryable=True: NOTHING USDT-related sent and TRX (if any) left on escrow on purpose —
@@ -514,6 +517,160 @@ def wait_gas_topup(client, gas_tx: str, address: str, required_sun: int, timeout
         i += 1
 
 
+# ── CatFee energy rental (Task 18) ──────────────────────────────────────
+# Rented quantity = estimate × RENT_MARGIN − energy already on the escrow (min 65k).
+RENT_MARGIN = 1.1
+ENERGY_WAIT_TIMEOUT_SEC = 45
+ENERGY_WAIT_BACKOFF = (2, 3, 3, 5)
+# A prior order is reused only while its delegation has at least this much time left.
+RENT_MIN_REMAINING_SEC = 120
+
+
+def _check_estimate_cap(est: dict) -> None:
+    required = int(est["required_sun"])
+    if required > MAX_FEE_LIMIT_SUN:
+        raise EscrowTransferRefused(
+            "GAS_ESTIMATE_TOO_HIGH",
+            f"Оцінка газу {required / SUN_PER_TRX:.2f} TRX > ліміту {MAX_FEE_LIMIT_SUN / SUN_PER_TRX:.0f} TRX "
+            f"(est={est}). Нічого не відправлено.")
+
+
+def _required_after_rent(est: dict) -> None:
+    """Energy was delivered (≥ the estimate, verified on-chain): the escrow only needs TRX
+    for bandwidth + any residual energy shortfall without the burn margin. fee_limit is
+    unchanged (cap), so a slightly-off estimate still burns from the escrow's TRX."""
+    short = max(0, int(est["energy"]) - int(est.get("energy_available") or 0))
+    est["required_sun"] = min(int(est["required_sun"]),
+                              int(short * int(est.get("energy_fee_sun") or ENERGY_FEE_FALLBACK_SUN)
+                                  + BANDWIDTH_RESERVE_SUN * GAS_MARGIN))
+
+
+def _ensure_escrow_trx(client, master: str, from_address: str, required: int, prior_gas_tx: str | None,
+                       est: dict, *, energy_order_id: str | None = None) -> str | None:
+    """Top up escrow TRX from master to ``required`` (difference only). Returns the new
+    top-up txid or None. Reuses a prior attempt's top-up instead of sending again."""
+    escrow_bal = _trx_sun_or_none(client, from_address)
+    if escrow_bal is None:  # unknown ≠ 0: never top up blindly
+        raise EscrowTransferRefused("ESCROW_TRX_UNKNOWN", f"Баланс TRX escrow {from_address} невідомий — повтор пізніше",
+                                    retryable=True, gas_tx=prior_gas_tx, energy_order_id=energy_order_id)
+    if escrow_bal < required and prior_gas_tx:
+        # A previous attempt already topped up — wait for it instead of sending TRX again.
+        prev = wait_gas_topup(client, prior_gas_tx, from_address, required, timeout=GAS_RECHECK_TIMEOUT_SEC)
+        if prev["status"] == "PENDING":
+            raise EscrowTransferRefused(
+                "GAS_TOPUP_UNCONFIRMED",
+                f"Попереднє газ-поповнення ще не підтверджене (tx {prior_gas_tx}); повтор пізніше без нового поповнення",
+                retryable=True, gas_tx=prior_gas_tx, energy_order_id=energy_order_id)
+        escrow_bal = _trx_sun_or_none(client, from_address) if prev.get("balance_sun") is None else prev["balance_sun"]
+        if escrow_bal is None:
+            if prev["status"] == "SUCCESS":
+                escrow_bal = required  # confirmed top-up, balance just not readable
+            else:
+                raise EscrowTransferRefused("ESCROW_TRX_UNKNOWN", f"Баланс TRX escrow {from_address} невідомий",
+                                            retryable=True, gas_tx=prior_gas_tx, energy_order_id=energy_order_id)
+    topup = max(0, required - escrow_bal)
+    logger.info(
+        f"[ESCROW] gas {from_address}: est={est}, escrow TRX={escrow_bal / SUN_PER_TRX:.6f}, "
+        f"required={required / SUN_PER_TRX:.6f}, top-up={topup / SUN_PER_TRX:.6f}"
+    )
+    if topup <= 0:
+        return None
+    master_bal = _account_balance_sun(client, master)
+    need = topup + MASTER_TRANSFER_RESERVE_SUN
+    if master_bal < need:
+        raise EscrowTransferRefused(
+            "MASTER_INSUFFICIENT_TRX",
+            f"Недостатньо TRX на master-гаманці {master}: є {master_bal / SUN_PER_TRX:.2f} TRX, "
+            f"потрібно ≈{need / SUN_PER_TRX:.2f} TRX (газ {topup / SUN_PER_TRX:.2f} + резерв). "
+            f"Нічого не відправлено.",
+            energy_order_id=energy_order_id,
+        )
+    master_key = PrivateKey(bytes.fromhex(settings.tron_master_wallet_private_key))
+    try:
+        gas_txn = client.trx.transfer(master, from_address, topup).build().sign(master_key)
+        gas_tx = _broadcast_ok(gas_txn.broadcast())
+    except Exception as e:
+        raise EscrowTransferRefused("GAS_TOPUP_FAILED", f"Газ-поповнення не вдалося: {e}",
+                                    energy_order_id=energy_order_id) from e
+    logger.info(f"[ESCROW] gas top-up {topup / SUN_PER_TRX:.6f} TRX tx={gas_tx}")
+    gas_r = wait_gas_topup(client, gas_tx, from_address, required, timeout=GAS_CONFIRM_TIMEOUT_SEC)
+    if gas_r["status"] != "SUCCESS":
+        # TRX stays on escrow (no sweep); retried later and reused (no second top-up).
+        raise EscrowTransferRefused(
+            "GAS_TOPUP_UNCONFIRMED",
+            f"Газ-поповнення escrow не підтвердилось: {gas_r['reason']} (tx {gas_tx})",
+            retryable=True, gas_tx=gas_tx, energy_order_id=energy_order_id,
+        )
+    return gas_tx
+
+
+def wait_for_energy(client, address: str, target: int, *, timeout: float = ENERGY_WAIT_TIMEOUT_SEC,
+                    order_id: str | None = None, sleep=time.sleep) -> bool:
+    """Poll getaccountresource until the address has ≥ target energy (True) or timeout /
+    the CatFee order definitively failed (False)."""
+    deadline = time.monotonic() + timeout
+    i = 0
+    while True:
+        if get_available_energy(client, address) >= target:
+            return True
+        if order_id and i % 2 == 1:
+            try:
+                o = catfee.get_order(order_id)
+                if o.get("status") in catfee.FAIL_STATUSES or o.get("confirm_status") == "DELEGATION_CONFIRMED_FAIL":
+                    logger.warning(f"[CATFEE] order {order_id} failed: {o.get('status')}/{o.get('confirm_status')}")
+                    return False
+            except Exception as e:
+                logger.warning(f"[CATFEE] order {order_id} status check failed: {e}")
+        remaining = deadline - time.monotonic()
+        if remaining <= 0:
+            return False
+        sleep(min(ENERGY_WAIT_BACKOFF[min(i, len(ENERGY_WAIT_BACKOFF) - 1)], max(remaining, 0.01)))
+        i += 1
+
+
+def rent_energy(client, address: str, need: int, energy_key: str, prior_order_id: str | None = None,
+                *, target: int | None = None, sleep=time.sleep, timeout: float | None = None) -> dict:
+    """Rent ``need`` energy for 1h to ``address`` via CatFee and wait until it arrives.
+    Never raises: returns {source: catfee|burn, order_id, rent_sun, reason}.
+
+    At most ONE order per job: a prior order id is never re-ordered (its energy is either on
+    the escrow already, still arriving, or expired → burn). A new order uses
+    client_order_id=energy_key, so a crash before the id is persisted can't double-charge.
+    """
+    res = {"source": "burn", "order_id": prior_order_id, "rent_sun": None, "reason": None}
+    target = int(target if target is not None else need)  # absolute energy the transfer needs
+    timeout = ENERGY_WAIT_TIMEOUT_SEC if timeout is None else timeout
+    try:
+        if prior_order_id:
+            order = catfee.get_order(prior_order_id)
+            res["rent_sun"] = catfee.order_cost_sun(order)
+            exp = int(order.get("expired_timestamp") or 0) / 1000
+            if order.get("status") in catfee.FAIL_STATUSES or (exp and exp - time.time() < RENT_MIN_REMAINING_SEC):
+                res["reason"] = f"prior order {prior_order_id} unusable ({order.get('status')}, exp={exp:.0f}); no re-order"
+                return res
+            order_id = prior_order_id
+        else:
+            quantity = max(catfee.MIN_QUANTITY, -(-int(need) // 1000) * 1000)
+            order = catfee.create_order(address, quantity, energy_key)
+            order_id = str(order["id"])
+            res["order_id"] = order_id
+            res["rent_sun"] = catfee.order_cost_sun(order)
+    except catfee.CatFeeError as e:
+        res["reason"] = f"catfee error: {e}"
+        logger.warning(f"[CATFEE] fallback to TRX burn for {address}: {e}")
+        return res
+    except Exception as e:  # never let the rental path break a payout
+        res["reason"] = f"catfee unexpected error: {type(e).__name__}: {e}"
+        logger.warning(f"[CATFEE] fallback to TRX burn for {address}: {res['reason']}")
+        return res
+    if wait_for_energy(client, address, target, timeout=timeout, order_id=order_id, sleep=sleep):
+        res["source"] = "catfee"
+    else:
+        res["reason"] = f"energy of order {order_id} not delivered within {int(timeout)}s"
+        logger.warning(f"[CATFEE] {res['reason']} → TRX burn for the remainder")
+    return res
+
+
 def prepare_usdt_transfer(
     from_encrypted_private_key: str,
     to_address: str,
@@ -521,6 +678,8 @@ def prepare_usdt_transfer(
     *,
     allow_master: bool = False,
     prior_gas_tx: str | None = None,
+    energy_key: str | None = None,
+    prior_energy_order: str | None = None,
 ) -> dict:
     """Estimate gas, top up escrow TRX (difference only), build + sign the USDT transfer.
 
@@ -529,6 +688,11 @@ def prepare_usdt_transfer(
     records it first (crash/timeout after broadcast can then be reconciled by receipt).
     Raises EscrowTransferRefused (nothing USDT-related was sent).
     Blocking — call via asyncio.to_thread.
+
+    energy_key (Task 18): stable per-job id (e.g. "tgsell-tx123") → CatFee client_order_id.
+    When given and CatFee is configured, energy is rented for 1h to the escrow before the
+    transfer; any CatFee problem falls back to the TRX-burn scheme. prior_energy_order: the
+    order id persisted by a previous attempt — never ordered again for the same job.
     """
     master = (settings.tron_master_wallet_address or "").strip()
     to_address = (to_address or "").strip()
@@ -549,62 +713,38 @@ def prepare_usdt_transfer(
         raise EscrowTransferRefused("SELF_DESTINATION", "Адреса отримувача = сам escrow-гаманець")
 
     est = estimate_usdt_transfer_cost_sun(from_address, to_address, amount_units, client)
-    required = int(est["required_sun"])
-    if required > MAX_FEE_LIMIT_SUN:
-        raise EscrowTransferRefused(
-            "GAS_ESTIMATE_TOO_HIGH",
-            f"Оцінка газу {required / SUN_PER_TRX:.2f} TRX > ліміту {MAX_FEE_LIMIT_SUN / SUN_PER_TRX:.0f} TRX "
-            f"(est={est}). Нічого не відправлено.")
-    escrow_bal = _trx_sun_or_none(client, from_address)
-    if escrow_bal is None:  # unknown ≠ 0: never top up blindly
-        raise EscrowTransferRefused("ESCROW_TRX_UNKNOWN", f"Баланс TRX escrow {from_address} невідомий — повтор пізніше",
-                                    retryable=True, gas_tx=prior_gas_tx)
-    if escrow_bal < required and prior_gas_tx:
-        # A previous attempt already topped up — wait for it instead of sending TRX again.
-        prev = wait_gas_topup(client, prior_gas_tx, from_address, required, timeout=GAS_RECHECK_TIMEOUT_SEC)
-        if prev["status"] == "PENDING":
-            raise EscrowTransferRefused(
-                "GAS_TOPUP_UNCONFIRMED",
-                f"Попереднє газ-поповнення ще не підтверджене (tx {prior_gas_tx}); повтор пізніше без нового поповнення",
-                retryable=True, gas_tx=prior_gas_tx)
-        escrow_bal = _trx_sun_or_none(client, from_address) if prev.get("balance_sun") is None else prev["balance_sun"]
-        if escrow_bal is None:
-            if prev["status"] == "SUCCESS":
-                escrow_bal = required  # confirmed top-up, balance just not readable
-            else:
-                raise EscrowTransferRefused("ESCROW_TRX_UNKNOWN", f"Баланс TRX escrow {from_address} невідомий",
-                                            retryable=True, gas_tx=prior_gas_tx)
-    topup = max(0, required - escrow_bal)
-    logger.info(
-        f"[ESCROW] prepare {amount_units} units {from_address}→{to_address}: est={est}, "
-        f"escrow TRX={escrow_bal / SUN_PER_TRX:.6f}, top-up={topup / SUN_PER_TRX:.6f}"
-    )
+    _check_estimate_cap(est)
+    energy = {"source": "burn", "order_id": prior_energy_order, "rent_sun": None, "reason": None}
     gas_tx = None
-    if topup > 0:
-        master_bal = _account_balance_sun(client, master)
-        need = topup + MASTER_TRANSFER_RESERVE_SUN
-        if master_bal < need:
-            raise EscrowTransferRefused(
-                "MASTER_INSUFFICIENT_TRX",
-                f"Недостатньо TRX на master-гаманці {master}: є {master_bal / SUN_PER_TRX:.2f} TRX, "
-                f"потрібно ≈{need / SUN_PER_TRX:.2f} TRX (газ {topup / SUN_PER_TRX:.2f} + резерв). "
-                f"Нічого не відправлено.",
-            )
-        master_key = PrivateKey(bytes.fromhex(settings.tron_master_wallet_private_key))
-        try:
-            gas_txn = client.trx.transfer(master, from_address, topup).build().sign(master_key)
-            gas_tx = _broadcast_ok(gas_txn.broadcast())
-        except Exception as e:
-            raise EscrowTransferRefused("GAS_TOPUP_FAILED", f"Газ-поповнення не вдалося: {e}") from e
-        logger.info(f"[ESCROW] gas top-up {topup / SUN_PER_TRX:.6f} TRX tx={gas_tx}")
-        gas_r = wait_gas_topup(client, gas_tx, from_address, required, timeout=GAS_CONFIRM_TIMEOUT_SEC)
-        if gas_r["status"] != "SUCCESS":
-            # TRX stays on escrow (no sweep); retried later and reused (no second top-up).
-            raise EscrowTransferRefused(
-                "GAS_TOPUP_UNCONFIRMED",
-                f"Газ-поповнення escrow не підтвердилось: {gas_r['reason']} (tx {gas_tx})",
-                retryable=True, gas_tx=gas_tx,
-            )
+    if energy_key and catfee.enabled():
+        need = max(0, int(est["energy"] * RENT_MARGIN) - int(est.get("energy_available") or 0))
+        if need > 0:
+            # Activation + bandwidth first (CatFee refuses non-activated receivers); TRX for
+            # bandwidth keeps coming from master exactly as before.
+            bw_required = int(BANDWIDTH_RESERVE_SUN * GAS_MARGIN)
+            gas_tx = _ensure_escrow_trx(client, master, from_address, bw_required, prior_gas_tx, est,
+                                        energy_order_id=prior_energy_order)
+            energy = rent_energy(client, from_address, need, energy_key, prior_energy_order,
+                                 target=int(est["energy"]))
+            if energy["source"] == "catfee" or energy.get("order_id"):
+                # Re-estimate with the delegated energy (residual, if any, is burned as before).
+                est = estimate_usdt_transfer_cost_sun(from_address, to_address, amount_units, client)
+                _check_estimate_cap(est)
+                if energy["source"] == "catfee":
+                    _required_after_rent(est)
+        else:
+            energy["reason"] = "escrow already has energy"
+            if prior_energy_order:  # delegated by this job's earlier CatFee order
+                energy["source"] = "catfee"
+    elif energy_key:
+        energy["reason"] = "catfee disabled"
+    est["energy_source"] = energy["source"]
+    required = int(est["required_sun"])
+    # A top-up confirmed in THIS attempt is not "prior" (no waiting on it again).
+    gas_tx2 = _ensure_escrow_trx(client, master, from_address, required,
+                                 None if gas_tx else prior_gas_tx, est,
+                                 energy_order_id=energy.get("order_id"))
+    gas_tx = gas_tx2 or gas_tx
 
     # Final fail-fast check right before signing: the escrow must hold the TRX that the
     # estimate says will be burned. Otherwise do NOT broadcast (an under-funded transfer
@@ -616,7 +756,10 @@ def prepare_usdt_transfer(
             f"На escrow {from_address} TRX={None if final_bal is None else final_bal / SUN_PER_TRX} < "
             f"потрібно {required / SUN_PER_TRX:.2f} (energy {est['energy']}, доступно {est.get('energy_available', 0)}). "
             f"USDT не відправлено; повтор пізніше.",
-            retryable=True, gas_tx=gas_tx or prior_gas_tx)
+            retryable=True, gas_tx=gas_tx or prior_gas_tx, energy_order_id=energy.get("order_id"))
+    logger.info(f"[ESCROW] energy source for {from_address}→{to_address}: {energy['source']} "
+                f"(order={energy.get('order_id')}, rent={(energy.get('rent_sun') or 0) / SUN_PER_TRX:.6f} TRX, "
+                f"reason={energy.get('reason')})")
 
     contract = _get_usdt_contract()
     txn = (
@@ -633,6 +776,7 @@ def prepare_usdt_transfer(
         "estimate": est,
         "from_address": from_address,
         "fee_limit_sun": est["fee_limit_sun"],
+        "energy": energy,
     }
 
 

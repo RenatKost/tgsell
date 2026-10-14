@@ -56,6 +56,9 @@ def _tx_row(tx: Transaction, now=None) -> dict:
         "from_address": tx.from_address, "to_address": tx.to_address, "tx_hash": tx.tx_hash,
         "tronscan_url": TRONSCAN_TX.format(tx.tx_hash) if tx.tx_hash else None,
         "receipt_status": tx.receipt_status, "receipt_reason": tx.receipt_reason,
+        "energy_source": tx.energy_source, "energy_order_id": tx.energy_order_id,
+        "energy_rent_trx": None if tx.energy_rent_sun is None else tx.energy_rent_sun / 1e6,
+        "fee_trx": None if tx.fee_sun is None else tx.fee_sun / 1e6, "energy_used": tx.energy_used,
         "created_at": _iso(tx.created_at), "broadcast_at": _iso(tx.broadcast_at),
         "finalized_at": _iso(tx.finalized_at),
     }
@@ -119,7 +122,8 @@ async def list_transactions(
         buf = io.StringIO()
         cols = ["id", "deal_id", "type", "status", "stage", "amount", "amount_units", "from_address",
                 "to_address", "tx_hash", "tronscan_url", "receipt_status", "receipt_reason",
-                "created_at", "broadcast_at", "finalized_at"]
+                "created_at", "broadcast_at", "finalized_at", "energy_source", "energy_order_id",
+                "energy_rent_trx", "fee_trx", "energy_used"]
         w = csv.DictWriter(buf, fieldnames=cols)
         w.writeheader()
         for tx in rows:
@@ -344,7 +348,11 @@ async def gas_status(
     from app.services import gas_monitor
 
     st = await gas_monitor.fetch_status(force=refresh)
-    return {**st, "history": await gas_monitor.snapshot_history(db, days),
+    try:
+        cf = await gas_monitor.fetch_catfee_status(db, force=refresh)
+    except Exception as e:  # never break the gas card
+        cf = {"enabled": None, "level": "unknown", "error": str(e)[:200]}
+    return {**st, "catfee": cf, "history": await gas_monitor.snapshot_history(db, days),
             "auto_topup": False,
             "note": "Автопоповнення неможливе: платформа заробляє лише USDT; обмін на TRX потребує DEX-угоди "
                     "з ключем master. Поповнюйте вручну на адресу вище (або застейкайте/орендуйте енергію)."}
