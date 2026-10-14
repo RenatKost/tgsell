@@ -476,6 +476,12 @@ async def process_queued(db, tx_id: int, *, receipt_timeout: float | None = None
 
     timeout = escrow_svc.RECEIPT_TIMEOUT_SEC if receipt_timeout is None else receipt_timeout
     receipt = await asyncio.to_thread(escrow_svc.get_receipt, tx_hash, timeout)
+    if receipt.get("status") in ("SUCCESS", "FAILED"):
+        try:
+            escrow_svc.log_payout_receipt(tx_hash, receipt, estimate=prepared.get("estimate"),
+                                          label=f"deal #{deal_id} {tx_type.value}")
+        except Exception as e:  # logging must never affect the payout
+            logger.warning(f"[PAYOUT] receipt cost log failed: {e}")
     outcome = await _apply_receipt(db, deal_id, tx_id, receipt)
     if outcome.status == "pending":
         await _alert(
@@ -543,6 +549,11 @@ async def reconcile_pending_transfers(db, now=None) -> int:
             age_from = tx.broadcast_at or tx.created_at or now
             stale = now - age_from >= PENDING_STALE_AFTER
             receipt = await asyncio.to_thread(escrow_svc.get_receipt, tx.tx_hash, 0)
+            if receipt.get("status") in ("SUCCESS", "FAILED"):
+                try:
+                    escrow_svc.log_payout_receipt(tx.tx_hash, receipt, label=f"deal #{deal_id} {tx.type.value} (reconcile)")
+                except Exception as e:
+                    logger.warning(f"[PAYOUT] receipt cost log failed: {e}")
             if receipt["status"] == "PENDING":
                 if not stale:
                     await db.commit()

@@ -147,6 +147,7 @@ async def payout_queue(
     ).order_by(Transaction.id))).scalars().all()
     failed = (await db.execute(select(Transaction).where(
         Transaction.status == TransactionStatus.failed, Transaction.type.in_(OUTGOING_TYPES),
+        func.coalesce(Transaction.receipt_status, "") != "SUPERSEDED",  # closed stale attempts (0035)
         func.coalesce(Transaction.finalized_at, Transaction.created_at) >= now - timedelta(hours=failed_hours),
     ).order_by(Transaction.id.desc()).limit(100))).scalars().all()
     rows = [_tx_row(t, now) for t in pending]
