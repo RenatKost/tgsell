@@ -282,6 +282,13 @@ ENERGY_FEE_FALLBACK_SUN = 100
 BANDWIDTH_RESERVE_SUN = 1 * SUN_PER_TRX
 GAS_MARGIN = 1.2
 MIN_FEE_LIMIT_SUN = 30 * SUN_PER_TRX
+# Hard ceiling for one USDT transfer: an estimate above this is treated as an anomaly
+# (fee spike / bad estimate) and the payout is refused before anything is sent.
+MAX_FEE_LIMIT_SUN = 100 * SUN_PER_TRX
+# Below this an API estimate for a receiver with 0 USDT is implausible (new storage
+# slot ≈ 2x energy); floor it so the top-up never under-funds (OUT_OF_ENERGY 11–12.10).
+ENERGY_MIN_NEW_HOLDER = 130_000
+ENERGY_SUSPICIOUS_BELOW = 100_000
 # Master → escrow TRX transfer: bandwidth (~0.27 TRX) + possible 1 TRX activation of a
 # brand-new escrow account. Kept on master on top of the top-up amount.
 MASTER_TRANSFER_RESERVE_SUN = int(1.5 * SUN_PER_TRX)
@@ -343,6 +350,11 @@ def estimate_usdt_transfer_energy(
             energy = int(resp.get(key) or 0)
             if ok and energy > 0:
                 logger.info(f"[ESCROW] {method}: {energy} energy for USDT → {to_address}")
+                if energy < ENERGY_SUSPICIOUS_BELOW:
+                    rb = get_usdt_balance(to_address)
+                    if not rb:  # 0 or unknown → receiver may need a new slot
+                        logger.info(f"[ESCROW] receiver USDT={rb}: energy floor {ENERGY_MIN_NEW_HOLDER}")
+                        energy = max(energy, ENERGY_MIN_NEW_HOLDER)
                 return energy
         except Exception as e:
             logger.warning(f"[ESCROW] {method} failed: {e}")
@@ -353,19 +365,35 @@ def estimate_usdt_transfer_energy(
     return energy
 
 
+def get_available_energy(client: Tron, address: str) -> int:
+    """Energy the account can spend now (staked/delegated); 0 when unknown (conservative)."""
+    try:
+        res = _api(client, "wallet/getaccountresource", {"address": address, "visible": True}) or {}
+        return max(0, int(res.get("EnergyLimit", 0) or 0) - int(res.get("EnergyUsed", 0) or 0))
+    except Exception as e:
+        logger.warning(f"[ESCROW] getaccountresource {address} failed, energy=0: {e}")
+        return 0
+
+
 def estimate_usdt_transfer_cost_sun(
     from_address: str, to_address: str, amount_raw: int, client: Tron | None = None
 ) -> dict:
-    """{energy, energy_fee_sun, required_sun (with bandwidth + margin), fee_limit_sun}."""
+    """{energy, energy_available, energy_fee_sun, required_sun (TRX to burn incl. bandwidth
+    + margin, after the escrow's own energy), fee_limit_sun}."""
     client = client or _get_tron_client()
     energy = estimate_usdt_transfer_energy(from_address, to_address, amount_raw, client)
     fee = get_energy_fee_sun(client)
-    required = int((energy * fee + BANDWIDTH_RESERVE_SUN) * GAS_MARGIN)
+    avail = get_available_energy(client, from_address)
+    burn_energy = max(0, int(energy * GAS_MARGIN) - avail)
+    required = int(burn_energy * fee + BANDWIDTH_RESERVE_SUN * GAS_MARGIN)
     return {
         "energy": energy,
+        "energy_available": avail,
         "energy_fee_sun": fee,
         "required_sun": required,
-        "fee_limit_sun": max(MIN_FEE_LIMIT_SUN, required),
+        # fee_limit caps what the tx may burn; ≥ required so a correct estimate never dies
+        # with OUT_OF_ENERGY, ≤ MAX so a bad estimate can't drain the escrow.
+        "fee_limit_sun": min(MAX_FEE_LIMIT_SUN, max(MIN_FEE_LIMIT_SUN, required)),
     }
 
 
@@ -522,6 +550,11 @@ def prepare_usdt_transfer(
 
     est = estimate_usdt_transfer_cost_sun(from_address, to_address, amount_units, client)
     required = int(est["required_sun"])
+    if required > MAX_FEE_LIMIT_SUN:
+        raise EscrowTransferRefused(
+            "GAS_ESTIMATE_TOO_HIGH",
+            f"Оцінка газу {required / SUN_PER_TRX:.2f} TRX > ліміту {MAX_FEE_LIMIT_SUN / SUN_PER_TRX:.0f} TRX "
+            f"(est={est}). Нічого не відправлено.")
     escrow_bal = _trx_sun_or_none(client, from_address)
     if escrow_bal is None:  # unknown ≠ 0: never top up blindly
         raise EscrowTransferRefused("ESCROW_TRX_UNKNOWN", f"Баланс TRX escrow {from_address} невідомий — повтор пізніше",
@@ -573,6 +606,18 @@ def prepare_usdt_transfer(
                 retryable=True, gas_tx=gas_tx,
             )
 
+    # Final fail-fast check right before signing: the escrow must hold the TRX that the
+    # estimate says will be burned. Otherwise do NOT broadcast (an under-funded transfer
+    # burns everything it has and dies with OUT_OF_ENERGY). TRX stays on escrow, retry later.
+    final_bal = _trx_sun_or_none(client, from_address)
+    if final_bal is None or final_bal < required:
+        raise EscrowTransferRefused(
+            "ESCROW_GAS_SHORT",
+            f"На escrow {from_address} TRX={None if final_bal is None else final_bal / SUN_PER_TRX} < "
+            f"потрібно {required / SUN_PER_TRX:.2f} (energy {est['energy']}, доступно {est.get('energy_available', 0)}). "
+            f"USDT не відправлено; повтор пізніше.",
+            retryable=True, gas_tx=gas_tx or prior_gas_tx)
+
     contract = _get_usdt_contract()
     txn = (
         contract.functions.transfer(to_address, amount_units)
@@ -594,6 +639,33 @@ def prepare_usdt_transfer(
 def broadcast_prepared(prepared: dict) -> str:
     """Broadcast a prepared transfer. Raises on rejection/network error (tx may still be live)."""
     return _broadcast_ok(prepared["txn"].broadcast())
+
+
+def receipt_costs(info: dict | None) -> dict:
+    """Actual resource usage from gettransactioninfobyid: energy used/burned, fees (sun)."""
+    info = info or {}
+    r = info.get("receipt") or {}
+    return {
+        "energy_used": int(r.get("energy_usage_total") or 0),
+        "energy_from_stake": int(r.get("energy_usage") or 0),
+        "energy_fee_sun": int(r.get("energy_fee") or 0),
+        "net_fee_sun": int(r.get("net_fee") or 0),
+        "fee_sun": int(info.get("fee") or 0),
+    }
+
+
+def log_payout_receipt(txid: str, receipt: dict, *, estimate: dict | None = None, label: str = "") -> dict:
+    """INFO log of the real gas spent by a payout (compare with the estimate)."""
+    c = receipt_costs(receipt.get("info"))
+    est = estimate or {}
+    logger.info(
+        f"[ESCROW] payout receipt {label} tx={txid} status={receipt.get('status')} "
+        f"energy_used={c['energy_used']} (staked {c['energy_from_stake']}) "
+        f"energy_fee={c['energy_fee_sun'] / SUN_PER_TRX:.6f} TRX net_fee={c['net_fee_sun'] / SUN_PER_TRX:.6f} TRX "
+        f"total_fee={c['fee_sun'] / SUN_PER_TRX:.6f} TRX; estimate energy={est.get('energy')} "
+        f"required={(est.get('required_sun') or 0) / SUN_PER_TRX:.6f} TRX fee_limit={(est.get('fee_limit_sun') or 0) / SUN_PER_TRX:.0f} TRX"
+    )
+    return c
 
 
 def get_receipt(txid: str, timeout: float = 0) -> dict:
