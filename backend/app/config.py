@@ -41,6 +41,11 @@ class Settings(BaseSettings):
     tron_master_wallet_private_key: str = ""
     usdt_contract_address: str = "TXYZopYRdj2D9XRtbG411XZZ3kM5VkAeBf"  # Nile testnet USDT
     encryption_key: str = "change-me-32-byte-encryption-key!"
+    # CatFee energy rental (Task 18). Empty key/secret → disabled (TRX-burn scheme).
+    catfee_api_key: str = ""
+    catfee_api_secret: str = ""
+    # Empty → https://api.catfee.io on mainnet, https://nile.catfee.io on nile.
+    catfee_base_url: str = ""
 
     # Service
     service_fee_percent: float = 3.0

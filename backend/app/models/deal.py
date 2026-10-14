@@ -140,6 +140,15 @@ class Transaction(Base):
     # Gas top-up already sent for this job (reused on retry, never topped up twice) + retry count.
     gas_tx_hash: Mapped[str | None] = mapped_column(String(100), nullable=True)
     gas_attempts: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
+    # Energy source of the payout (migration 0036): 'catfee' (rented) | 'burn' (TRX burned).
+    # energy_order_id = CatFee order (persisted → never ordered twice for one job).
+    energy_source: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    energy_order_id: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    energy_rent_sun: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
+    # Actual on-chain cost from the receipt (gettransactioninfobyid).
+    fee_sun: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
+    energy_fee_sun: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
+    energy_used: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
 
     deal = relationship("Deal", back_populates="transactions")
 

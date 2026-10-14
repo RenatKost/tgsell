@@ -33,6 +33,7 @@ from sqlalchemy import select
 from app.config import settings
 from app.models.channel import Channel, ChannelStatus
 from app.models.deal import Deal, DealStatus, Transaction, TransactionStatus, TransactionType
+from app.services import catfee
 from app.services import escrow as escrow_svc
 from app.services.deal_lifecycle import (
     PayoutClaimError,
@@ -366,6 +367,17 @@ def _add_deal_message(db, deal: Deal, text: str, event: str = "payout") -> None:
     chat_svc.system(db, deal, event, text)
 
 
+async def _store_receipt_costs(db, tx_id: int, costs: dict) -> None:
+    """Persist the real on-chain cost of a payout (receipt fee/energy)."""
+    t = await db.get(Transaction, tx_id, populate_existing=True)
+    if t is None:
+        return
+    t.fee_sun = int(costs.get("fee_sun") or 0)
+    t.energy_fee_sun = int(costs.get("energy_fee_sun") or 0)
+    t.energy_used = int(costs.get("energy_used") or 0)
+    await db.commit()
+
+
 async def process_queued(db, tx_id: int, *, receipt_timeout: float | None = None) -> TransferOutcome:
     """Worker: execute one queued job (pending row with tx_hash NULL). Never resends.
 
@@ -387,7 +399,16 @@ async def process_queued(db, tx_id: int, *, receipt_timeout: float | None = None
     amount_units = int(tx.amount_units or to_units(tx.amount))
     allow_master = tx_type == TransactionType.fee_collection
     prior_gas_tx = tx.gas_tx_hash
+    prior_energy_order = tx.energy_order_id
     await db.commit()  # release row lock during network calls
+
+    async def keep_energy_order(order_id: str | None) -> None:
+        """Persist the CatFee order id even when the attempt is refused (never re-ordered)."""
+        if not order_id or order_id == prior_energy_order:
+            return
+        t = await db.get(Transaction, tx_id, populate_existing=True)
+        t.energy_order_id = order_id
+        await db.commit()
 
     async def defer(code: str, msg: str, gas_tx: str | None) -> TransferOutcome:
         """Retryable gas problem: nothing USDT sent, keep TRX on escrow, keep job queued."""
@@ -447,11 +468,16 @@ async def process_queued(db, tx_id: int, *, receipt_timeout: float | None = None
         kw = {"allow_master": allow_master}
         if prior_gas_tx:
             kw["prior_gas_tx"] = prior_gas_tx
+        if catfee.enabled():  # Task 18: without CatFee keys the call is exactly as before
+            kw["energy_key"] = f"tgsell-tx{tx_id}"
+            if prior_energy_order:
+                kw["prior_energy_order"] = prior_energy_order
         prepared = await asyncio.to_thread(
             escrow_svc.prepare_usdt_transfer, deal.escrow_private_key_encrypted, to_address,
             amount_units, **kw,
         )
     except Exception as e:
+        await keep_energy_order(getattr(e, "energy_order_id", None))
         if getattr(e, "retryable", False):
             return await defer(getattr(e, "reason", "GAS_RETRY"), getattr(e, "message", str(e)),
                                getattr(e, "gas_tx", None))
@@ -465,6 +491,12 @@ async def process_queued(db, tx_id: int, *, receipt_timeout: float | None = None
     if prepared.get("gas_tx"):
         t.gas_tx_hash = prepared["gas_tx"]
     t.fee_limit_sun = prepared.get("fee_limit_sun")
+    en = prepared.get("energy") or {}
+    t.energy_source = en.get("source") or "burn"
+    if en.get("order_id"):
+        t.energy_order_id = en["order_id"]
+    if en.get("rent_sun") is not None:
+        t.energy_rent_sun = int(en["rent_sun"])
     t.broadcast_at = utcnow_naive()
     await db.commit()
     tx_hash = prepared["txid"]
@@ -478,8 +510,11 @@ async def process_queued(db, tx_id: int, *, receipt_timeout: float | None = None
     receipt = await asyncio.to_thread(escrow_svc.get_receipt, tx_hash, timeout)
     if receipt.get("status") in ("SUCCESS", "FAILED"):
         try:
-            escrow_svc.log_payout_receipt(tx_hash, receipt, estimate=prepared.get("estimate"),
-                                          label=f"deal #{deal_id} {tx_type.value}")
+            costs = escrow_svc.log_payout_receipt(tx_hash, receipt, estimate=prepared.get("estimate"),
+                                                  label=f"deal #{deal_id} {tx_type.value}")
+            logger.info(f"[PAYOUT] deal #{deal_id} {tx_type.value} tx={tx_hash} energy_source={en.get('source')} "
+                        f"rent={(en.get('rent_sun') or 0) / 1e6:.6f} TRX fee={costs['fee_sun'] / 1e6:.6f} TRX")
+            await _store_receipt_costs(db, tx_id, costs)
         except Exception as e:  # logging must never affect the payout
             logger.warning(f"[PAYOUT] receipt cost log failed: {e}")
     outcome = await _apply_receipt(db, deal_id, tx_id, receipt)
@@ -551,7 +586,8 @@ async def reconcile_pending_transfers(db, now=None) -> int:
             receipt = await asyncio.to_thread(escrow_svc.get_receipt, tx.tx_hash, 0)
             if receipt.get("status") in ("SUCCESS", "FAILED"):
                 try:
-                    escrow_svc.log_payout_receipt(tx.tx_hash, receipt, label=f"deal #{deal_id} {tx.type.value} (reconcile)")
+                    costs = escrow_svc.log_payout_receipt(tx.tx_hash, receipt, label=f"deal #{deal_id} {tx.type.value} (reconcile)")
+                    await _store_receipt_costs(db, tx_id, costs)
                 except Exception as e:
                     logger.warning(f"[PAYOUT] receipt cost log failed: {e}")
             if receipt["status"] == "PENDING":

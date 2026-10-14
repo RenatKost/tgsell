@@ -178,6 +178,89 @@ async def check_and_alert(*, send=None) -> dict:
     return st
 
 
+# ── CatFee balance (Task 18) ────────────────────────────────────────────
+
+_catfee_cache: dict = {"at": 0.0, "payload": None}
+_catfee_alert_state: dict = {"low": False}
+
+
+async def avg_rent_trx(db) -> float:
+    """Average CatFee rental cost of the last 20 payouts (fallback ~2.5 TRX)."""
+    from app.models.deal import Transaction
+
+    from app.services import catfee
+
+    try:
+        rows = (await db.execute(select(Transaction.energy_rent_sun).where(
+            Transaction.energy_source == "catfee", Transaction.energy_rent_sun > 0,
+        ).order_by(Transaction.id.desc()).limit(20))).scalars().all()
+    except Exception as e:  # pragma: no cover
+        logger.warning(f"[CATFEE] avg rent query failed: {e}")
+        rows = []
+    if not rows:
+        return catfee.DEFAULT_RENT_TRX
+    return max(0.1, sum(rows) / len(rows) / escrow_svc.SUN_PER_TRX)
+
+
+def evaluate_catfee(balance_sun: int | None, per_payout_trx: float, *, enabled: bool, error: str | None = None) -> dict:
+    from app.services import catfee
+
+    base = {"enabled": enabled, "per_payout_trx": round(per_payout_trx, 3),
+            "low_below_payouts": catfee.LOW_BALANCE_PAYOUTS, "base_url": catfee.base_url() if enabled else None,
+            "error": error, "checked_at": utcnow_naive().isoformat() + "Z"}
+    if not enabled:
+        return {**base, "balance_trx": None, "payouts_covered": None, "level": "disabled"}
+    if balance_sun is None:
+        return {**base, "balance_trx": None, "payouts_covered": None, "level": "unknown"}
+    trx = balance_sun / escrow_svc.SUN_PER_TRX
+    cov = math.floor(trx / per_payout_trx + 1e-9) if per_payout_trx > 0 else None
+    level = "low" if cov is not None and cov < catfee.LOW_BALANCE_PAYOUTS else "ok"
+    return {**base, "balance_trx": round(trx, 6), "payouts_covered": cov, "level": level,
+            "suggested_topup_trx": max(0, math.ceil(per_payout_trx * 20 - trx)) if level == "low" else 0}
+
+
+async def fetch_catfee_status(db, *, force: bool = False) -> dict:
+    from app.services import catfee
+
+    age = time.monotonic() - _catfee_cache["at"]
+    if not force and _catfee_cache["payload"] is not None and age < CACHE_TTL_SEC:
+        return _catfee_cache["payload"]
+    per = await avg_rent_trx(db)
+    if not catfee.enabled():
+        st = evaluate_catfee(None, per, enabled=False)
+    else:
+        try:
+            bal = await asyncio.to_thread(catfee.get_balance_sun)
+            st = evaluate_catfee(bal, per, enabled=True)
+        except Exception as e:
+            st = evaluate_catfee(None, per, enabled=True, error=str(e)[:200])
+    _catfee_cache.update(at=time.monotonic(), payload=st)
+    return st
+
+
+async def catfee_check_and_alert(db, *, send=None) -> dict:
+    """Admin alert when the CatFee balance covers < 5 payouts (6h throttle; recovery once)."""
+    st = await fetch_catfee_status(db, force=True)
+    if send is None:
+        from app.services.alerts import send_admin_alert as send
+    try:
+        if st["level"] == "low":
+            await send(
+                f"🐱 <b>Мало коштів на CatFee</b>\nБаланс: {st['balance_trx']:.2f} TRX — вистачить на "
+                f"~{st['payouts_covered']} виплат (≈{st['per_payout_trx']:.2f} TRX/виплата).\n"
+                f"Рекомендовано поповнити ~{st.get('suggested_topup_trx', 0)} TRX на catfee.io. "
+                f"Без балансу виплати спалюватимуть TRX з master (≈7–17 TRX/виплата).",
+                alert_key="catfee_low", throttle_minutes=WARNING_THROTTLE_MIN)
+            _catfee_alert_state["low"] = True
+        elif st["level"] == "ok" and _catfee_alert_state["low"]:
+            await send(f"🐱 Баланс CatFee відновлено: {st['balance_trx']:.2f} TRX", alert_key="catfee_ok",
+                       throttle_minutes=1)
+            _catfee_alert_state["low"] = False
+    except Exception as e:  # pragma: no cover
+        logger.warning(f"[CATFEE] alert failed: {e}")
+    return st
+
+
 # ── snapshots ───────────────────────────────────────────────────────────
 
 async def maybe_snapshot(db, st: dict, now=None) -> bool:

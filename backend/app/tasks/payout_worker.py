@@ -135,6 +135,14 @@ async def _gas_cycle(worker: "PayoutWorker", now=None) -> None:
     except Exception as e:
         logger.error(f"[PAYOUT-WORKER] gas check failed: {e}", exc_info=True)
     try:
+        from app.services import catfee
+
+        if catfee.enabled():
+            async with worker.session_factory() as db:
+                await gas_monitor.catfee_check_and_alert(db)
+    except Exception as e:
+        logger.error(f"[PAYOUT-WORKER] catfee check failed: {e}", exc_info=True)
+    try:
         await gas_monitor.maybe_send_daily_summary(worker.session_factory, now)
     except Exception as e:
         logger.error(f"[PAYOUT-WORKER] daily summary failed: {e}", exc_info=True)

@@ -63,6 +63,17 @@ export const GasCard = () => {
 					<div className='text-xs text-gray-400'>Попередження &lt; {fmt(st.warning_threshold_trx, 0)} TRX, критично &lt; {fmt(st.critical_threshold_trx, 0)} TRX · відмов через газ за 24 год: {st.refused_prechecks_24h} · перевірено {when(st.checked_at)}</div>
 				</div>
 			</div>
+			{st.catfee && (
+				<div className='mt-3 text-sm border-t border-gray-100 dark:border-gray-700 pt-2'>
+					<b>🐱 CatFee (оренда енергії):</b>{' '}
+					{st.catfee.enabled === false ? <span className='text-gray-400'>вимкнено (немає CATFEE_API_KEY/SECRET) — газ спалюється TRX</span>
+						: st.catfee.balance_trx == null ? <span className='text-orange-600'>баланс невідомий{st.catfee.error ? ` (${st.catfee.error})` : ''}</span>
+						: <span className={st.catfee.level === 'low' ? 'text-red-600 font-semibold' : ''}>
+							{fmt(st.catfee.balance_trx)} TRX ≈ {st.catfee.payouts_covered} виплат (≈{fmt(st.catfee.per_payout_trx, 2)} TRX/виплата)
+							{st.catfee.level === 'low' && ` — мало, поповніть ~${st.catfee.suggested_topup_trx} TRX`}
+						</span>}
+				</div>
+			)}
 			<div className='mt-3'>
 				<div className='flex gap-2 mb-1 text-xs'>
 					{[7, 30].map(d => <button key={d} onClick={() => setDays(d)} className={days === d ? 'font-bold text-[#3498db]' : 'text-gray-400'}>{d} днів</button>)}
@@ -150,7 +161,7 @@ export const TransactionsPanel = () => {
 							<td className='p-3'>{fmt(t.amount, 6)}</td>
 							<td className='p-3 font-mono text-xs'>{short(t.to_address)}</td>
 							<td className='p-3'><TxLink tx={t} /></td>
-							<td className='p-3 text-xs'>{t.receipt_status || '—'}{t.receipt_reason ? ` (${t.receipt_reason})` : ''}</td>
+							<td className='p-3 text-xs'>{t.receipt_status || '—'}{t.receipt_reason ? ` (${t.receipt_reason})` : ''}{t.energy_source ? <div className='text-gray-400'>⚡ {t.energy_source}{t.energy_rent_trx != null ? ` оренда ${fmt(t.energy_rent_trx, 2)} TRX` : ''}{t.fee_trx != null ? ` · fee ${fmt(t.fee_trx, 2)} TRX` : ''}</div> : null}</td>
 							<td className='p-3 whitespace-nowrap text-xs'>{when(t.created_at)}</td>
 						</tr>))}</tbody>
 				</table>
