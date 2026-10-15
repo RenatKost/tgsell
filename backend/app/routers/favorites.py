@@ -61,6 +61,8 @@ async def add_favorite(
 
     db.add(Favorite(user_id=user.id, channel_id=channel_id))
     await db.commit()
+    from app.services.user_activity import record_event_detached
+    await record_event_detached("favorite_add", user_id=user.id, object_type="channel", object_id=channel_id)
     return {"ok": True}
 
 
