@@ -16,56 +16,74 @@ GROQ_URL = "https://api.groq.com/openai/v1/chat/completions"
 MODEL = "openai/gpt-oss-120b"
 
 
-async def analyze_channel(
-    channel_data: dict,
-    posts_data: list[dict],
-    stats_data: list[dict],
-    is_closed: bool = False,
-) -> dict | None:
-    """Send full channel data to Groq/Llama for deep monetization analysis.
+NO_DATA = "мало даних"
 
-    is_closed marks a channel that requires an approved join request — the
-    bot cannot read its posts/history, so subscriber/view/ER numbers here are
-    self-reported by the seller and stats_data/posts_data will be empty.
-    """
-    if not settings.groq_api_key:
-        logger.warning("GROQ_API_KEY not set — skipping AI analysis")
+
+def _num(value):
+    """Return a float for a usable metric, or None for None/garbage/NaN."""
+    if value is None or isinstance(value, bool):
         return None
+    try:
+        f = float(value)
+    except (TypeError, ValueError):
+        return None
+    if f != f:  # NaN
+        return None
+    return f
 
-    # ── Build rich context ──
+
+def _fmt_int(value, suffix: str = "") -> str:
+    f = _num(value)
+    return f"{int(round(f)):,}{suffix}" if f is not None else NO_DATA
+
+
+def _fmt_float(value, digits: int = 1, suffix: str = "") -> str:
+    f = _num(value)
+    return f"{f:.{digits}f}{suffix}" if f is not None else NO_DATA
+
+
+def build_channel_prompt(
+    channel_data: dict,
+    posts_data: list[dict] | None,
+    stats_data: list[dict] | None,
+    is_closed: bool = False,
+) -> str:
+    """Build the Groq prompt. Missing metrics (None) render as «мало даних»
+    instead of crashing on format specs or pretending to be 0."""
+    channel_data = channel_data or {}
     views_hidden = channel_data.get('views_hidden', False)
     channel_info = (
         f"Назва: {channel_data.get('channel_name', '?')}\n"
         f"Категорія: {channel_data.get('category', '?')}\n"
-        f"Підписників: {channel_data.get('subscribers_count', 0):,}\n"
-        f"Середні перегляди: {'⚠️ ВИМКНЕНІ АДМІНОМ (лічильник переглядів прихований)' if views_hidden else f'{(channel_data.get('avg_views') or 0):,}'}\n"
-        f"ER (engagement rate): {(channel_data.get('er') or 0):.2f}%\n"
-        f"Ціна продажу: {channel_data.get('price', 0):,} USDT\n"
-        f"Поточний прибуток/міс: {channel_data.get('monthly_income', 0) or 0:,} USDT\n"
+        f"Підписників: {_fmt_int(channel_data.get('subscribers_count'))}\n"
+        f"Середні перегляди: {'⚠️ ВИМКНЕНІ АДМІНОМ (лічильник переглядів прихований)' if views_hidden else _fmt_int(channel_data.get('avg_views'))}\n"
+        f"ER (engagement rate): {_fmt_float(channel_data.get('er'), 2, '%')}\n"
+        f"Ціна продажу: {_fmt_int(channel_data.get('price'), ' USDT')}\n"
+        f"Поточний прибуток/міс: {_fmt_int(channel_data.get('monthly_income') or 0, ' USDT')}\n"
         f"Вік каналу: {channel_data.get('age', '?')}\n"
-        f"Постів загалом: {channel_data.get('total_posts', 0)}\n"
-        f"Частота публікацій: {channel_data.get('post_frequency', 0)} пост/день\n"
-        f"Сер. пересилань/пост: {channel_data.get('avg_forwards', 0)}\n"
-        f"Сер. реакцій/пост: {channel_data.get('avg_reactions', 0)}\n"
+        f"Постів загалом: {_fmt_int(channel_data.get('total_posts'))}\n"
+        f"Частота публікацій: {_fmt_float(channel_data.get('post_frequency'), 1, ' пост/день')}\n"
+        f"Сер. пересилань/пост: {_fmt_float(channel_data.get('avg_forwards'))}\n"
+        f"Сер. реакцій/пост: {_fmt_float(channel_data.get('avg_reactions'))}\n"
         f"Telegram: {channel_data.get('telegram_link', '')}\n"
         f"Опис власника: {channel_data.get('description', '') or 'Немає'}\n"
     )
 
     # Top 20 posts for content analysis (trim text to save tokens)
     posts_text = ""
-    for i, p in enumerate(posts_data[:20], 1):
+    for i, p in enumerate((posts_data or [])[:20], 1):
         text_preview = (p.get("text") or "")[:150]
         posts_text += (
             f"#{i}: {text_preview}\n"
-            f"  👁{p.get('views', 0)} ❤️{p.get('reactions', 0)} 🔄{p.get('forwards', 0)} 📎{p.get('media_type', 'txt')}\n"
+            f"  👁{_fmt_int(p.get('views'))} ❤️{_fmt_int(p.get('reactions'))} 🔄{_fmt_int(p.get('forwards'))} 📎{p.get('media_type') or 'txt'}\n"
         )
 
     # Last 14 stats entries (enough to see trend)
     stats_text = ""
     for s in (stats_data or [])[-14:]:
         stats_text += (
-            f"  {s.get('date', '?')}: subs={s.get('subscribers', 0)}, "
-            f"views={s.get('avg_views', 0)}, er={s.get('er', 0):.1f}%\n"
+            f"  {s.get('date') or '?'}: subs={_fmt_int(s.get('subscribers'))}, "
+            f"views={_fmt_int(s.get('avg_views'))}, er={_fmt_float(s.get('er'), 1, '%')}\n"
         )
 
     closed_notice = (
@@ -77,10 +95,10 @@ async def analyze_channel(
 
     prompt = f"""Ти — аналітик покупки Telegram-каналів. Дай КОНКРЕТНИЙ аналіз без загальних фраз.
 {closed_notice}
-КАНАЛ: {channel_data.get('channel_name')} | {channel_data.get('category')} | {channel_data.get('subscribers_count', 0):,} підп.
-Перегляди: {'ПРИХОВАНІ' if views_hidden else f"{(channel_data.get('avg_views') or 0):,}"} | ER: {(channel_data.get('er') or 0):.1f}% | Ціна: {channel_data.get('price', 0):,} USDT
-Дохід/міс: {channel_data.get('monthly_income', 0) or 0:,} USDT | Вік: {channel_data.get('age', '?')} | Пости/день: {(channel_data.get('post_frequency') or 0):.1f}
-Forwards/пост: {channel_data.get('avg_forwards', 0)} | Реакції/пост: {channel_data.get('avg_reactions', 0)}
+КАНАЛ: {channel_data.get('channel_name')} | {channel_data.get('category')} | {_fmt_int(channel_data.get('subscribers_count'))} підп.
+Перегляди: {'ПРИХОВАНІ' if views_hidden else _fmt_int(channel_data.get('avg_views'))} | ER: {_fmt_float(channel_data.get('er'), 1, '%')} | Ціна: {_fmt_int(channel_data.get('price'), ' USDT')}
+Дохід/міс: {_fmt_int(channel_data.get('monthly_income') or 0, ' USDT')} | Вік: {channel_data.get('age', '?')} | Пости/день: {_fmt_float(channel_data.get('post_frequency'))}
+Forwards/пост: {_fmt_float(channel_data.get('avg_forwards'))} | Реакції/пост: {_fmt_float(channel_data.get('avg_reactions'))}
 
 ОСТАННІ 20 ПОСТІВ:
 {posts_text if posts_text else "Немає постів"}
@@ -121,7 +139,28 @@ Forwards/пост: {channel_data.get('avg_forwards', 0)} | Реакції/пос
 - income_min/max — реалістичні числа USDT для ЦЬОГО каналу, не загальні
 - Якщо views_hidden=true, зниж score на 10-15 балів і вкажи це в ризиках
 - Якщо канал закритий (вказано вище), обов'язково познач growth_trend і content_analysis як "недостатньо даних для оцінки" — не вигадуй конкретику, якщо ОСТАННІ 20 ПОСТІВ/СТАТИСТИКА порожні
+- Якщо метрика позначена «мало даних» — не вигадуй її значення, у відповідному полі прямо напиши «мало даних»
 - Тільки валідний JSON"""
+    return prompt
+
+
+async def analyze_channel(
+    channel_data: dict,
+    posts_data: list[dict],
+    stats_data: list[dict],
+    is_closed: bool = False,
+) -> dict | None:
+    """Send full channel data to Groq/Llama for deep monetization analysis.
+
+    is_closed marks a channel that requires an approved join request — the
+    bot cannot read its posts/history, so subscriber/view/ER numbers here are
+    self-reported by the seller and stats_data/posts_data will be empty.
+    """
+    if not settings.groq_api_key:
+        logger.warning("GROQ_API_KEY not set — skipping AI analysis")
+        return None
+
+    prompt = build_channel_prompt(channel_data, posts_data, stats_data, is_closed)
 
     try:
         async with httpx.AsyncClient(timeout=60.0) as client:
@@ -196,11 +235,10 @@ async def analyze_bundle(bundle_data: dict, channels_data: list[dict]) -> dict |
         channels_text = ""
         for i, ch in enumerate(channels_data, 1):
             subs = int(ch.get('subscribers_count') or 0)
-            er = float(ch.get('er') or 0)
-            views = int(ch.get('avg_views') or 0)
             channels_text += (
                 f"{i}. {ch.get('channel_name', '?')} — "
-                f"{subs:,} підп., ER {er:.1f}%, перегляди: {views:,}\n"
+                f"{subs:,} підп., ER {_fmt_float(ch.get('er'), 1, '%')}, "
+                f"перегляди: {_fmt_int(ch.get('avg_views'))}\n"
             )
 
         prompt = f"""Ти — аналітик покупки Telegram-сіток. Дай КОНКРЕТНИЙ аналіз без води.
