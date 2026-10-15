@@ -464,70 +464,72 @@ async def collect_fee(
     admin: User = Depends(get_superadmin_user),
     db: AsyncSession = Depends(get_db),
 ):
-    """Admin-manual: move exactly deal.service_fee USDT from a completed deal's escrow to master.
+    """Admin-manual fee collection of ONE deal (Task 19: replaced by the fee sweep).
 
-    Only completed deals whose release has receipt SUCCESS; no open outgoing tx; at most
-    one (pending/confirmed) fee collection per deal. Refunded/cancelled/open deals refused.
+    Sweeps the whole remaining escrow USDT to TREASURY_ADDRESS (never a UI/API address)
+    through the payout worker (CatFee energy / burn fallback). Same eligibility as the
+    automatic sweep; legacy #3/#29 (and #6) are refused; at most one sweep per deal.
     """
-    from app.services import payouts
+    import importlib
+
+    fee_sweep = importlib.import_module("app.services.fee_sweep")
+    payouts = importlib.import_module("app.services.payouts")
 
     deal = (await db.execute(select(Deal).where(Deal.id == deal_id).with_for_update())).scalar_one_or_none()
     if not deal:
         raise HTTPException(status_code=404, detail="Deal not found")
+    try:
+        fee_sweep.treasury_address()
+    except fee_sweep.FeeSweepError as e:
+        await db.rollback()
+        raise HTTPException(status_code=e.http_status, detail=e.message)
+    if await payouts.open_outgoing_tx(db, deal.id) is not None:
+        await db.rollback()
+        raise HTTPException(status_code=409, detail="Є непідтверджена вихідна транзакція по угоді")
+    if deal.sweep_status in ("queued", "done"):
+        await db.rollback()
+        raise HTTPException(status_code=409, detail="Комісію з цієї угоди вже зібрано / в черзі")
+    reason = await fee_sweep.check_eligible(db, deal)
+    if reason is not None:
+        await db.rollback()
+        raise HTTPException(status_code=400, detail=reason)
+    prev = deal.sweep_status
+    if deal.sweep_status is None:
+        deal.sweep_status = "pending_sweep"
+    await db.commit()
+    r = await fee_sweep.sweep_deal(db, deal_id, force=True, actor=admin,
+                                   allowed_states=("pending_sweep", "due", "failed", "empty"))
+    if r["result"] != "queued":
+        if prev is None and r["result"] != "empty":
+            d = await payouts._lock_deal(db, deal_id)
+            d.sweep_status = prev if d.sweep_status == "pending_sweep" else d.sweep_status
+            await db.commit()
+        raise HTTPException(status_code=400, detail=f"Sweep не поставлено: {r.get('reason') or r['result']}")
+    response.status_code = 202
+    return {"ok": True, "status": "queued", "deal_id": deal_id, "amount_usdt": r["amount_usdt"],
+            "to_address": fee_sweep.treasury_address(), "transaction_id": r["transaction_id"]}
 
-    def refuse(msg: str, code: int = 400):
-        raise HTTPException(status_code=code, detail=msg)
+
+@router.post("/fee-sweep/collect-all")
+async def fee_sweep_collect_all(
+    response: Response,
+    admin: User = Depends(get_superadmin_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Superadmin "Зібрати все": queue sweeps of every pending_sweep escrow → TREASURY_ADDRESS.
+
+    No address parameter by design. Legacy #3/#29 (рішення за Ренатом) and #6 are excluded.
+    """
+    fee_sweep = __import__("importlib").import_module("app.services.fee_sweep")
 
     try:
-        if deal.status != DealStatus.completed or not deal.payout_tx_hash:
-            refuse("Комісію можна зібрати лише з completed-угоди з підтвердженою виплатою")
-        release_ok = (await db.execute(
-            select(Transaction.id).where(
-                Transaction.deal_id == deal.id,
-                Transaction.type == TransactionType.release,
-                Transaction.tx_hash == deal.payout_tx_hash,
-                Transaction.status == TransactionStatus.confirmed,
-                Transaction.receipt_status == "SUCCESS",
-            ).limit(1)
-        )).scalar_one_or_none()
-        if release_ok is None:
-            refuse("Виплата продавцю не має квитанції SUCCESS — збір комісії заборонено")
-        if await payouts.open_outgoing_tx(db, deal.id) is not None:
-            refuse("Є непідтверджена вихідна транзакція по угоді", 409)
-        prior = (await db.execute(
-            select(Transaction.id).where(
-                Transaction.deal_id == deal.id,
-                Transaction.type == TransactionType.fee_collection,
-                Transaction.status.in_((TransactionStatus.pending, TransactionStatus.confirmed)),
-            ).limit(1)
-        )).scalar_one_or_none()
-        if prior is not None:
-            refuse("Комісію з цієї угоди вже зібрано", 409)
-        units = payouts.to_units(deal.service_fee or 0)
-        if units <= 0:
-            refuse("Комісія угоди = 0")
-        master = (settings_master_wallet() or "").strip()
-        if not payouts.is_tron_address(master):
-            refuse("Master-гаманець не налаштований")
-    except HTTPException:
-        await db.rollback()
-        raise
-
-    await _precheck_gas_or_http(db, deal, master, units, allow_master=True)
-    job = payouts.enqueue_transfer(
-        db, deal, tx_type=TransactionType.fee_collection, to_address=master,
-        amount_units=units, restore_status=None,
-    )
-    audit(db, admin, "deal.collect_fee", "deal", deal.id, to_address=master, amount_units=units)
+        res = await fee_sweep.collect_all(db, admin)
+    except fee_sweep.FeeSweepError as e:
+        raise HTTPException(status_code=e.http_status, detail=e.message)
+    audit(db, admin, "fee_sweep.collect_all", "deal", None, queued=res["queued"], amount_usdt=res["amount_usdt"])
     await db.commit()
     response.status_code = 202
-    return {
-        "ok": True,
-        "status": "queued",
-        "deal_id": deal_id,
-        "amount_usdt": payouts.units_to_usdt(units),
-        "transaction_id": job.id,
-    }
+    return res
 
 
 def settings_master_wallet() -> str:
@@ -1594,7 +1596,7 @@ async def admin_dashboard_stats(
     # Fee actually moved to master (admin collect-fee, receipt SUCCESS only).
     fee_collected = (await db.execute(
         select(func.sum(Transaction.amount)).where(
-            Transaction.type == TransactionType.fee_collection,
+            Transaction.type.in_((TransactionType.fee_collection, TransactionType.fee_sweep)),
             Transaction.status == TransactionStatus.confirmed,
         )
     )).scalar() or 0

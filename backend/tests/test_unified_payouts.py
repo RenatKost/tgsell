@@ -131,6 +131,9 @@ async def env(pg_orm, monkeypatch):
     alert = AsyncMock()
     monkeypatch.setattr(alerts, "send_admin_alert", alert)
     monkeypatch.setattr(settings, "tron_master_wallet_address", MASTER)
+    # Task 19: auto fee sweep off for legacy tests (FakeTron balances never decrease);
+    # tests/test_fee_sweep.py turns it on.
+    monkeypatch.setattr(settings, "fee_sweep_enabled", False)
     payouts._stuck_alerted.clear()
 
     from app.models.channel import Channel, ChannelStatus
@@ -482,9 +485,10 @@ async def test_collect_fee_after_confirmed_release(env):
     env.tron.balances[escrow_addr] = 3_000_000  # fee left on escrow
     r = await env.call(env.admin.collect_fee, deal_id)
     assert r["ok"] is True and r["amount_usdt"] == 3.0
-    assert env.tron.prepared[-1][1:] == (MASTER, 3_000_000, True)
+    from app.config import settings
+    assert env.tron.prepared[-1][1:] == (settings.treasury_address, 3_000_000, False)
     fee_tx = (await env.txs(deal_id))[-1]
-    assert fee_tx.type == env.TT.fee_collection and fee_tx.status == env.TS.confirmed
+    assert fee_tx.type == env.TT.fee_sweep and fee_tx.status == env.TS.confirmed
     assert (await env.get(deal_id)).status == env.S.completed
 
     with pytest.raises(HTTPException) as ei:  # only once

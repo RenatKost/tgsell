@@ -242,6 +242,12 @@ export const EscrowOverview = () => {
 		try { const { data } = await adminAPI.retryOverpayRefund(i.deal_id); alert(`Повернення ${data.amount_usdt} USDT поставлено в чергу (tx #${data.transaction_id}).`); load(); }
 		catch (x) { alert(err(x)); load(); }
 	};
+	const SW = { due: 'вирішується', queued: 'в черзі', pending_sweep: 'очікує збору', done: 'в казні', empty: 'порожньо', failed: 'НЕ ВИКОНАНО' };
+	const collectAll = async () => {
+		if (!window.confirm(`Зібрати все: поставити в чергу sweep усіх escrow зі статусом «очікує збору» (${d.totals.pending_sweep_count} шт., ~${fmt(d.totals.pending_sweep_usdt, 6)} USDT) на казну ${d.treasury_address}?\n\nУгоди #29 і #3 не включаються (рішення за Ренатом).`)) return;
+		try { const { data } = await adminAPI.feeSweepCollectAll(); alert(`У черзі: ${data.queued} sweep, ${data.amount_usdt} USDT → ${data.treasury}`); load(); }
+		catch (x) { alert(err(x)); load(); }
+	};
 	const FEE = { collectable: 'можна зібрати', collecting: 'збирається', collected: 'зібрано', not_collectable: 'не збирається (до 0026)' };
 	return (
 		<div className={card + ' mb-6'}>
@@ -252,6 +258,19 @@ export const EscrowOverview = () => {
 			{e && <div className='text-red-600'>{e}</div>}
 			{d && (
 				<>
+					<div className='mb-3 p-3 rounded bg-gray-50 dark:bg-slate-800'>
+						<div className='font-semibold mb-1'>Гроші → казна <span className='text-xs text-gray-400 break-all'>{d.treasury_address}</span></div>
+						<div className='grid grid-cols-2 lg:grid-cols-4 gap-2'>
+							<div>Зароблено всього: <b>{fmt(d.totals.earned)}</b></div>
+							<div>Відправлено в казну: <b>{fmt(d.totals.treasury_sent)}</b></div>
+							<div>Очікує збору: <b>{fmt(d.totals.pending_sweep_usdt)}</b> ({d.totals.pending_sweep_count} угод, мін. {d.fee_sweep_min_usdt})</div>
+							<div>Рішення за Ренатом: <b>{fmt(d.totals.renat_decision_usdt)}</b> (#29, #3)</div>
+						</div>
+						{d.totals.pending_sweep_count > 0 && <button onClick={collectAll} className='mt-2 px-3 py-1 rounded bg-green-600 text-white'>Зібрати все</button>}
+						{d.treasury_txs?.length > 0 && <div className='mt-2 text-xs'>{d.treasury_txs.map(t => (
+							<div key={t.id}>#{t.deal_id} · {fmt(t.amount, 6)} USDT · {t.status}{t.tronscan_url && <> · <a href={t.tronscan_url} target='_blank' rel='noopener noreferrer' className='text-[#3498db]'>{short(t.tx_hash)}</a></>}</div>
+						))}</div>}
+					</div>
 					<div className='grid grid-cols-2 lg:grid-cols-4 gap-2 mb-3'>
 						<div>Нараховано: <b>{fmt(d.totals.accrued)}</b></div>
 						<div>Зібрано: <b>{fmt(d.totals.collected)}</b></div>
@@ -266,7 +285,7 @@ export const EscrowOverview = () => {
 					</div>
 					<div className='overflow-x-auto'>
 						<table className='w-full text-xs'>
-							<thead><tr className='text-left text-gray-400 uppercase'><th className='p-2'>Угода</th><th className='p-2'>Статус</th><th className='p-2'>Факт USDT</th><th className='p-2'>Очікувано</th><th className='p-2'>Комісія</th><th className='p-2'>Переплата</th><th className='p-2'></th></tr></thead>
+							<thead><tr className='text-left text-gray-400 uppercase'><th className='p-2'>Угода</th><th className='p-2'>Статус</th><th className='p-2'>Факт USDT</th><th className='p-2'>Очікувано</th><th className='p-2'>Комісія</th><th className='p-2'>Переплата</th><th className='p-2'>Казна</th><th className='p-2'></th></tr></thead>
 							<tbody>{d.items.map(i => (
 								<tr key={i.deal_id} className={`border-t border-gray-100 dark:border-slate-700 ${i.mismatch ? 'bg-red-50 dark:bg-red-900/20' : ''}`}>
 									<td className='p-2'><a href={'/deal/' + i.deal_id} target='_blank' rel='noopener noreferrer' className='text-[#3498db]'>#{i.deal_id}</a></td>
@@ -279,6 +298,10 @@ export const EscrowOverview = () => {
 										{i.overpay_tx?.tronscan_url && <> · <a href={i.overpay_tx.tronscan_url} target='_blank' rel='noopener noreferrer' className='text-[#3498db]'>{short(i.overpay_tx.tx_hash)}</a></>}
 										{i.overpay_retry_allowed && <button onClick={() => retryOverpay(i)} className='ml-2 px-2 py-0.5 rounded bg-orange-500 text-white'>Повторити</button>}
 									</>) : '—'}</td>
+									<td className='p-2'>{i.renat_decision ? <span className='text-purple-600 font-semibold'>рішення за Ренатом{i.renat_note ? ` (${i.renat_note})` : ''}</span> : (i.sweep_status ? <>
+										<span className={i.sweep_status === 'failed' ? 'text-red-600 font-semibold' : ''}>{SW[i.sweep_status] || i.sweep_status}</span>
+										{i.sweep_tx?.tronscan_url && <> · <a href={i.sweep_tx.tronscan_url} target='_blank' rel='noopener noreferrer' className='text-[#3498db]'>{short(i.sweep_tx.tx_hash)}</a></>}
+									</> : '—')}</td>
 									<td className='p-2'>{i.mismatch && <span className='text-red-600 font-semibold'>розбіжність</span>}{i.stray && <span className='text-orange-600'>залишок (лише перегляд)</span>}</td>
 								</tr>))}</tbody>
 						</table>

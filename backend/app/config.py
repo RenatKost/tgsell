@@ -47,6 +47,12 @@ class Settings(BaseSettings):
     # Empty → https://api.catfee.io on mainnet, https://nile.catfee.io on nile.
     catfee_base_url: str = ""
 
+    # Task 19: automatic fee sweep. The ONLY destination for fee sweeps (code default,
+    # Renat's MEXC USDT TRC-20 deposit). Validated as TRON base58check before every use.
+    treasury_address: str = "TXoRpYu5FDgZvrqNQb239bLjcc5oHzavCG"
+    fee_sweep_min_usdt: float = 5.0
+    fee_sweep_enabled: bool = True
+
     # Service
     service_fee_percent: float = 3.0
     # Admin alert when master wallet TRX (gas source for payouts) drops below this.

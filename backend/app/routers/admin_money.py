@@ -263,20 +263,22 @@ async def escrow_overview(
     deals = (await db.execute(select(Deal).order_by(Deal.id.desc()))).scalars().all()
     txs = (await db.execute(select(Transaction).where(Transaction.type.in_((
         TransactionType.release, TransactionType.fee_collection, TransactionType.refund, TransactionType.sweep,
-        TransactionType.overpay_refund))))).scalars().all()
+        TransactionType.overpay_refund, TransactionType.fee_sweep))))).scalars().all()
     by_deal: dict[int, list[Transaction]] = {}
     for t in txs:
         by_deal.setdefault(t.deal_id, []).append(t)
 
     totals = {"accrued": 0.0, "collected": 0.0, "collectable": 0.0, "not_collectable_legacy": 0.0,
               "held_active": 0.0, "stray_cancelled": 0.0, "unknown_wallets": len(unknown),
-              "overpay_refunded": 0.0, "overpay_open": 0.0, "overpay_failed": 0}
+              "overpay_refunded": 0.0, "overpay_open": 0.0, "overpay_failed": 0,
+              "treasury_sent": 0.0, "pending_sweep_usdt": 0.0, "pending_sweep_count": 0, "renat_decision_usdt": 0.0}
+    fs = __import__("importlib").import_module("app.services.fee_sweep")
     items = []
     for d in deals:
         ts = by_deal.get(d.id, [])
         fee = float(d.service_fee or 0)
         bal = None if d.id in unknown else live.get(d.id, 0.0 if checked_all else None)
-        fee_tx = [t for t in ts if t.type == TransactionType.fee_collection
+        fee_tx = [t for t in ts if t.type in (TransactionType.fee_collection, TransactionType.fee_sweep)
                   and t.status in (TransactionStatus.pending, TransactionStatus.confirmed)]
         fee_collected = any(t.status == TransactionStatus.confirmed for t in fee_tx)
         release_ok = any(t.type == TransactionType.release and t.tx_hash == d.payout_tx_hash
@@ -316,12 +318,22 @@ async def escrow_overview(
                     expected += op_usdt
                 if d.overpay_status == "failed":
                     totals["overpay_failed"] += 1
+        sweep_tx = [t for t in ts if t.type == TransactionType.fee_sweep]
+        totals["treasury_sent"] += sum(t.amount for t in sweep_tx if t.status == TransactionStatus.confirmed)
+        if d.sweep_status == "pending_sweep" and d.id not in fs.EXCLUDED_DEAL_IDS:
+            totals["pending_sweep_count"] += 1
+            totals["pending_sweep_usdt"] += bal or 0.0
+        renat = d.id in fs.RENAT_DECISION_DEAL_IDS
+        if renat:
+            totals["renat_decision_usdt"] += bal or 0.0
+        last_sweep = max(sweep_tx, key=lambda t: t.id) if sweep_tx else None
         last_op = max(op_tx, key=lambda t: t.id) if op_tx else None
         mismatch = (expected is not None and bal is not None and not stray
                     and abs(to_units(bal) - to_units(expected)) > 0)
         notable = (bool(bal) or mismatch or bal is None or d.status in FUNDED_ACTIVE
                    or fee_state in ("collectable", "collecting", "not_collectable")
-                   or (d.overpay_status not in (None, "done")))
+                   or (d.overpay_status not in (None, "done"))
+                   or renat or d.sweep_status in ("due", "queued", "pending_sweep", "failed"))
         if not notable:
             continue
         items.append({
@@ -332,8 +344,14 @@ async def escrow_overview(
             "overpay_refund_address": d.overpay_refund_address,
             "overpay_tx": _tx_row(last_op) if last_op else None,
             "overpay_retry_allowed": d.overpay_status == "failed",
+            "sweep_status": d.sweep_status, "sweep_tx": _tx_row(last_sweep) if last_sweep else None,
+            "renat_decision": renat, "renat_note": fs.RENAT_DECISION_NOTE.get(d.id) if renat else None,
         })
-    return {"items": items, "totals": {k: round(v, 6) if isinstance(v, float) else v for k, v in totals.items()},
+    totals["earned"] = totals["accrued"]
+    treasury_txs = sorted((t for t in txs if t.type == TransactionType.fee_sweep), key=lambda t: t.id, reverse=True)
+    return {"items": items, "treasury_address": fs.settings.treasury_address,
+            "fee_sweep_min_usdt": fs.settings.fee_sweep_min_usdt,
+            "treasury_txs": [_tx_row(t) for t in treasury_txs[:50]], "totals": {k: round(v, 6) if isinstance(v, float) else v for k, v in totals.items()},
             "balances_checked_at": balances.get("checked_at"), "cached": balances.get("cached")}
 
 

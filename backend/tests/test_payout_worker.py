@@ -174,7 +174,8 @@ async def test_sweep_and_collect_fee_are_queued(env):
     r = await env.call(env.admin.collect_fee, deal_id, run_worker=False)
     assert r["http"] == 202 and r["status"] == "queued" and env.tron.prepared[-1][1] == SELLER_W
     await env.work()
-    assert env.tron.prepared[-1][1:] == (MASTER, 3_000_000, True)
+    from app.config import settings
+    assert env.tron.prepared[-1][1:] == (settings.treasury_address, 3_000_000, False)
 
 
 # ── TRX balances ──
