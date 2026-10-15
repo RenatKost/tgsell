@@ -15,6 +15,7 @@ from app.routers import auth, channels, deals, admin, users, favorites, auctions
 from app.routers import bundles as bundles_router
 from app.routers import admin_money
 from app.routers import user_activity as user_activity_router
+from app.routers import saved_searches as saved_searches_router
 from app.routers import chat as chat_router
 from app.tasks.payment_checker import run_payment_checker
 from app.tasks.payout_worker import run_payout_worker
@@ -95,6 +96,8 @@ async def lifespan(app: FastAPI):
     # Task 22: quality index from stored data only (no Telethon), <= every 6h
     from app.services.quality import run_quality_scorer
     background_tasks.append(loop.create_task(run_quality_scorer(startup_delay_sec=60)))
+    from app.services.saved_searches import run_saved_search_notifier
+    background_tasks.append(loop.create_task(run_saved_search_notifier()))
     yield
     logger.info("Shutting down background tasks…")
     for task in background_tasks:
@@ -144,6 +147,7 @@ app.include_router(bundles_router.router, prefix="/api")
 app.include_router(media.router, prefix="/api")
 app.include_router(support.router, prefix="/api")
 app.include_router(user_activity_router.router, prefix="/api")
+app.include_router(saved_searches_router.router, prefix="/api")
 
 @app.get("/api/health")
 async def health():

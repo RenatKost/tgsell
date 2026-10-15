@@ -61,6 +61,8 @@ async def _attach_bundle_info_bulk(
     return {row[0]: (row[1], row[2]) for row in rows}
 
 
+from app.services.catalog_filters import CATALOG_FILTER_KEYS, apply_catalog_filters  # noqa: E402
+
 @router.get("", response_model=ChannelListResponse)
 async def list_channels(
     search: str = Query("", max_length=100),
@@ -79,6 +81,8 @@ async def list_channels(
     pps_min: float | None = Query(None, ge=0, description="Min price per subscriber (USDT)"),
     pps_max: float | None = Query(None, ge=0, description="Max price per subscriber (USDT)"),
     no_inflation: bool | None = Query(None, description="Task 22: only channels with quality health 'clean'"),
+    min_subscribers: int | None = Query(None, ge=0),
+    max_subscribers: int | None = Query(None, ge=0),
     db: AsyncSession = Depends(get_db),
 ):
     """List channels with filters, search, sorting and pagination."""
@@ -97,45 +101,14 @@ async def list_channels(
         query = query.where(~Channel.id.in_(bundled_ids_subq))
         query = query.where(not_blocked_seller(Channel.seller_id))
 
-    if search:
-        query = query.where(Channel.channel_name.ilike(f"%{search}%"))
-    if category:
-        query = query.where(Channel.category == category)
-    if min_price is not None:
-        query = query.where(Channel.price >= min_price)
-    if max_price is not None:
-        query = query.where(Channel.price <= max_price)
-    if er_min is not None:
-        query = query.where(Channel.er >= er_min)
-    if roi_max is not None:
-        # ROI months = price / monthly_income — only for channels with monthly_income > 0
-        query = query.where(Channel.monthly_income > 0)
-        query = query.where(Channel.price / Channel.monthly_income <= roi_max)
-    if verified_data:
-        query = query.where(
-            Channel.avg_views.is_not(None),
-            Channel.er.is_not(None),
-            Channel.is_closed.is_(False),
-        )
-    if ai_recommended:
-        # Channels AI recommends: good ER + reasonable ROI + has income data
-        query = query.where(
-            Channel.er >= 15,
-            Channel.monthly_income > 0,
-            Channel.price / Channel.monthly_income <= 12,
-        )
-
+    query = apply_catalog_filters(query, dict(
+        search=search, category=category, min_price=min_price, max_price=max_price, roi_max=roi_max,
+        er_min=er_min, verified_data=verified_data, ai_recommended=ai_recommended, pps_min=pps_min,
+        pps_max=pps_max, no_inflation=no_inflation, min_subscribers=min_subscribers,
+        max_subscribers=max_subscribers,
+    ))
     pps_expr = Channel.price / Channel.subscribers_count
     priceable = (Channel.subscribers_count > 0) & (Channel.price > 0) & Channel.is_closed.is_(False)
-    if pps_min is not None or pps_max is not None:
-        query = query.where(priceable)
-        if pps_min is not None:
-            query = query.where(pps_expr >= pps_min)
-        if pps_max is not None:
-            query = query.where(pps_expr <= pps_max)
-
-    if no_inflation:
-        query = query.where(Channel.quality_health == "clean")
 
     # Sorting
     if sort == "quality_desc":
@@ -194,6 +167,20 @@ async def list_channels(
         total_pages=total_pages,
         page=page,
     )
+
+
+@router.get("/{channel_id}/similar")
+async def similar_channels(channel_id: int, limit: int = Query(6, ge=1, le=6), db: AsyncSession = Depends(get_db)):
+    """Task 24: up to 6 similar public listings (same category, close subs and $/view, best quality first)."""
+    from app.services.similar import find_similar
+    base = (await db.execute(
+        select(Channel).where(Channel.id == channel_id).where(not_blocked_seller(Channel.seller_id))
+    )).scalar_one_or_none()
+    if not base:
+        raise HTTPException(status_code=404, detail="Channel not found")
+    market = await load_market(db)
+    items = await find_similar(db, base, market, limit=limit)
+    return {"channel_id": channel_id, "items": items}
 
 
 @router.get("/{channel_id}", response_model=ChannelResponse)

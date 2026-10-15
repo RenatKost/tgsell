@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { useParams, useNavigate, NavLink } from 'react-router-dom';
+import { useParams, useNavigate, NavLink, useSearchParams } from 'react-router-dom';
 import { trackEvent } from '../utils/tracking';
 import { Radio, ExternalLink } from 'lucide-react';
 import { channelsAPI, dealsAPI } from '../services/api';
@@ -16,11 +16,20 @@ import PostsList from '../components/ChanelDetails/PostsList';
 import AiAnalysis from '../components/ChanelDetails/AiAnalysis';
 import { PriceEstimate } from '../components/Pricing/PriceVerdict';
 import { QualityBlock } from '../components/Quality/QualityBadge';
+import SimilarChannels from '../components/Similar/SimilarChannels';
 
 const ChannelDetailsPage = () => {
 	const { id } = useParams();
 	// Task 23: channel view (server dedupes repeats within 10 min)
 	useEffect(() => { if (Number(id) > 0) trackEvent('channel_view', { channel_id: Number(id) }); }, [id]);
+	// Task 24: click-through from a saved-search bot notification (?ref=saved_search)
+	const [searchParams, setSearchParams] = useSearchParams();
+	useEffect(() => {
+		if (searchParams.get('ref') === 'saved_search' && Number(id) > 0) {
+			trackEvent('saved_search_click', { channel_id: Number(id), page: 'channel' });
+			setSearchParams({}, { replace: true });
+		}
+	}, [id, searchParams, setSearchParams]);
 	const navigate = useNavigate();
 	const { isAuthenticated } = useAuth();
 	const [channel, setChannel] = useState(null);
@@ -184,6 +193,8 @@ const ChannelDetailsPage = () => {
 			<div className='mt-4'>
 				<PostsList channelId={channel.id} />
 			</div>
+
+			<SimilarChannels channelId={channel.id} />
 		</section>
 	);
 };

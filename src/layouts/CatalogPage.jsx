@@ -2,7 +2,8 @@ import { trackEvent } from '../utils/tracking';
 import { useEffect, useState, useRef, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import CatalogCard from '../components/Cards/CatalogCard';
-import { channelsAPI, bundlesAPI } from '../services/api';
+import { channelsAPI, bundlesAPI, savedSearchesAPI } from '../services/api';
+import { useAuth } from '../context/AppContext';
 import BundleCard from '../components/Cards/BundleCard';
 import { options as categoryOptions } from '../components/Main/Calculator';
 
@@ -70,7 +71,18 @@ const PPS_BUCKETS = [
 	{ value: 'gt1', label: '$/підп. > 1', min: 1 },
 ];
 
+// Task 24: subscribers filter buckets
+const SUBS_BUCKETS = [
+	{ value: 'lt1k', label: '< 1 000 підп.', max: 1000 },
+	{ value: '1k_10k', label: '1 000–10 000 підп.', min: 1000, max: 10000 },
+	{ value: '10k_50k', label: '10 000–50 000 підп.', min: 10000, max: 50000 },
+	{ value: 'gt50k', label: '> 50 000 підп.', min: 50000 },
+];
+
 const CatalogPage = () => {
+	const { isAuthenticated } = useAuth();
+	const [saveMsg, setSaveMsg] = useState('');
+	const [subsBucket, setSubsBucket] = useState('');
 	const [channels, setChannels] = useState([]);
 	const [bundles, setBundles] = useState([]);
 	const [bundlesLoading, setBundlesLoading] = useState(true);
@@ -103,30 +115,36 @@ const CatalogPage = () => {
 		return () => clearTimeout(t);
 	}, [priceRange]);
 
+	// Task 24: catalog filters (shared by the list request and «Зберегти пошук»)
+	const buildFilters = useCallback(() => {
+		const params = {};
+		if (search) params.search = search;
+		if (category) params.category = category;
+		if (roi6) params.roi_max = 6;
+		else if (roi12) params.roi_max = 12;
+		if (er20) params.er_min = 20;
+		if (verifiedData) params.verified_data = true;
+		if (noInflation) params.no_inflation = true;
+		if (aiRecommended) params.ai_recommended = true;
+		if (debouncedPrice[0] > 0) params.min_price = debouncedPrice[0];
+		if (debouncedPrice[1] < PRICE_MAX) params.max_price = debouncedPrice[1];
+		const pps = PPS_BUCKETS.find(b => b.value === ppsBucket);
+		if (pps) {
+			if (pps.min != null) params.pps_min = pps.min;
+			if (pps.max != null) params.pps_max = pps.max;
+		}
+		const subs = SUBS_BUCKETS.find(b => b.value === subsBucket);
+		if (subs) {
+			if (subs.min != null) params.min_subscribers = subs.min;
+			if (subs.max != null) params.max_subscribers = subs.max;
+		}
+		return params;
+	}, [search, category, roi6, roi12, er20, verifiedData, noInflation, aiRecommended, debouncedPrice, ppsBucket, subsBucket]);
+
 	const fetchChannels = useCallback(async () => {
 		setLoading(true);
 		try {
-			const params = {
-				search,
-				category,
-				sort: sortBy,
-				page,
-				limit: 12,
-			};
-			if (roi6) params.roi_max = 6;
-			else if (roi12) params.roi_max = 12;
-			if (er20) params.er_min = 20;
-			if (verifiedData) params.verified_data = true;
-			if (noInflation) params.no_inflation = true;
-			if (aiRecommended) params.ai_recommended = true;
-			if (debouncedPrice[0] > 0) params.min_price = debouncedPrice[0];
-			if (debouncedPrice[1] < PRICE_MAX) params.max_price = debouncedPrice[1];
-			const pps = PPS_BUCKETS.find(b => b.value === ppsBucket);
-			if (pps) {
-				if (pps.min != null) params.pps_min = pps.min;
-				if (pps.max != null) params.pps_max = pps.max;
-			}
-
+			const params = { ...buildFilters(), sort: sortBy, page, limit: 12 };
 			const { data } = await channelsAPI.getAll(params);
 			setChannels(data.items || data);
 			setTotalPages(data.total_pages || 1);
@@ -136,7 +154,21 @@ const CatalogPage = () => {
 		} finally {
 			setLoading(false);
 		}
-	}, [search, category, sortBy, page, roi6, roi12, er20, verifiedData, noInflation, aiRecommended, debouncedPrice, ppsBucket]);
+	}, [buildFilters, sortBy, page]);
+
+	const handleSaveSearch = async () => {
+		if (!isAuthenticated) {
+			setSaveMsg('Увійдіть, щоб зберігати пошуки');
+			return;
+		}
+		try {
+			await savedSearchesAPI.create({ filters: buildFilters() });
+			setSaveMsg('Пошук збережено. Нові канали надійдуть у бот @tgsell_alert_bot');
+		} catch (err) {
+			setSaveMsg(err.response?.data?.detail || 'Не вдалося зберегти пошук');
+		}
+		setTimeout(() => setSaveMsg(''), 5000);
+	};
 
 	useEffect(() => {
 		setBundlesLoading(true);
@@ -238,6 +270,21 @@ const CatalogPage = () => {
 					</svg>
 				</div>
 
+				{/* Subscribers filter (Task 24) */}
+				<div className='relative'>
+					<select
+						value={subsBucket}
+						onChange={(e) => { setSubsBucket(e.target.value); resetPage(); }}
+						className='appearance-none bg-gray-50 dark:bg-card-inner border border-gray-200 dark:border-card-border text-gray-700 dark:text-gray-300 text-[12px] font-semibold pl-3 pr-7 py-1.5 rounded-xl focus:outline-none focus:border-accent cursor-pointer transition-colors'
+					>
+						<option value=''>Підписники</option>
+						{SUBS_BUCKETS.map(b => <option key={b.value} value={b.value}>{b.label}</option>)}
+					</select>
+					<svg className='pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-gray-400' width='10' height='10' viewBox='0 0 12 12'>
+						<path d='M2 4l4 4 4-4' stroke='currentColor' strokeWidth='1.6' strokeLinecap='round' strokeLinejoin='round' fill='none'/>
+					</svg>
+				</div>
+
 				<div className='h-5 w-px bg-gray-200 dark:bg-card-border mx-1 hidden sm:block' />
 
 				{/* ROI chips */}
@@ -332,9 +379,20 @@ const CatalogPage = () => {
 				</div>
 			</div>
 
+			{/* Task 24: save current filters */}
+			<div className='flex flex-wrap items-center gap-3 -mt-3 mb-4'>
+				<button
+					onClick={handleSaveSearch}
+					className='inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-[12px] font-semibold border border-accent/50 text-accent hover:bg-accent hover:text-black transition-colors'
+				>
+					🔔 Зберегти пошук
+				</button>
+				{saveMsg && <span className='text-xs text-gray-500 dark:text-gray-400'>{saveMsg}</span>}
+			</div>
+
 			{/* Active filter badges */}
 			<AnimatePresence>
-				{(roi6 || roi12 || er20 || verifiedData || noInflation || aiRecommended || ppsBucket || priceRange[0] > 0 || priceRange[1] < PRICE_MAX) && (
+				{(roi6 || roi12 || er20 || verifiedData || noInflation || aiRecommended || ppsBucket || subsBucket || priceRange[0] > 0 || priceRange[1] < PRICE_MAX) && (
 					<motion.div
 						initial={{ opacity: 0, height: 0 }}
 						animate={{ opacity: 1, height: 'auto' }}
@@ -357,7 +415,7 @@ const CatalogPage = () => {
 						<button
 							onClick={() => {
 								setRoi6(false); setRoi12(false); setEr20(false);
-								setVerifiedData(false); setNoInflation(false); setAiRecommended(false); setPpsBucket('');
+								setVerifiedData(false); setNoInflation(false); setAiRecommended(false); setPpsBucket(''); setSubsBucket('');
 								setPriceRange([0, PRICE_MAX]); resetPage();
 							}}
 							className='text-xs text-gray-400 hover:text-red-400 transition-colors ml-1'

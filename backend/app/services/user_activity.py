@@ -21,8 +21,8 @@ from app.utils.activity_ids import _RateLimiter, hash_id, limiter  # noqa: F401
 
 logger = logging.getLogger(__name__)
 
-CLIENT_EVENTS = {"visit", "channel_view", "search"}
-SERVER_EVENTS = {"login", "favorite_add", "deal_start", "payment"}
+CLIENT_EVENTS = {"visit", "channel_view", "search", "saved_search_click"}
+SERVER_EVENTS = {"login", "favorite_add", "deal_start", "payment", "saved_search_create"}
 PAGES = {"home", "catalog", "channel", "auction", "cabinet", "sell", "deal", "bundle", "faq", "other"}
 
 CHANNEL_VIEW_DEDUPE = timedelta(minutes=10)
