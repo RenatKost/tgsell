@@ -256,6 +256,23 @@ async def test_overlap_old_release_inflight_row_not_picked_by_worker(env):
 
 
 @pytest.mark.asyncio
+async def test_transaction_created_at_is_utc_regardless_of_db_timezone(env):
+    """created_at feeds the stale-pending check (vs utcnow_naive); a non-UTC DB session
+    timezone must not shift it (else in-flight rows look fresh for hours / stale too early)."""
+    from sqlalchemy import text
+    deal_id, escrow_addr = await env.make_deal(env.S.payout_in_progress)
+    async with env.orm.session() as db:
+        if db.bind.dialect.name == "postgresql":
+            await db.execute(text("SET LOCAL TIME ZONE 'Asia/Tokyo'"))  # UTC+9
+        db.add(env.Tx(deal_id=deal_id, tx_hash=None, amount=97.0, amount_units=97_000_000,
+                      from_address=escrow_addr, to_address=SELLER_W, type=env.TT.release,
+                      status=env.TS.pending, restore_status="awaiting_payout"))
+        await db.commit()
+    (tx,) = await env.txs(deal_id)
+    assert abs(tx.created_at - utcnow_naive()) < timedelta(minutes=1)
+
+
+@pytest.mark.asyncio
 async def test_worker_crash_mid_prepare_recovered_without_resend(env, monkeypatch):
     deal_id, _ = await env.make_deal(env.S.awaiting_payout)
     await env.seller_wallet(deal_id, run_worker=False)

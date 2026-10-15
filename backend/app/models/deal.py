@@ -10,6 +10,7 @@ from sqlalchemy import text as sa_text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database import Base
+from app.utils.timeutil import utcnow_naive
 
 
 class DealStatus(str, enum.Enum):
@@ -128,7 +129,11 @@ class Transaction(Base):
     status: Mapped[TransactionStatus] = mapped_column(
         Enum(TransactionStatus), default=TransactionStatus.pending
     )
-    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+    # Naive UTC set app-side: the stale-pending reconcile compares it with utcnow_naive(),
+    # so it must not depend on the DB session timezone (func.now() is local time there).
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime, server_default=func.now(), default=utcnow_naive
+    )
 
     # Outgoing-transfer bookkeeping (migration 0026, all nullable; legacy rows keep NULL).
     # A row is inserted as `pending` BEFORE broadcast; tx_hash (known pre-broadcast) is
