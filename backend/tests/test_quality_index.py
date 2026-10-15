@@ -128,3 +128,14 @@ async def test_compute_store_history_and_api(pg_orm, monkeypatch):
         assert [i["channel_name"] for i in r["items"]] == ["empty", "good", "infl"]
         d = (await cl.get(f"/channels/{ids['good']}")).json()
         assert d["quality_score"] >= 70 and d["quality_breakdown"]["components"]["er"]["points"] > 0
+
+
+def test_pricing_inflated_verdict_is_authoritative():
+    # prod #81: posts look fine but the Task 21 verdict (avg_views 32 / 10464) is inflated
+    r = score_channel(subscribers=10464, posts=_posts(views=2500), snapshots=[], now=NOW, price_verdict="inflated")
+    assert r["health"] == "suspicious" and r["score"] <= 25
+    r = score_channel(subscribers=10464, posts=_posts(views=2500), snapshots=[], now=NOW, price_verdict="unknown")
+    assert r["health"] == "clean"
+    # inflated + too little data -> still null, but flagged
+    r = score_channel(subscribers=10464, posts=_posts(n=1), snapshots=[], now=NOW, price_verdict="inflated")
+    assert r["score"] is None and r["health"] == "suspicious"

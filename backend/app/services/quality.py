@@ -26,7 +26,7 @@ from statistics import mean, pstdev
 
 from sqlalchemy import insert, select, update
 
-from app.services.pricing import MAX_VIEW_RATIO, MIN_VIEW_RATIO
+from app.services.pricing import MAX_VIEW_RATIO, MIN_VIEW_RATIO, VERDICT_INFLATED
 from app.utils.timeutil import utcnow_naive
 
 logger = logging.getLogger(__name__)
@@ -54,7 +54,8 @@ def _clamp(x: float, lo: float = 0.0, hi: float = 1.0) -> float:
 
 def score_channel(*, subscribers, is_closed=False, views_hidden=False,
                   posts: list[tuple[datetime, int]], snapshots: list[tuple[datetime, int]],
-                  growth_30d=None, growth_7d=None, now: datetime | None = None) -> dict:
+                  growth_30d=None, growth_7d=None, now: datetime | None = None,
+                  price_verdict: str | None = None) -> dict:
     """posts: (date, views) of the last WINDOW_DAYS; snapshots: (day, subscribers) real only."""
     now = now or utcnow_naive()
     since = now - timedelta(days=WINDOW_DAYS)
@@ -106,7 +107,12 @@ def score_channel(*, subscribers, is_closed=False, views_hidden=False,
                            "value": round(monthly * 100, 1), "days": span}
 
     # Integrity
-    inflated = ratio is not None and (ratio < MIN_VIEW_RATIO or ratio > MAX_VIEW_RATIO)
+    # Task 21 pricing verdict (channel avg_views, fresh only) is authoritative;
+    # the post-based ratio is a fallback when no verdict is passed in.
+    if price_verdict is not None:
+        inflated = price_verdict == VERDICT_INFLATED
+    else:
+        inflated = ratio is not None and (ratio < MIN_VIEW_RATIO or ratio > MAX_VIEW_RATIO)
     snaps = sorted((datetime(d.year, d.month, d.day), s) for d, s in snapshots if s)
     jumps = 0
     for (d1, s1), (d2, s2) in zip(snaps, snaps[1:]):
@@ -114,7 +120,7 @@ def score_channel(*, subscribers, is_closed=False, views_hidden=False,
         delta = abs(s2 - s1) / days
         if delta >= JUMP_ABS and delta / max(s1, 1) > JUMP_REL:
             jumps += 1
-    if ratio is not None or len(snaps) >= 2:
+    if ratio is not None or len(snaps) >= 2 or inflated:
         pts = 0.0 if inflated else max(0, WEIGHTS["integrity"] - JUMP_PENALTY * jumps)
         comps["integrity"] = {"points": round(pts, 1), "max": WEIGHTS["integrity"],
                               "inflated": inflated, "jumps": jumps}
@@ -140,7 +146,8 @@ async def compute_for_channel(db, channel_id: int, now: datetime | None = None) 
     now = now or utcnow_naive()
     row = (await db.execute(
         select(Channel.subscribers_count, Channel.is_closed, Channel.views_hidden,
-               Channel.growth_30d, Channel.growth_7d).where(Channel.id == channel_id)
+               Channel.growth_30d, Channel.growth_7d, Channel.category, Channel.price,
+               Channel.avg_views, Channel.last_post_date).where(Channel.id == channel_id)
     )).first()
     if row is None:
         return None
@@ -158,7 +165,12 @@ async def compute_for_channel(db, channel_id: int, now: datetime | None = None) 
             ChannelStats.date >= now - timedelta(days=60),
         )
     )).all()
-    r = score_channel(subscribers=row[0], is_closed=bool(row[1]), views_hidden=bool(row[2]),
+    from app.services.pricing import build_market, estimate
+
+    verdict = estimate(build_market(), category=row[5], price=row[6] or 0, subscribers=row[0],
+                       avg_views=row[7], is_closed=bool(row[1]), views_hidden=bool(row[2]),
+                       last_post_date=row[8], now=now)["price_verdict"]
+    r = score_channel(subscribers=row[0], price_verdict=verdict, is_closed=bool(row[1]), views_hidden=bool(row[2]),
                       growth_30d=row[3], growth_7d=row[4],
                       posts=[(p[0], p[1]) for p in posts], snapshots=[(s[0], s[1]) for s in snaps], now=now)
     await db.execute(update(Channel).where(Channel.id == channel_id).values(
