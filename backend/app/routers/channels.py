@@ -21,6 +21,7 @@ from app.schemas.channel import (
     ChannelUpdate,
 )
 from app.services.moderation import not_blocked_seller
+from app.services.pricing import apply_estimate, load_market
 from app.utils.security import get_current_user
 from app.utils.timeutil import to_naive_utc, utcnow_naive
 
@@ -75,6 +76,8 @@ async def list_channels(
     er_min: float | None = Query(None, ge=0, description="Minimum ER percentage"),
     verified_data: bool | None = Query(None, description="Only channels with collected stats (avg_views & er not null)"),
     ai_recommended: bool | None = Query(None, description="AI recommends buying: er>=15, roi<=12, monthly_income>0"),
+    pps_min: float | None = Query(None, ge=0, description="Min price per subscriber (USDT)"),
+    pps_max: float | None = Query(None, ge=0, description="Max price per subscriber (USDT)"),
     db: AsyncSession = Depends(get_db),
 ):
     """List channels with filters, search, sorting and pagination."""
@@ -121,8 +124,22 @@ async def list_channels(
             Channel.price / Channel.monthly_income <= 12,
         )
 
+    pps_expr = Channel.price / Channel.subscribers_count
+    priceable = (Channel.subscribers_count > 0) & (Channel.price > 0) & Channel.is_closed.is_(False)
+    if pps_min is not None or pps_max is not None:
+        query = query.where(priceable)
+        if pps_min is not None:
+            query = query.where(pps_expr >= pps_min)
+        if pps_max is not None:
+            query = query.where(pps_expr <= pps_max)
+
     # Sorting
-    if sort == "price_asc":
+    if sort in ("pps_asc", "pps_desc"):
+        from sqlalchemy import case
+        pps_sort = case((priceable, pps_expr), else_=None)
+        order = pps_sort.asc() if sort == "pps_asc" else pps_sort.desc()
+        query = query.order_by(order.nulls_last(), Channel.id.desc())
+    elif sort == "price_asc":
         query = query.order_by(Channel.price.asc())
     elif sort == "price_desc":
         query = query.order_by(Channel.price.desc())
@@ -145,9 +162,10 @@ async def list_channels(
     # Attach bundle info
     channel_ids = [c.id for c in channels]
     bundle_map = await _attach_bundle_info_bulk(db, channel_ids)
+    market = await load_market(db)
     items = []
     for c in channels:
-        resp = ChannelResponse.model_validate(c)
+        resp = apply_estimate(ChannelResponse.model_validate(c), market)
         if c.id in bundle_map:
             resp.bundle_id, resp.bundle_name = bundle_map[c.id]
         items.append(resp)
@@ -187,6 +205,7 @@ async def get_channel(channel_id: int, db: AsyncSession = Depends(get_db)):
             data.active_auction_ends_at = active_auction.ends_at
     # Attach bundle info
     data = await _attach_bundle_info(db, data)
+    apply_estimate(data, await load_market(db))
     return data
 
 

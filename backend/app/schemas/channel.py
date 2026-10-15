@@ -81,6 +81,12 @@ class ChannelResponse(BaseModel):
     # Bundle info (populated at runtime if channel is part of a bundle)
     bundle_id: int | None = None
     bundle_name: str | None = None
+    # Task 21: price estimate (populated at runtime by app.services.pricing)
+    price_per_sub: float | None = None
+    price_per_view: float | None = None
+    fair_price_range: list[float] | None = None
+    price_verdict: str = "unknown"  # cheaper / fair / expensive / unknown
+    price_reference_scope: str | None = None  # category / catalog
 
     @model_validator(mode="after")
     def _sanitize_avatar(self):
