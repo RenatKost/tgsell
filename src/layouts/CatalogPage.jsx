@@ -1,3 +1,4 @@
+import { trackEvent } from '../utils/tracking';
 import { useEffect, useState, useRef, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import CatalogCard from '../components/Cards/CatalogCard';
@@ -75,6 +76,12 @@ const CatalogPage = () => {
 	const [bundlesLoading, setBundlesLoading] = useState(true);
 	const [loading, setLoading] = useState(true);
 	const [search, setSearch] = useState('');
+	// Task 23: count searches only (query text is never sent), debounced
+	useEffect(() => {
+		if (search.trim().length < 2) return undefined;
+		const t = setTimeout(() => trackEvent('search', { page: 'catalog' }), 1500);
+		return () => clearTimeout(t);
+	}, [search]);
 	const [category, setCategory] = useState('');
 	const [sortBy, setSortBy] = useState('newest');
 	const [page, setPage] = useState(1);

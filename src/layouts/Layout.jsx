@@ -1,5 +1,6 @@
 import { Outlet } from 'react-router-dom';
 import Footer from '../components/Footer';
+import ActivityTracker from '../components/ActivityTracker';
 import Header from '../components/Header/Header';
 import { ScrollRestoration } from '../components/ScrollRestoration';
 import { useAuth } from '../context/AppContext';
@@ -10,6 +11,7 @@ const Layout = () => {
 		<ScrollRestoration>
 			<div className='wrapper bg-gray-50 dark:bg-transparent transition-colors duration-300'>
 				<Header />
+				<ActivityTracker />
 				{user?.is_blocked && (
 					<div className='w-full max-w-7xl mx-auto px-4 md:px-8 mt-4'>
 						<div className='rounded-xl border border-red-300 bg-red-50 dark:bg-red-900/20 dark:border-red-800 text-red-700 dark:text-red-300 px-4 py-3 text-sm'>

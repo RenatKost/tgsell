@@ -29,6 +29,11 @@ from app.services.moderation import ensure_login_allowed
 router = APIRouter(prefix="/auth", tags=["auth"])
 
 
+async def _track_login(db, user_id: int) -> None:
+    from app.services.user_activity import record_event_detached
+    await record_event_detached("login", user_id=user_id)
+
+
 @router.post("/telegram", response_model=TokenResponse)
 async def telegram_login(data: TelegramAuthData, db: AsyncSession = Depends(get_db)):
     """Authenticate via Telegram Login Widget."""
@@ -92,6 +97,7 @@ async def telegram_login(data: TelegramAuthData, db: AsyncSession = Depends(get_
         await db.refresh(user)
 
     await ensure_login_allowed(db, user)
+    await _track_login(db, user.id)
     access_token = create_access_token({"sub": str(user.id)})
     refresh_token = create_refresh_token({"sub": str(user.id)})
 
@@ -158,6 +164,7 @@ async def google_login(data: GoogleAuthData, db: AsyncSession = Depends(get_db))
         await db.refresh(user)
 
     await ensure_login_allowed(db, user)
+    await _track_login(db, user.id)
     access_token = create_access_token({"sub": str(user.id)})
     refresh_token = create_refresh_token({"sub": str(user.id)})
 
@@ -249,6 +256,7 @@ async def check_bot_auth(token: str, db: AsyncSession = Depends(get_db)):
         await db.refresh(user)
 
     await ensure_login_allowed(db, user)
+    await _track_login(db, user.id)
     access_token = create_access_token({"sub": str(user.id)})
     refresh_token = create_refresh_token({"sub": str(user.id)})
 

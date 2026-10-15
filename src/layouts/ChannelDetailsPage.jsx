@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useParams, useNavigate, NavLink } from 'react-router-dom';
+import { trackEvent } from '../utils/tracking';
 import { Radio, ExternalLink } from 'lucide-react';
 import { channelsAPI, dealsAPI } from '../services/api';
 import { useAuth } from '../context/AppContext';
@@ -18,6 +19,8 @@ import { QualityBlock } from '../components/Quality/QualityBadge';
 
 const ChannelDetailsPage = () => {
 	const { id } = useParams();
+	// Task 23: channel view (server dedupes repeats within 10 min)
+	useEffect(() => { if (Number(id) > 0) trackEvent('channel_view', { channel_id: Number(id) }); }, [id]);
 	const navigate = useNavigate();
 	const { isAuthenticated } = useAuth();
 	const [channel, setChannel] = useState(null);

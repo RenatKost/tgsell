@@ -374,4 +374,15 @@ export const usersAPI = {
 		api.get(`/users/${id}/reviews`),
 };
 
+// ===== Task 23: first-party tracking (no PII) + admin activity =====
+export const trackingAPI = {
+	event: (body) => api.post('/track/event', body),
+	heartbeat: (body) => api.post('/track/heartbeat', body),
+};
+
+export const userActivityAPI = {
+	users: (params) => api.get('/admin/activity/users', { params }),
+	funnel: () => api.get('/admin/activity/funnel'),
+};
+
 export default api;

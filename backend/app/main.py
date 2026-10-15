@@ -14,6 +14,7 @@ from app.config import settings
 from app.routers import auth, channels, deals, admin, users, favorites, auctions, activity, media, support
 from app.routers import bundles as bundles_router
 from app.routers import admin_money
+from app.routers import user_activity as user_activity_router
 from app.routers import chat as chat_router
 from app.tasks.payment_checker import run_payment_checker
 from app.tasks.payout_worker import run_payout_worker
@@ -142,6 +143,7 @@ app.include_router(activity.router, prefix="/api")
 app.include_router(bundles_router.router, prefix="/api")
 app.include_router(media.router, prefix="/api")
 app.include_router(support.router, prefix="/api")
+app.include_router(user_activity_router.router, prefix="/api")
 
 @app.get("/api/health")
 async def health():
