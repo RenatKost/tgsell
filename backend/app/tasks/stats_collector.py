@@ -97,51 +97,11 @@ async def collect_stats_once():
                 if stats.get("channel_age_months"):
                     channel.age = f"{stats['channel_age_months']}"
 
-                # Save daily_stats history with deduplication
-                daily_stats = stats.get("daily_stats", [])
-                if daily_stats:
-                    # Get existing dates for this channel to avoid duplicates
-                    existing = await db.execute(
-                        select(ChannelStats.date).where(
-                            ChannelStats.channel_id == channel.id
-                        )
-                    )
-                    existing_dates = {
-                        d.strftime("%Y-%m-%d") for d in existing.scalars().all()
-                    }
+                # Honest time series (Task 20): retro points carry post metrics
+                # only; today's row is a real snapshot; last 3 days are refreshed.
+                from app.services.stats_history import record_stats
 
-                    for ds in daily_stats:
-                        if ds["date"] not in existing_dates:
-                            db.add(ChannelStats(
-                                channel_id=channel.id,
-                                date=datetime.strptime(ds["date"], "%Y-%m-%d"),
-                                subscribers=ds.get("subscribers") or 0,
-                                avg_views=ds.get("avg_views") or 0,
-                                avg_reach=ds.get("avg_views") or 0,
-                                er=ds.get("er") or 0.0,
-                                post_count=ds.get("post_count") or 0,
-                                avg_forwards=ds.get("avg_forwards") or 0,
-                                avg_reactions=ds.get("avg_reactions") or 0,
-                            ))
-                else:
-                    # Fallback: save today's snapshot
-                    today_str = datetime.utcnow().strftime("%Y-%m-%d")
-                    existing = await db.execute(
-                        select(ChannelStats.id).where(
-                            ChannelStats.channel_id == channel.id,
-                            ChannelStats.date >= datetime.strptime(today_str, "%Y-%m-%d"),
-                        )
-                    )
-                    if not existing.scalar_one_or_none():
-                        db.add(ChannelStats(
-                            channel_id=channel.id,
-                            date=datetime.utcnow(),
-                            subscribers=stats.get("subscribers_count") or 0,
-                            avg_views=stats.get("avg_views") or 0,
-                            avg_reach=stats.get("avg_views") or 0,
-                            er=stats.get("er") or 0.0,
-                            post_count=0,
-                        ))
+                await record_stats(db, channel_id, stats)
 
                 # Save individual posts with deduplication + view tracking
                 posts_data = stats.get("posts", [])

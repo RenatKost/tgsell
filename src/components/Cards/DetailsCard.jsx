@@ -59,9 +59,10 @@ const DetailsCard = ({ channel, onBuy, onAuction, stats = [] }) => {
 		: null;
 
 	let subTrend = null;
-	if (stats.length >= 2) {
-		const first = stats[0]?.subscribers;
-		const last = stats[stats.length - 1]?.subscribers;
+	const realSubs = stats.filter(s => s.subscribers != null && s.subscribers > 0);
+	if (realSubs.length >= 2) {
+		const first = realSubs[0]?.subscribers;
+		const last = realSubs[realSubs.length - 1]?.subscribers;
 		if (first && last) {
 			const diff = last - first;
 			const pct = ((diff / first) * 100).toFixed(1);

@@ -582,32 +582,10 @@ async def create_channel(
             if body.er is not None:
                 channel.er = body.er
 
-        # Save historical daily stats for graphs
-        daily_stats = stats.get("daily_stats", [])
-        if daily_stats:
-            for ds in daily_stats:
-                stat_record = ChannelStats(
-                    channel_id=channel.id,
-                    date=dt.strptime(ds["date"], "%Y-%m-%d"),
-                    subscribers=ds.get("subscribers") or 0,
-                    avg_views=ds.get("avg_views") or 0,
-                    avg_reach=ds.get("avg_views") or 0,
-                    er=ds.get("er") or 0.0,
-                    post_count=ds.get("post_count") or 0,
-                )
-                db.add(stat_record)
-        else:
-            # Fallback: save single current record
-            stat_record = ChannelStats(
-                channel_id=channel.id,
-                date=dt.utcnow(),
-                subscribers=stats.get("subscribers_count") or 0,
-                avg_views=stats.get("avg_views") or 0,
-                avg_reach=stats.get("avg_views") or 0,
-                er=stats.get("er") or 0.0,
-                post_count=0,
-            )
-            db.add(stat_record)
+        # Save historical daily stats for graphs (honest series, Task 20)
+        from app.services.stats_history import record_stats
+
+        await record_stats(db, channel.id, stats)
         await db.commit()
 
         # Save individual posts
