@@ -1,0 +1,37 @@
+{
+  "source": "@tumobog_bir asking prices, 2026-07-15..2026-10-15, 158 unique lots (see docs / tumobog_summary.md)",
+  "updated": "2026-10-15",
+  "currency": "USD",
+  "overall": {"pps": 0.096, "ppv": 0.62, "n": 152},
+  "segments": {
+    "channel":       {"pps": 0.115, "ppv": 0.65, "n": 82},
+    "network":       {"pps": 0.095, "ppv": 0.62, "n": 65},
+    "closed_join_requests": {"pps": 0.022, "ppv": 0.07, "n": 5},
+    "news":          {"pps": 0.105, "ppv": 0.66, "n": 37},
+    "jobs":          {"pps": 0.20,  "ppv": 2.0,  "n": 26},
+    "radar":         {"pps": 0.05,  "ppv": 0.25, "n": 6},
+    "business":      {"pps": 0.142, "ppv": 1.36, "n": 5},
+    "educational":   {"pps": 0.06,  "ppv": 0.37, "n": 5},
+    "cooking":       {"pps": 0.05,  "ppv": 0.42, "n": 5},
+    "regional":      {"pps": 0.092, "ppv": 0.54, "n": 4},
+    "events":        {"pps": 0.158, "ppv": 1.91, "n": 4},
+    "real_estate":   {"pps": 0.043, "ppv": 0.47, "n": 4},
+    "sport":         {"pps": 0.177, "ppv": 3.0,  "n": 3},
+    "ukrainians_abroad": {"pps": 0.23, "ppv": 1.15, "n": 3}
+  },
+  "category_map": {
+    "Новини/ЗМІ": "news",
+    "Новини 18+": "news",
+    "Політика": "news",
+    "Регіональні": "regional",
+    "Пізнавальні": "educational",
+    "Історичні": "educational",
+    "Кулінарія": "cooking",
+    "Вакансія/Робота": "jobs",
+    "Бізнес": "business",
+    "Інвестиції/Акції": "business",
+    "Нерухомість": "real_estate",
+    "Спорт": "sport",
+    "Подорожі/Країни": "ukrainians_abroad"
+  }
+}

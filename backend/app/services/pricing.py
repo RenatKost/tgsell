@@ -1,38 +1,55 @@
-"""Task 21: market price estimate for channel listings.
+"""Task 21 (v2): listing price estimate against an external market baseline.
 
-Metrics
-  price_per_sub  = price / subscribers_count
-  price_per_view = price / avg_views
+Baseline = backend/app/data/market_prices.json: median $/subscriber (pps) and
+$/view (ppv) per segment from the @tumobog_bir market table (158 lots),
+plus a mapping from our categories to those segments. Update the JSON to
+refresh the baseline; no code change is needed.
 
-Market reference = median price_per_sub / price_per_view per category over
-approved listings plus completed deals (deal amount vs. the sold channel's
-stats). Categories with fewer than MIN_CATEGORY_SAMPLES samples fall back to
-the whole catalog (scope="catalog").
+Hook for real TgSell deals: completed deals (deal amount vs. channel stats)
+are blended into a segment's medians as a weighted median, each deal counting
+DEAL_WEIGHT times, the baseline counting its sample size n. Deals only start
+affecting a segment once it has at least MIN_DEALS of them.
 
-Excluded from the medians (and given verdict "unknown" themselves): closed
-channels, 0 subscribers, price <= 0 (bundle lots / placeholders).
-
-Fair range: each available metric gives an estimate (subs * median_pps,
-views * median_ppv); their mean is the fair price, and the fair range is
-fair * [1 - FAIR_BAND, 1 + FAIR_BAND] (±25%). Price below the range is
-"cheaper", above "expensive", inside "fair".
+Rules
+- Unpriceable (closed, 0 subs, price <= 0) -> "unknown".
+- Views are used only when fresh: not hidden and the last post is not older
+  than FRESH_VIEWS_DAYS. Fresh views/subs < MIN_VIEW_RATIO (2%) or
+  > MAX_VIEW_RATIO -> "inflated" (likely bought subs / bought views).
+- Fair price = median of the available estimates (subs*pps, views*ppv),
+  range = fair ±FAIR_BAND.
+- Price differs from fair by more than MAX_RATIO (3x) either way -> numbers
+  hidden, verdict "unknown" (estimate is not trustworthy for this lot).
+- Category without mapping -> overall median is used for the badge only;
+  fair_price_range is not exposed (scope "overall").
 """
 from __future__ import annotations
 
+import json
 from dataclasses import dataclass, field
+from datetime import datetime, timedelta, timezone
+from pathlib import Path
 from statistics import median
 
-MIN_CATEGORY_SAMPLES = 3
+DATA_FILE = Path(__file__).resolve().parent.parent / "data" / "market_prices.json"
+
 FAIR_BAND = 0.25
+MAX_RATIO = 3.0
+MIN_VIEW_RATIO = 0.02
+MAX_VIEW_RATIO = 1.5
+FRESH_VIEWS_DAYS = 30
+DEAL_WEIGHT = 5
+MIN_DEALS = 3
 
 VERDICT_CHEAPER = "cheaper"
 VERDICT_FAIR = "fair"
 VERDICT_EXPENSIVE = "expensive"
+VERDICT_INFLATED = "inflated"
 VERDICT_UNKNOWN = "unknown"
 
 
 @dataclass(frozen=True)
 class Sample:
+    """A real TgSell completed deal (hook for weighting)."""
     category: str
     price: float
     subscribers: int | None
@@ -42,21 +59,23 @@ class Sample:
 
 @dataclass
 class MarketRef:
-    pps: float | None = None  # median price per subscriber
-    ppv: float | None = None  # median price per view
+    pps: float | None = None
+    ppv: float | None = None
     samples: int = 0
 
 
 @dataclass
 class Market:
-    by_category: dict[str, MarketRef] = field(default_factory=dict)
-    catalog: MarketRef = field(default_factory=MarketRef)
+    by_segment: dict[str, MarketRef] = field(default_factory=dict)
+    overall: MarketRef = field(default_factory=MarketRef)
+    category_map: dict[str, str] = field(default_factory=dict)
 
     def ref_for(self, category: str | None) -> tuple[MarketRef, str]:
-        ref = self.by_category.get(category or "")
-        if ref is not None and ref.samples >= MIN_CATEGORY_SAMPLES:
+        seg = self.category_map.get(category or "")
+        ref = self.by_segment.get(seg) if seg else None
+        if ref is not None and ref.pps is not None:
             return ref, "category"
-        return self.catalog, "catalog"
+        return self.overall, "overall"
 
 
 def is_priceable(price, subscribers, is_closed) -> bool:
@@ -75,48 +94,92 @@ def price_per_view(price, subscribers, avg_views, is_closed=False) -> float | No
     return float(price) / avg_views
 
 
-def _ref(samples: list[Sample]) -> MarketRef:
-    pps = [price_per_sub(s.price, s.subscribers, s.is_closed) for s in samples]
-    ppv = [price_per_view(s.price, s.subscribers, s.avg_views, s.is_closed) for s in samples]
-    pps = [v for v in pps if v is not None]
-    ppv = [v for v in ppv if v is not None]
-    return MarketRef(
-        pps=median(pps) if pps else None,
-        ppv=median(ppv) if ppv else None,
-        samples=len(pps),
-    )
+def _weighted_median(pairs: list[tuple[float, float]]) -> float | None:
+    pairs = sorted((v, w) for v, w in pairs if v is not None and w > 0)
+    if not pairs:
+        return None
+    total = sum(w for _, w in pairs)
+    acc = 0.0
+    for v, w in pairs:
+        acc += w
+        if acc >= total / 2:
+            return v
+    return pairs[-1][0]
 
 
-def build_market(samples: list[Sample]) -> Market:
-    valid = [s for s in samples if is_priceable(s.price, s.subscribers, s.is_closed)]
-    cats: dict[str, list[Sample]] = {}
-    for s in valid:
-        cats.setdefault(s.category or "", []).append(s)
-    return Market(by_category={c: _ref(v) for c, v in cats.items()}, catalog=_ref(valid))
+def load_baseline(path: Path = DATA_FILE) -> dict:
+    with open(path, encoding="utf-8") as f:
+        return json.load(f)
 
 
-def estimate(market: Market, *, category, price, subscribers, avg_views, is_closed) -> dict:
+def build_market(baseline: dict | None = None, deals: list[Sample] | None = None) -> Market:
+    baseline = baseline if baseline is not None else load_baseline()
+    cmap = dict(baseline.get("category_map", {}))
+    o = baseline.get("overall", {})
+    overall = MarketRef(o.get("pps"), o.get("ppv"), int(o.get("n", 0)))
+    segs = {k: MarketRef(v.get("pps"), v.get("ppv"), int(v.get("n", 0)))
+            for k, v in baseline.get("segments", {}).items()}
+
+    by_seg: dict[str, list[Sample]] = {}
+    for d in deals or []:
+        seg = cmap.get(d.category or "")
+        if seg in segs and is_priceable(d.price, d.subscribers, d.is_closed):
+            by_seg.setdefault(seg, []).append(d)
+    for seg, ds in by_seg.items():
+        if len(ds) < MIN_DEALS:
+            continue
+        ref = segs[seg]
+        pps = [(ref.pps, ref.samples)] + [(price_per_sub(d.price, d.subscribers), DEAL_WEIGHT) for d in ds]
+        ppv = [(ref.ppv, ref.samples)] + [
+            (price_per_view(d.price, d.subscribers, d.avg_views), DEAL_WEIGHT) for d in ds]
+        segs[seg] = MarketRef(_weighted_median(pps), _weighted_median(ppv), ref.samples + len(ds))
+    return Market(by_segment=segs, overall=overall, category_map=cmap)
+
+
+def fresh_views(avg_views, views_hidden=False, last_post_date=None, now=None) -> int | None:
+    if views_hidden or not avg_views or avg_views <= 0:
+        return None
+    if last_post_date is not None:
+        now = now or datetime.now(timezone.utc).replace(tzinfo=None)
+        lp = last_post_date.replace(tzinfo=None) if last_post_date.tzinfo else last_post_date
+        if now - lp > timedelta(days=FRESH_VIEWS_DAYS):
+            return None
+    return int(avg_views)
+
+
+def estimate(market: Market, *, category, price, subscribers, avg_views, is_closed,
+             views_hidden=False, last_post_date=None, now=None) -> dict:
     out = {
         "price_per_sub": price_per_sub(price, subscribers, is_closed),
-        "price_per_view": price_per_view(price, subscribers, avg_views, is_closed),
+        "price_per_view": None,
         "fair_price_range": None,
         "price_verdict": VERDICT_UNKNOWN,
         "price_reference_scope": None,
     }
     if out["price_per_sub"] is None:
         return out
+    views = fresh_views(avg_views, views_hidden, last_post_date, now)
+    out["price_per_view"] = price_per_view(price, subscribers, views, is_closed)
+    if views is not None:
+        ratio = views / subscribers
+        if ratio < MIN_VIEW_RATIO or ratio > MAX_VIEW_RATIO:
+            out["price_verdict"] = VERDICT_INFLATED
+            return out
     ref, scope = market.ref_for(category)
     estimates = []
     if ref.pps is not None:
         estimates.append(subscribers * ref.pps)
-    if ref.ppv is not None and out["price_per_view"] is not None:
-        estimates.append(avg_views * ref.ppv)
+    if ref.ppv is not None and views is not None:
+        estimates.append(views * ref.ppv)
     if not estimates:
         return out
-    fair = sum(estimates) / len(estimates)
+    fair = median(estimates)
+    if fair <= 0 or price > fair * MAX_RATIO or price < fair / MAX_RATIO:
+        return out  # too far from the market: not trustworthy, hide numbers
     low, high = fair * (1 - FAIR_BAND), fair * (1 + FAIR_BAND)
-    out["fair_price_range"] = [round(low, 2), round(high, 2)]
     out["price_reference_scope"] = scope
+    if scope == "category":
+        out["fair_price_range"] = [round(low, 2), round(high, 2)]
     if price < low:
         out["price_verdict"] = VERDICT_CHEAPER
     elif price > high:
@@ -127,25 +190,19 @@ def estimate(market: Market, *, category, price, subscribers, avg_views, is_clos
 
 
 async def load_market(db) -> Market:
-    """Approved listings + completed deals → Market."""
+    """Market baseline (JSON) + completed TgSell deals as weighted samples."""
     from sqlalchemy import select
 
-    from app.models.channel import Channel, ChannelStatus
+    from app.models.channel import Channel
     from app.models.deal import Deal, DealStatus
 
-    samples: list[Sample] = []
-    rows = (await db.execute(
-        select(Channel.category, Channel.price, Channel.subscribers_count, Channel.avg_views, Channel.is_closed)
-        .where(Channel.status == ChannelStatus.approved)
-    )).all()
-    samples += [Sample(r[0], r[1] or 0, r[2], r[3], bool(r[4])) for r in rows]
     rows = (await db.execute(
         select(Channel.category, Deal.amount_usdt, Channel.subscribers_count, Channel.avg_views, Channel.is_closed)
         .join(Channel, Deal.channel_id == Channel.id)
         .where(Deal.status == DealStatus.completed)
     )).all()
-    samples += [Sample(r[0], r[1] or 0, r[2], r[3], bool(r[4])) for r in rows]
-    return build_market(samples)
+    deals = [Sample(r[0], r[1] or 0, r[2], r[3], bool(r[4])) for r in rows]
+    return build_market(deals=deals)
 
 
 def apply_estimate(resp, market: Market):
@@ -153,6 +210,7 @@ def apply_estimate(resp, market: Market):
     for k, v in estimate(
         market, category=resp.category, price=resp.price, subscribers=resp.subscribers_count,
         avg_views=resp.avg_views, is_closed=resp.is_closed,
+        views_hidden=getattr(resp, "views_hidden", False), last_post_date=getattr(resp, "last_post_date", None),
     ).items():
         setattr(resp, k, v)
     return resp

@@ -85,8 +85,8 @@ class ChannelResponse(BaseModel):
     price_per_sub: float | None = None
     price_per_view: float | None = None
     fair_price_range: list[float] | None = None
-    price_verdict: str = "unknown"  # cheaper / fair / expensive / unknown
-    price_reference_scope: str | None = None  # category / catalog
+    price_verdict: str = "unknown"  # cheaper / fair / expensive / inflated / unknown
+    price_reference_scope: str | None = None  # category / overall
 
     @model_validator(mode="after")
     def _sanitize_avatar(self):
