@@ -299,6 +299,17 @@ export const adminAPI = {
 		api.post(`/admin/bundles/${id}/reject`, null, { params: { reason } }),
 };
 
+// ===== Task 24: similar channels + saved searches =====
+export const similarAPI = {
+	get: (channelId) => api.get(`/channels/${channelId}/similar`),
+};
+
+export const savedSearchesAPI = {
+	getAll: () => api.get('/saved-searches'),
+	create: (body) => api.post('/saved-searches', body),
+	remove: (id) => api.delete(`/saved-searches/${id}`),
+};
+
 // ===== Favorites =====
 export const favoritesAPI = {
 	getAll: () =>

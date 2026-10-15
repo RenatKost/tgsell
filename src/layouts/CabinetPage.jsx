@@ -5,6 +5,7 @@ import { channelsAPI, favoritesAPI, dealsAPI, auctionsAPI, bundlesAPI } from '..
 import { useAuth } from '../context/AppContext';
 import CabinetCard from '../components/Cards/CabinetCard';
 import CatalogCard from '../components/Cards/CatalogCard';
+import SavedSearches from '../components/Cabinet/SavedSearches';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import {
 	faList,
@@ -16,6 +17,7 @@ import {
 	faGavel,
 	faUsers,
 	faChevronRight,
+	faBell,
 } from '@fortawesome/free-solid-svg-icons';
 
 const TABS = [
@@ -24,6 +26,7 @@ const TABS = [
 	{ text: 'Мої аукціони', value: 'auctions', icon: faGavel },
 	{ text: 'Мої угоди', value: 'deals', icon: faHandshake },
 	{ text: 'Обране', value: 'favorites', icon: faHeart },
+	{ text: 'Збережені пошуки', value: 'saved', icon: faBell },
 ];
 
 const STATUS_FILTERS = [
@@ -98,6 +101,8 @@ const CabinetPage = () => {
 					const { data } = await dealsAPI.getMy();
 					setDeals(Array.isArray(data) ? data : []);
 					dealsAPI.chatUnread().then(r => setUnread(r.data.unread || {})).catch(() => {});
+				} else if (activeTab.value === 'saved') {
+					// loaded by <SavedSearches />
 				} else {
 					const { data } = await favoritesAPI.getAll();
 					setFavorites(data);
@@ -554,6 +559,8 @@ const CabinetPage = () => {
 						</div>
 					)}
 				</>
+			) : activeTab.value === 'saved' ? (
+				<SavedSearches />
 			) : (
 				<>
 					{loading ? (

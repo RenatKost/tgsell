@@ -144,6 +144,15 @@ async def approve_channel(
             except Exception as e:
                 logger.error(f"Failed to auto-create auction for channel #{channel_id}: {e}")
 
+        # Task 24: queue saved-search matches (sent grouped by the notifier, max 1/h per search)
+        try:
+            from app.services.saved_searches import enqueue_matches_for_channel
+            await enqueue_matches_for_channel(db, channel.id)
+        except Exception as e:
+            logger.warning(f"Saved-search matching failed for channel #{channel_id}: {type(e).__name__}")
+            await db.rollback()
+            await db.refresh(channel)
+
         return ChannelResponse.model_validate(channel)
     except HTTPException:
         raise
