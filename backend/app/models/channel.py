@@ -3,7 +3,7 @@ from datetime import datetime
 
 from sqlalchemy import (
     BigInteger, Boolean, DateTime, Enum, Float, ForeignKey,
-    Integer, String, Text, UniqueConstraint, func,
+    Integer, JSON, String, Text, UniqueConstraint, func,
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -87,6 +87,12 @@ class Channel(Base):
     removed_by_id: Mapped[int | None] = mapped_column(ForeignKey("users.id"), nullable=True)
     removed_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
 
+    # Task 22: quality index (migration 0039); NULL score = not enough data
+    quality_score: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    quality_health: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    quality_breakdown: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    quality_updated_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+
     # Relationships
     seller = relationship("User", back_populates="channels", foreign_keys=[seller_id])
     stats = relationship("ChannelStats", back_populates="channel", cascade="all, delete-orphan", passive_deletes=True)
@@ -116,6 +122,17 @@ class ChannelStats(Base):
     recorded_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
 
     channel = relationship("Channel", back_populates="stats")
+
+
+class ChannelQualityHistory(Base):
+    __tablename__ = "channel_quality_history"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    channel_id: Mapped[int] = mapped_column(ForeignKey("channels.id", ondelete="CASCADE"), index=True)
+    computed_at: Mapped[datetime] = mapped_column(DateTime)
+    score: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    health: Mapped[str] = mapped_column(String(20))
+    breakdown: Mapped[dict | None] = mapped_column(JSON, nullable=True)
 
 
 class ChannelPost(Base):

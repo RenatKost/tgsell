@@ -85,6 +85,7 @@ const CatalogPage = () => {
 	const [roi12, setRoi12] = useState(false);
 	const [er20, setEr20] = useState(false);
 	const [verifiedData, setVerifiedData] = useState(false);
+	const [noInflation, setNoInflation] = useState(false);
 	const [aiRecommended, setAiRecommended] = useState(false);
 	const [priceRange, setPriceRange] = useState([0, PRICE_MAX]);
 	const [ppsBucket, setPpsBucket] = useState('');
@@ -109,6 +110,7 @@ const CatalogPage = () => {
 			else if (roi12) params.roi_max = 12;
 			if (er20) params.er_min = 20;
 			if (verifiedData) params.verified_data = true;
+			if (noInflation) params.no_inflation = true;
 			if (aiRecommended) params.ai_recommended = true;
 			if (debouncedPrice[0] > 0) params.min_price = debouncedPrice[0];
 			if (debouncedPrice[1] < PRICE_MAX) params.max_price = debouncedPrice[1];
@@ -127,7 +129,7 @@ const CatalogPage = () => {
 		} finally {
 			setLoading(false);
 		}
-	}, [search, category, sortBy, page, roi6, roi12, er20, verifiedData, aiRecommended, debouncedPrice, ppsBucket]);
+	}, [search, category, sortBy, page, roi6, roi12, er20, verifiedData, noInflation, aiRecommended, debouncedPrice, ppsBucket]);
 
 	useEffect(() => {
 		setBundlesLoading(true);
@@ -206,6 +208,8 @@ const CatalogPage = () => {
 						<option value='subscribers_desc'>Підписники ↓</option>
 						<option value='pps_asc'>Ціна за підписника ↑</option>
 						<option value='pps_desc'>Ціна за підписника ↓</option>
+						<option value='quality_desc'>Якість ↓</option>
+						<option value='ppv_asc'>Ціна за перегляд ↑</option>
 					</select>
 					<svg className='pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-gray-400' width='10' height='10' viewBox='0 0 12 12'>
 						<path d='M2 4l4 4 4-4' stroke='currentColor' strokeWidth='1.6' strokeLinecap='round' strokeLinejoin='round' fill='none'/>
@@ -280,6 +284,20 @@ const CatalogPage = () => {
 					activeColor='bg-green-500 text-white'
 				/>
 
+				{/* Task 22: без накрутки */}
+				<Chip
+					active={noInflation}
+					onClick={() => { setNoInflation(v => !v); resetPage(); }}
+					icon={
+						<svg width='12' height='12' viewBox='0 0 24 24' fill='none'>
+							<path d='M12 3l8 3v6c0 4.5-3.4 8.3-8 9-4.6-.7-8-4.5-8-9V6l8-3z' stroke='currentColor' strokeWidth='2' strokeLinejoin='round'/>
+							<path d='M8.5 12l2.5 2.5 4.5-5' stroke='currentColor' strokeWidth='2' strokeLinecap='round' strokeLinejoin='round'/>
+						</svg>
+					}
+					label='без накрутки'
+					activeColor='bg-green-500 text-white'
+				/>
+
 				{/* AI підбор */}
 				<Chip
 					active={aiRecommended}
@@ -309,7 +327,7 @@ const CatalogPage = () => {
 
 			{/* Active filter badges */}
 			<AnimatePresence>
-				{(roi6 || roi12 || er20 || verifiedData || aiRecommended || ppsBucket || priceRange[0] > 0 || priceRange[1] < PRICE_MAX) && (
+				{(roi6 || roi12 || er20 || verifiedData || noInflation || aiRecommended || ppsBucket || priceRange[0] > 0 || priceRange[1] < PRICE_MAX) && (
 					<motion.div
 						initial={{ opacity: 0, height: 0 }}
 						animate={{ opacity: 1, height: 'auto' }}
@@ -321,6 +339,7 @@ const CatalogPage = () => {
 						{roi12 && <span className='text-xs bg-accent/10 text-accent px-2 py-0.5 rounded-full'>ROI &lt; 12 міс.</span>}
 						{er20 && <span className='text-xs bg-accent/10 text-accent px-2 py-0.5 rounded-full'>ER &gt; 20%</span>}
 						{verifiedData && <span className='text-xs bg-green-500/10 text-green-400 px-2 py-0.5 rounded-full'>✓ verified data</span>}
+						{noInflation && <span className='text-xs bg-green-500/10 text-green-400 px-2 py-0.5 rounded-full'>без накрутки</span>}
 						{aiRecommended && <span className='text-xs bg-accent/10 text-accent px-2 py-0.5 rounded-full'>TgSell підбір</span>}
 						{ppsBucket && <span className='text-xs bg-accent/10 text-accent px-2 py-0.5 rounded-full'>{PPS_BUCKETS.find(b => b.value === ppsBucket)?.label}</span>}
 						{(priceRange[0] > 0 || priceRange[1] < PRICE_MAX) && (
@@ -331,7 +350,7 @@ const CatalogPage = () => {
 						<button
 							onClick={() => {
 								setRoi6(false); setRoi12(false); setEr20(false);
-								setVerifiedData(false); setAiRecommended(false); setPpsBucket('');
+								setVerifiedData(false); setNoInflation(false); setAiRecommended(false); setPpsBucket('');
 								setPriceRange([0, PRICE_MAX]); resetPage();
 							}}
 							className='text-xs text-gray-400 hover:text-red-400 transition-colors ml-1'

@@ -78,6 +78,7 @@ async def list_channels(
     ai_recommended: bool | None = Query(None, description="AI recommends buying: er>=15, roi<=12, monthly_income>0"),
     pps_min: float | None = Query(None, ge=0, description="Min price per subscriber (USDT)"),
     pps_max: float | None = Query(None, ge=0, description="Max price per subscriber (USDT)"),
+    no_inflation: bool | None = Query(None, description="Task 22: only channels with quality health 'clean'"),
     db: AsyncSession = Depends(get_db),
 ):
     """List channels with filters, search, sorting and pagination."""
@@ -133,8 +134,25 @@ async def list_channels(
         if pps_max is not None:
             query = query.where(pps_expr <= pps_max)
 
+    if no_inflation:
+        query = query.where(Channel.quality_health == "clean")
+
     # Sorting
-    if sort in ("pps_asc", "pps_desc"):
+    if sort == "quality_desc":
+        query = query.order_by(Channel.quality_score.desc().nulls_last(), Channel.id.desc())
+    elif sort == "ppv_asc":
+        from datetime import timedelta
+        from sqlalchemy import case
+        from app.services.pricing import FRESH_VIEWS_DAYS
+        from app.utils.timeutil import utcnow_naive
+        fresh = (
+            priceable & (Channel.avg_views > 0) & Channel.views_hidden.is_(False)
+            & (Channel.last_post_date.is_(None)
+               | (Channel.last_post_date >= utcnow_naive() - timedelta(days=FRESH_VIEWS_DAYS)))
+        )
+        ppv_sort = case((fresh, Channel.price / Channel.avg_views), else_=None)
+        query = query.order_by(ppv_sort.asc().nulls_last(), Channel.id.desc())
+    elif sort in ("pps_asc", "pps_desc"):
         from sqlalchemy import case
         pps_sort = case((priceable, pps_expr), else_=None)
         order = pps_sort.asc() if sort == "pps_asc" else pps_sort.desc()
