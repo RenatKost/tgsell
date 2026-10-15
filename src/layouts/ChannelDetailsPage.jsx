@@ -13,6 +13,7 @@ import Subscribers from '../components/ChanelDetails/Subscribers';
 import Views from '../components/ChanelDetails/Views';
 import PostsList from '../components/ChanelDetails/PostsList';
 import AiAnalysis from '../components/ChanelDetails/AiAnalysis';
+import { PriceEstimate } from '../components/Pricing/PriceVerdict';
 
 const ChannelDetailsPage = () => {
 	const { id } = useParams();
@@ -116,6 +117,7 @@ const ChannelDetailsPage = () => {
 				{/* LEFT SIDEBAR: DetailsCard → Comment → Resources → ChannelHealth */}
 				<div className='flex flex-col gap-4'>
 					<DetailsCard channel={channel} onBuy={handleBuy} onAuction={handleGoAuction} stats={stats} />
+					<PriceEstimate channel={channel} />
 
 					{channel.description && (
 						<div className='bg-white dark:bg-card rounded-xl border border-gray-100 dark:border-card-border shadow-sm dark:shadow-neon p-4'>

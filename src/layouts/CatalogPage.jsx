@@ -61,6 +61,14 @@ const Chip = ({ active, onClick, icon, label, activeColor = 'bg-accent text-blac
 
 const PRICE_MAX = 50000;
 
+// Task 21: price-per-subscriber filter buckets (USDT)
+const PPS_BUCKETS = [
+	{ value: 'lt005', label: '$/підп. < 0.05', max: 0.05 },
+	{ value: '005_02', label: '$/підп. 0.05–0.2', min: 0.05, max: 0.2 },
+	{ value: '02_1', label: '$/підп. 0.2–1', min: 0.2, max: 1 },
+	{ value: 'gt1', label: '$/підп. > 1', min: 1 },
+];
+
 const CatalogPage = () => {
 	const [channels, setChannels] = useState([]);
 	const [bundles, setBundles] = useState([]);
@@ -79,6 +87,7 @@ const CatalogPage = () => {
 	const [verifiedData, setVerifiedData] = useState(false);
 	const [aiRecommended, setAiRecommended] = useState(false);
 	const [priceRange, setPriceRange] = useState([0, PRICE_MAX]);
+	const [ppsBucket, setPpsBucket] = useState('');
 	// Debounced price — updates 1s after user stops dragging
 	const [debouncedPrice, setDebouncedPrice] = useState([0, PRICE_MAX]);
 	useEffect(() => {
@@ -103,6 +112,11 @@ const CatalogPage = () => {
 			if (aiRecommended) params.ai_recommended = true;
 			if (debouncedPrice[0] > 0) params.min_price = debouncedPrice[0];
 			if (debouncedPrice[1] < PRICE_MAX) params.max_price = debouncedPrice[1];
+			const pps = PPS_BUCKETS.find(b => b.value === ppsBucket);
+			if (pps) {
+				if (pps.min != null) params.pps_min = pps.min;
+				if (pps.max != null) params.pps_max = pps.max;
+			}
 
 			const { data } = await channelsAPI.getAll(params);
 			setChannels(data.items || data);
@@ -113,7 +127,7 @@ const CatalogPage = () => {
 		} finally {
 			setLoading(false);
 		}
-	}, [search, category, sortBy, page, roi6, roi12, er20, verifiedData, aiRecommended, debouncedPrice]);
+	}, [search, category, sortBy, page, roi6, roi12, er20, verifiedData, aiRecommended, debouncedPrice, ppsBucket]);
 
 	useEffect(() => {
 		setBundlesLoading(true);
@@ -190,6 +204,23 @@ const CatalogPage = () => {
 						<option value='price_asc'>Ціна ↑</option>
 						<option value='price_desc'>Ціна ↓</option>
 						<option value='subscribers_desc'>Підписники ↓</option>
+						<option value='pps_asc'>Ціна за підписника ↑</option>
+						<option value='pps_desc'>Ціна за підписника ↓</option>
+					</select>
+					<svg className='pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-gray-400' width='10' height='10' viewBox='0 0 12 12'>
+						<path d='M2 4l4 4 4-4' stroke='currentColor' strokeWidth='1.6' strokeLinecap='round' strokeLinejoin='round' fill='none'/>
+					</svg>
+				</div>
+
+				{/* Price per subscriber filter */}
+				<div className='relative'>
+					<select
+						value={ppsBucket}
+						onChange={(e) => { setPpsBucket(e.target.value); resetPage(); }}
+						className='appearance-none bg-gray-50 dark:bg-card-inner border border-gray-200 dark:border-card-border text-gray-700 dark:text-gray-300 text-[12px] font-semibold pl-3 pr-7 py-1.5 rounded-xl focus:outline-none focus:border-accent cursor-pointer transition-colors'
+					>
+						<option value=''>Ціна за підписника</option>
+						{PPS_BUCKETS.map(b => <option key={b.value} value={b.value}>{b.label}</option>)}
 					</select>
 					<svg className='pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-gray-400' width='10' height='10' viewBox='0 0 12 12'>
 						<path d='M2 4l4 4 4-4' stroke='currentColor' strokeWidth='1.6' strokeLinecap='round' strokeLinejoin='round' fill='none'/>
@@ -278,7 +309,7 @@ const CatalogPage = () => {
 
 			{/* Active filter badges */}
 			<AnimatePresence>
-				{(roi6 || roi12 || er20 || verifiedData || aiRecommended || priceRange[0] > 0 || priceRange[1] < PRICE_MAX) && (
+				{(roi6 || roi12 || er20 || verifiedData || aiRecommended || ppsBucket || priceRange[0] > 0 || priceRange[1] < PRICE_MAX) && (
 					<motion.div
 						initial={{ opacity: 0, height: 0 }}
 						animate={{ opacity: 1, height: 'auto' }}
@@ -291,6 +322,7 @@ const CatalogPage = () => {
 						{er20 && <span className='text-xs bg-accent/10 text-accent px-2 py-0.5 rounded-full'>ER &gt; 20%</span>}
 						{verifiedData && <span className='text-xs bg-green-500/10 text-green-400 px-2 py-0.5 rounded-full'>✓ verified data</span>}
 						{aiRecommended && <span className='text-xs bg-accent/10 text-accent px-2 py-0.5 rounded-full'>TgSell підбір</span>}
+						{ppsBucket && <span className='text-xs bg-accent/10 text-accent px-2 py-0.5 rounded-full'>{PPS_BUCKETS.find(b => b.value === ppsBucket)?.label}</span>}
 						{(priceRange[0] > 0 || priceRange[1] < PRICE_MAX) && (
 							<span className='text-xs bg-accent/10 text-accent px-2 py-0.5 rounded-full'>
 								{priceRange[0].toLocaleString()}–{priceRange[1] >= PRICE_MAX ? '∞' : priceRange[1].toLocaleString()} USDT
@@ -299,7 +331,7 @@ const CatalogPage = () => {
 						<button
 							onClick={() => {
 								setRoi6(false); setRoi12(false); setEr20(false);
-								setVerifiedData(false); setAiRecommended(false);
+								setVerifiedData(false); setAiRecommended(false); setPpsBucket('');
 								setPriceRange([0, PRICE_MAX]); resetPage();
 							}}
 							className='text-xs text-gray-400 hover:text-red-400 transition-colors ml-1'

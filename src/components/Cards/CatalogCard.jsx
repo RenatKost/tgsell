@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { NavLink, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AppContext';
 import { dealsAPI } from '../../services/api';
+import { PriceVerdictBadge } from '../Pricing/PriceVerdict';
 
 /* ── Tooltip ─────────────────────────────────────────────────────── */
 const Tooltip = ({ children, text, desc }) => {
@@ -125,6 +126,7 @@ const CatalogCard = ({ channel }) => {
 							🔒 Закритий
 						</span>
 					)}
+					<PriceVerdictBadge channel={channel} />
 					{channel.bundle_id ? (
 						<span className='bg-accent/15 text-accent text-[11px] font-bold px-2.5 py-1 rounded-lg border border-accent/30'>
 							📡 В сетці · {channel.bundle_name}
