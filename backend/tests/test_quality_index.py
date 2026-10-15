@@ -104,12 +104,17 @@ async def test_compute_store_history_and_api(pg_orm, monkeypatch):
     monkeypatch.setattr(importlib.import_module("app.database"), "async_session", pg_orm.session)
     assert await quality.recompute_due() == 3
     assert await quality.recompute_due() == 0  # <= every 6 hours
+    monkeypatch.setattr(quality, "FORMULA_VERSION", 999)
+    assert await quality.recompute_due() == 3  # formula changed -> forced
+    monkeypatch.setattr(quality, "FORMULA_VERSION", 2)
+    assert await quality.recompute_due() == 3  # back to v2 (stored 999)
+    assert await quality.recompute_due() == 0
     assert await quality.recompute_due(now=datetime.utcnow() + timedelta(hours=7)) == 3
 
     async with pg_orm.session() as db:
         hist = (await db.execute(select(ChannelQualityHistory).where(
             ChannelQualityHistory.channel_id == ids["good"]))).scalars().all()
-        assert len(hist) == 2 and hist[0].score is not None and hist[0].breakdown["components"]
+        assert len(hist) == 4 and hist[0].score is not None and hist[0].breakdown["components"]
 
     router_mod = importlib.import_module("app.routers.channels")
     db_mod = importlib.import_module("app.database")

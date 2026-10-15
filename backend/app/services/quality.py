@@ -41,6 +41,9 @@ JUMP_ABS = 300          # ...and at least 300 subscribers -> sharp jump
 JUMP_PENALTY = 15
 INFLATED_CAP = 25
 RECOMPUTE_HOURS = 6
+# Bump when the formula changes: stored scores of an older version are
+# recomputed right away, regardless of the 6h skip.
+FORMULA_VERSION = 2
 WEIGHTS = {"er": 30, "regularity": 25, "growth": 20, "integrity": 25}
 
 HEALTH_CLEAN = "clean"
@@ -128,7 +131,7 @@ def score_channel(*, subscribers, is_closed=False, views_hidden=False,
     suspicious = inflated or jumps > 0
     if "er" not in comps or "regularity" not in comps:
         return {"score": None, "health": HEALTH_SUSPICIOUS if suspicious else HEALTH_INSUFFICIENT,
-                "breakdown": {"components": comps, "reasons": sorted(set(reasons))}}
+                "breakdown": {"components": comps, "reasons": sorted(set(reasons)), "version": FORMULA_VERSION}}
     got = sum(c["points"] for c in comps.values())
     mx = sum(c["max"] for c in comps.values())
     score = round(100 * got / mx)
@@ -136,7 +139,7 @@ def score_channel(*, subscribers, is_closed=False, views_hidden=False,
         score = min(score, INFLATED_CAP)
     return {"score": int(score), "health": HEALTH_SUSPICIOUS if suspicious else HEALTH_CLEAN,
             "breakdown": {"components": comps, "reasons": sorted(set(reasons)),
-                          "missing": [k for k in WEIGHTS if k not in comps]}}
+                          "missing": [k for k in WEIGHTS if k not in comps], "version": FORMULA_VERSION}}
 
 
 async def compute_for_channel(db, channel_id: int, now: datetime | None = None) -> dict | None:
@@ -190,10 +193,11 @@ async def recompute_due(min_age_hours: float = RECOMPUTE_HOURS, now: datetime | 
     now = now or utcnow_naive()
     cutoff = now - timedelta(hours=min_age_hours)
     async with async_session() as db:
-        ids = (await db.execute(select(Channel.id).where(
+        rows = (await db.execute(select(Channel.id, Channel.quality_updated_at, Channel.quality_breakdown).where(
             Channel.status.in_([ChannelStatus.approved, ChannelStatus.pending]),
-            (Channel.quality_updated_at.is_(None)) | (Channel.quality_updated_at <= cutoff),
-        ))).scalars().all()
+        ))).all()
+    ids = [cid for cid, upd, bd in rows
+           if upd is None or upd <= cutoff or (bd or {}).get("version") != FORMULA_VERSION]
     done = 0
     for cid in ids:
         try:
