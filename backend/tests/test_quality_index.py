@@ -104,12 +104,17 @@ async def test_compute_store_history_and_api(pg_orm, monkeypatch):
     monkeypatch.setattr(importlib.import_module("app.database"), "async_session", pg_orm.session)
     assert await quality.recompute_due() == 3
     assert await quality.recompute_due() == 0  # <= every 6 hours
+    monkeypatch.setattr(quality, "FORMULA_VERSION", 999)
+    assert await quality.recompute_due() == 3  # formula changed -> forced
+    monkeypatch.setattr(quality, "FORMULA_VERSION", 2)
+    assert await quality.recompute_due() == 3  # back to v2 (stored 999)
+    assert await quality.recompute_due() == 0
     assert await quality.recompute_due(now=datetime.utcnow() + timedelta(hours=7)) == 3
 
     async with pg_orm.session() as db:
         hist = (await db.execute(select(ChannelQualityHistory).where(
             ChannelQualityHistory.channel_id == ids["good"]))).scalars().all()
-        assert len(hist) == 2 and hist[0].score is not None and hist[0].breakdown["components"]
+        assert len(hist) == 4 and hist[0].score is not None and hist[0].breakdown["components"]
 
     router_mod = importlib.import_module("app.routers.channels")
     db_mod = importlib.import_module("app.database")
@@ -128,3 +133,14 @@ async def test_compute_store_history_and_api(pg_orm, monkeypatch):
         assert [i["channel_name"] for i in r["items"]] == ["empty", "good", "infl"]
         d = (await cl.get(f"/channels/{ids['good']}")).json()
         assert d["quality_score"] >= 70 and d["quality_breakdown"]["components"]["er"]["points"] > 0
+
+
+def test_pricing_inflated_verdict_is_authoritative():
+    # prod #81: posts look fine but the Task 21 verdict (avg_views 32 / 10464) is inflated
+    r = score_channel(subscribers=10464, posts=_posts(views=2500), snapshots=[], now=NOW, price_verdict="inflated")
+    assert r["health"] == "suspicious" and r["score"] <= 25
+    r = score_channel(subscribers=10464, posts=_posts(views=2500), snapshots=[], now=NOW, price_verdict="unknown")
+    assert r["health"] == "clean"
+    # inflated + too little data -> still null, but flagged
+    r = score_channel(subscribers=10464, posts=_posts(n=1), snapshots=[], now=NOW, price_verdict="inflated")
+    assert r["score"] is None and r["health"] == "suspicious"

@@ -26,7 +26,7 @@ from statistics import mean, pstdev
 
 from sqlalchemy import insert, select, update
 
-from app.services.pricing import MAX_VIEW_RATIO, MIN_VIEW_RATIO
+from app.services.pricing import MAX_VIEW_RATIO, MIN_VIEW_RATIO, VERDICT_INFLATED
 from app.utils.timeutil import utcnow_naive
 
 logger = logging.getLogger(__name__)
@@ -41,6 +41,9 @@ JUMP_ABS = 300          # ...and at least 300 subscribers -> sharp jump
 JUMP_PENALTY = 15
 INFLATED_CAP = 25
 RECOMPUTE_HOURS = 6
+# Bump when the formula changes: stored scores of an older version are
+# recomputed right away, regardless of the 6h skip.
+FORMULA_VERSION = 2
 WEIGHTS = {"er": 30, "regularity": 25, "growth": 20, "integrity": 25}
 
 HEALTH_CLEAN = "clean"
@@ -54,7 +57,8 @@ def _clamp(x: float, lo: float = 0.0, hi: float = 1.0) -> float:
 
 def score_channel(*, subscribers, is_closed=False, views_hidden=False,
                   posts: list[tuple[datetime, int]], snapshots: list[tuple[datetime, int]],
-                  growth_30d=None, growth_7d=None, now: datetime | None = None) -> dict:
+                  growth_30d=None, growth_7d=None, now: datetime | None = None,
+                  price_verdict: str | None = None) -> dict:
     """posts: (date, views) of the last WINDOW_DAYS; snapshots: (day, subscribers) real only."""
     now = now or utcnow_naive()
     since = now - timedelta(days=WINDOW_DAYS)
@@ -106,7 +110,12 @@ def score_channel(*, subscribers, is_closed=False, views_hidden=False,
                            "value": round(monthly * 100, 1), "days": span}
 
     # Integrity
-    inflated = ratio is not None and (ratio < MIN_VIEW_RATIO or ratio > MAX_VIEW_RATIO)
+    # Task 21 pricing verdict (channel avg_views, fresh only) is authoritative;
+    # the post-based ratio is a fallback when no verdict is passed in.
+    if price_verdict is not None:
+        inflated = price_verdict == VERDICT_INFLATED
+    else:
+        inflated = ratio is not None and (ratio < MIN_VIEW_RATIO or ratio > MAX_VIEW_RATIO)
     snaps = sorted((datetime(d.year, d.month, d.day), s) for d, s in snapshots if s)
     jumps = 0
     for (d1, s1), (d2, s2) in zip(snaps, snaps[1:]):
@@ -114,7 +123,7 @@ def score_channel(*, subscribers, is_closed=False, views_hidden=False,
         delta = abs(s2 - s1) / days
         if delta >= JUMP_ABS and delta / max(s1, 1) > JUMP_REL:
             jumps += 1
-    if ratio is not None or len(snaps) >= 2:
+    if ratio is not None or len(snaps) >= 2 or inflated:
         pts = 0.0 if inflated else max(0, WEIGHTS["integrity"] - JUMP_PENALTY * jumps)
         comps["integrity"] = {"points": round(pts, 1), "max": WEIGHTS["integrity"],
                               "inflated": inflated, "jumps": jumps}
@@ -122,7 +131,7 @@ def score_channel(*, subscribers, is_closed=False, views_hidden=False,
     suspicious = inflated or jumps > 0
     if "er" not in comps or "regularity" not in comps:
         return {"score": None, "health": HEALTH_SUSPICIOUS if suspicious else HEALTH_INSUFFICIENT,
-                "breakdown": {"components": comps, "reasons": sorted(set(reasons))}}
+                "breakdown": {"components": comps, "reasons": sorted(set(reasons)), "version": FORMULA_VERSION}}
     got = sum(c["points"] for c in comps.values())
     mx = sum(c["max"] for c in comps.values())
     score = round(100 * got / mx)
@@ -130,7 +139,7 @@ def score_channel(*, subscribers, is_closed=False, views_hidden=False,
         score = min(score, INFLATED_CAP)
     return {"score": int(score), "health": HEALTH_SUSPICIOUS if suspicious else HEALTH_CLEAN,
             "breakdown": {"components": comps, "reasons": sorted(set(reasons)),
-                          "missing": [k for k in WEIGHTS if k not in comps]}}
+                          "missing": [k for k in WEIGHTS if k not in comps], "version": FORMULA_VERSION}}
 
 
 async def compute_for_channel(db, channel_id: int, now: datetime | None = None) -> dict | None:
@@ -140,7 +149,8 @@ async def compute_for_channel(db, channel_id: int, now: datetime | None = None) 
     now = now or utcnow_naive()
     row = (await db.execute(
         select(Channel.subscribers_count, Channel.is_closed, Channel.views_hidden,
-               Channel.growth_30d, Channel.growth_7d).where(Channel.id == channel_id)
+               Channel.growth_30d, Channel.growth_7d, Channel.category, Channel.price,
+               Channel.avg_views, Channel.last_post_date).where(Channel.id == channel_id)
     )).first()
     if row is None:
         return None
@@ -158,7 +168,12 @@ async def compute_for_channel(db, channel_id: int, now: datetime | None = None) 
             ChannelStats.date >= now - timedelta(days=60),
         )
     )).all()
-    r = score_channel(subscribers=row[0], is_closed=bool(row[1]), views_hidden=bool(row[2]),
+    from app.services.pricing import build_market, estimate
+
+    verdict = estimate(build_market(), category=row[5], price=row[6] or 0, subscribers=row[0],
+                       avg_views=row[7], is_closed=bool(row[1]), views_hidden=bool(row[2]),
+                       last_post_date=row[8], now=now)["price_verdict"]
+    r = score_channel(subscribers=row[0], price_verdict=verdict, is_closed=bool(row[1]), views_hidden=bool(row[2]),
                       growth_30d=row[3], growth_7d=row[4],
                       posts=[(p[0], p[1]) for p in posts], snapshots=[(s[0], s[1]) for s in snaps], now=now)
     await db.execute(update(Channel).where(Channel.id == channel_id).values(
@@ -178,10 +193,11 @@ async def recompute_due(min_age_hours: float = RECOMPUTE_HOURS, now: datetime | 
     now = now or utcnow_naive()
     cutoff = now - timedelta(hours=min_age_hours)
     async with async_session() as db:
-        ids = (await db.execute(select(Channel.id).where(
+        rows = (await db.execute(select(Channel.id, Channel.quality_updated_at, Channel.quality_breakdown).where(
             Channel.status.in_([ChannelStatus.approved, ChannelStatus.pending]),
-            (Channel.quality_updated_at.is_(None)) | (Channel.quality_updated_at <= cutoff),
-        ))).scalars().all()
+        ))).all()
+    ids = [cid for cid, upd, bd in rows
+           if upd is None or upd <= cutoff or (bd or {}).get("version") != FORMULA_VERSION]
     done = 0
     for cid in ids:
         try:
