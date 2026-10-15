@@ -31,6 +31,7 @@ class TransactionType(str, enum.Enum):
     fee_collection = "fee_collection"  # admin-manual service fee → master (migration 0026)
     sweep = "sweep"  # admin-manual sweep of stray funds from a cancelled deal (0026)
     overpay_refund = "overpay_refund"  # buyer overpayment → buyer-entered address (0032)
+    fee_sweep = "fee_sweep"  # whole remaining escrow USDT → TREASURY_ADDRESS (0037, Task 19)
 
 
 class TransactionStatus(str, enum.Enum):
@@ -73,6 +74,8 @@ class Deal(Base):
     overpay_refund_address: Mapped[str | None] = mapped_column(String(100), nullable=True)
     # awaiting_address | queued | done | failed
     overpay_status: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    # Fee sweep to treasury (migration 0037): due | queued | pending_sweep | done | empty | failed
+    sweep_status: Mapped[str | None] = mapped_column(String(20), nullable=True)
 
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
     paid_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)

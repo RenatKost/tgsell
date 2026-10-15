@@ -51,6 +51,7 @@ OUTGOING_TYPES = (
     TransactionType.fee_collection,
     TransactionType.sweep,
     TransactionType.overpay_refund,
+    TransactionType.fee_sweep,
 )
 UNITS = Decimal("0.000001")
 # TRON txs expire 60s after build; a tx not on chain after this is dead for good.
@@ -200,11 +201,21 @@ async def _finalize_success(db, deal: Deal, tx: Transaction) -> None:
         deal.overpay_status = "done"
         _add_deal_message(db, deal, f"Переплату {tx.amount} USDT повернено покупцю ✅\nTX: {tx.tx_hash}",
                           event="overpay_refund_done")
+    elif tx.type == TransactionType.fee_sweep:
+        deal.sweep_status = "done"
+        from app.services.moderation import audit
+
+        audit(db, None, "fee_sweep.done", "deal", deal.id, tx_hash=tx.tx_hash, to_address=tx.to_address,
+              amount_units=tx.amount_units)
     if tx.type == TransactionType.release:
         _add_deal_message(db, deal, f"Виплата {tx.amount} USDT підтверджена мережею ✅\nTX: {tx.tx_hash}", event="payout_done")
         maybe_enqueue_overpay_refund(db, deal)
     elif tx.type == TransactionType.refund:
         _add_deal_message(db, deal, f"Повернення {tx.amount} USDT покупцю підтверджено ✅\nTX: {tx.tx_hash}", event="refund_done")
+    if tx.type in (TransactionType.release, TransactionType.refund, TransactionType.overpay_refund):
+        fee_sweep = __import__("importlib").import_module("app.services.fee_sweep")
+
+        fee_sweep.mark_due(deal)  # Task 19: worker sweeps the remainder to treasury
     logger.info(f"[PAYOUT] Deal #{deal.id}: {tx.type.value} SUCCESS tx={tx.tx_hash}")
 
 
@@ -220,6 +231,11 @@ async def _finalize_failure(db, deal: Deal, tx: Transaction, reason: str) -> Non
         deal.overpay_status = "failed"  # no auto-retry (never duplicates); admin handles
         _add_deal_message(db, deal, "Повернення переплати не виконано (кошти лишаються в escrow). "
                                     "Адміністратора повідомлено.", event="overpay_refund_failed")
+    if tx.type == TransactionType.fee_sweep:
+        deal.sweep_status = "failed"  # no auto-retry; admin decides
+        from app.services.moderation import audit
+
+        audit(db, None, "fee_sweep.failed", "deal", deal.id, tx_hash=tx.tx_hash, reason=reason)
     if tx.type in (TransactionType.release, TransactionType.refund):
         _add_deal_message(db, deal, "Виплату не виконано (кошти лишаються в escrow). Адміністратора повідомлено.", event="payout_failed")
     logger.error(f"[PAYOUT] Deal #{deal.id}: {tx.type.value} FAILED tx={tx.tx_hash}: {reason}")
@@ -243,7 +259,8 @@ async def _apply_receipt(db, deal_id: int, tx_id: int, receipt: dict) -> Transfe
     if receipt["status"] == "SUCCESS":
         await _finalize_success(db, deal, tx)
         await db.commit()
-        if deal.overpay_status != "queued":  # TRX left for the queued overpay refund
+        # TRX left on escrow for the queued overpay refund / the upcoming fee sweep.
+        if deal.overpay_status != "queued" and deal.sweep_status != "due":
             await _sweep_trx(deal)
         return TransferOutcome("success", tx.tx_hash, transaction_id=tx.id)
     if receipt["status"] == "FAILED":
@@ -453,6 +470,15 @@ async def process_queued(db, tx_id: int, *, receipt_timeout: float | None = None
 
     if amount_units <= 0:
         return await refuse("BAD_AMOUNT", "Некоректна сума переказу")
+    if tx_type == TransactionType.fee_sweep:  # Task 19: treasury only, never legacy deals
+        fee_sweep = __import__("importlib").import_module("app.services.fee_sweep")
+
+        try:
+            treasury = fee_sweep.treasury_address()
+        except fee_sweep.FeeSweepError as e:
+            return await refuse("BAD_TREASURY", e.message)
+        if to_address != treasury or deal_id in fee_sweep.EXCLUDED_DEAL_IDS:
+            return await refuse("SWEEP_FORBIDDEN", "Fee sweep дозволено лише на TREASURY_ADDRESS і не з legacy-угод")
     try:
         balance = await asyncio.to_thread(escrow_svc.fetch_usdt_balance_units, deal.escrow_wallet_address)
     except escrow_svc.BalanceUnavailable as e:

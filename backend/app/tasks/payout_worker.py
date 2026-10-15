@@ -113,6 +113,12 @@ class PayoutWorker:
                     await db.rollback()
         async with self.session_factory() as db:
             reconciled = await payouts.reconcile_pending_transfers(db, utcnow_naive())
+        try:  # Task 19: decide fee sweeps of freshly finalized deals (jobs run next cycle)
+            fee_sweep = __import__("importlib").import_module("app.services.fee_sweep")
+
+            await fee_sweep.schedule_due(self.session_factory)
+        except Exception as e:
+            logger.error(f"[PAYOUT-WORKER] fee sweep scheduling failed: {e}", exc_info=True)
         if (self.cycles - 1) % MASTER_CHECK_EVERY_N_CYCLES == 0:
             await self.gas_cycle()
         try:  # deal chat → Telegram bridge (same single-instance lock)

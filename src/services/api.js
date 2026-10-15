@@ -238,6 +238,7 @@ export const adminAPI = {
 		api.get('/admin/escrow/balances', { params: refresh ? { refresh: true } : {} }),
 
 	collectFee: (dealId) => api.post(`/admin/deals/${dealId}/collect-fee`),
+	feeSweepCollectAll: () => api.post('/admin/fee-sweep/collect-all'),
 	overpayRefunds: () => api.get('/admin/overpay-refunds'),
 	retryOverpayRefund: (dealId) => api.post(`/admin/deals/${dealId}/overpay-refund/retry`),
 	payoutStatus: (dealId) => api.get(`/admin/deals/${dealId}/payout-status`),
