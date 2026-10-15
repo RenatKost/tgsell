@@ -43,6 +43,8 @@ class Channel(Base):
     avg_views: Mapped[int | None] = mapped_column(Integer, nullable=True)
     er: Mapped[float | None] = mapped_column(Float, nullable=True)
     daily_growth: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    growth_7d: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    growth_30d: Mapped[int | None] = mapped_column(Integer, nullable=True)
     age: Mapped[str | None] = mapped_column(String(100), nullable=True)
     adv_reach_12h: Mapped[int | None] = mapped_column(Integer, nullable=True)
     adv_reach_24h: Mapped[int | None] = mapped_column(Integer, nullable=True)
@@ -95,14 +97,19 @@ class Channel(Base):
 
 class ChannelStats(Base):
     __tablename__ = "channel_stats"
+    __table_args__ = (
+        # One row per channel per day (date is normalized to 00:00 UTC).
+        UniqueConstraint("channel_id", "date", name="uq_channel_stats_channel_date"),
+    )
 
     id: Mapped[int] = mapped_column(primary_key=True)
     channel_id: Mapped[int] = mapped_column(ForeignKey("channels.id", ondelete="CASCADE"))
     date: Mapped[datetime] = mapped_column(DateTime)
-    subscribers: Mapped[int] = mapped_column(Integer, default=0)
+    # NULL = unknown (retro points rebuilt from posts); only real snapshots carry it.
+    subscribers: Mapped[int | None] = mapped_column(Integer, nullable=True)
     avg_views: Mapped[int] = mapped_column(Integer, default=0)
     avg_reach: Mapped[int] = mapped_column(Integer, default=0)
-    er: Mapped[float] = mapped_column(Float, default=0.0)
+    er: Mapped[float | None] = mapped_column(Float, nullable=True)
     post_count: Mapped[int | None] = mapped_column(Integer, nullable=True, default=0)
     avg_forwards: Mapped[int | None] = mapped_column(Integer, nullable=True, default=0)
     avg_reactions: Mapped[int | None] = mapped_column(Integer, nullable=True, default=0)

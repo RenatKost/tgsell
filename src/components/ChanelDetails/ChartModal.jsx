@@ -8,7 +8,7 @@ const TF = [
 	{ label: '7д', days: 7 },
 ];
 
-const ChartModal = ({ open, onClose, stats = [], title, color, dataKey, tooltipFmt, seriesName }) => {
+const ChartModal = ({ open, onClose, stats: rawStats = [], title, color, dataKey, tooltipFmt, seriesName }) => {
 	const [tf, setTf] = useState(0);
 
 	useEffect(() => {
@@ -26,6 +26,8 @@ const ChartModal = ({ open, onClose, stats = [], title, color, dataKey, tooltipF
 	if (!open) return null;
 
 	const now = Date.now();
+	// Skip null points (no zero gaps): e.g. subscribers/ER of retro points.
+	const stats = typeof dataKey === 'function' ? rawStats : rawStats.filter(s => s[dataKey] != null && (dataKey !== 'subscribers' || s[dataKey] > 0));
 	const filtered = TF[tf].days === 0 ? stats : stats.filter(s => {
 		const d = new Date(s.date).getTime();
 		return (now - d) / 86400000 <= TF[tf].days;

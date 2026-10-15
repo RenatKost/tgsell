@@ -55,6 +55,8 @@ class ChannelResponse(BaseModel):
     avg_views: int | None
     er: float | None
     daily_growth: int | None
+    growth_7d: int | None = None
+    growth_30d: int | None = None
     age: str | None
     adv_reach_12h: int | None
     adv_reach_24h: int | None
@@ -93,10 +95,10 @@ class ChannelStatsResponse(BaseModel):
     id: int
     channel_id: int
     date: datetime
-    subscribers: int
+    subscribers: int | None = None
     avg_views: int
     avg_reach: int
-    er: float
+    er: float | None = None
     post_count: int | None = 0
     avg_forwards: int | None = 0
     avg_reactions: int | None = 0

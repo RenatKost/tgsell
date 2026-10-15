@@ -9,7 +9,9 @@ const TF = [
 	{ label: '7д', days: 7 },
 ];
 
-const Subscribers = ({ stats = [], current }) => {
+const Subscribers = ({ stats: rawStats = [], current }) => {
+	// Only real snapshots: retro points from posts carry subscribers = null.
+	const stats = rawStats.filter(s => s.subscribers != null && s.subscribers > 0);
 	const [tf, setTf] = useState(0);
 	const [modal, setModal] = useState(false);
 

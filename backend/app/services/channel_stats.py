@@ -592,14 +592,15 @@ async def get_channel_stats_telethon(channel_username: str, message_limit: int =
         for date_str in sorted(daily_views.keys()):
             day_views = daily_views[date_str]
             day_avg = sum(day_views) // len(day_views)
-            day_er = round((day_avg / subscribers * 100), 2) if subscribers > 0 else 0.0
             day_fwd = daily_forwards.get(date_str, [])
             day_react = daily_reactions.get(date_str, [])
             daily_stats.append({
                 "date": date_str,
                 "avg_views": day_avg,
-                "subscribers": subscribers,
-                "er": day_er,
+                # Retro points are post metrics only: the historical subscriber
+                # count is unknown, so neither subscribers nor ER is faked.
+                "subscribers": None,
+                "er": None,
                 "post_count": len(day_views),
                 "avg_forwards": sum(day_fwd) // len(day_fwd) if day_fwd else 0,
                 "avg_reactions": sum(day_react) // len(day_react) if day_react else 0,

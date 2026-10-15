@@ -9,7 +9,9 @@ const TF = [
 	{ label: '7д', days: 7 },
 ];
 
-const ER = ({ stats = [], current }) => {
+const ER = ({ stats: rawStats = [], current }) => {
+	// ER is only known for real snapshots (null for retro points).
+	const stats = rawStats.filter(s => s.er != null);
 	const [tf, setTf] = useState(0);
 	const [modal, setModal] = useState(false);
 

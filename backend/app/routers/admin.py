@@ -113,31 +113,10 @@ async def approve_channel(
             if stats.get("channel_age_months"):
                 channel.age = f"{stats['channel_age_months']}"
 
-            # Save historical daily stats for graphs
-            daily_stats = stats.get("daily_stats", [])
-            if daily_stats:
-                for ds in daily_stats:
-                    stat_record = ChannelStats(
-                        channel_id=channel.id,
-                        date=datetime.strptime(ds["date"], "%Y-%m-%d"),
-                        subscribers=ds.get("subscribers", 0),
-                        avg_views=ds.get("avg_views", 0),
-                        avg_reach=ds.get("avg_views", 0),
-                        er=ds.get("er", 0.0),
-                        post_count=ds.get("post_count", 0),
-                    )
-                    db.add(stat_record)
-            else:
-                stat_record = ChannelStats(
-                    channel_id=channel.id,
-                    date=datetime.utcnow(),
-                    subscribers=stats.get("subscribers_count", 0),
-                    avg_views=stats.get("avg_views", 0),
-                    avg_reach=stats.get("avg_views", 0),
-                    er=stats.get("er", 0.0),
-                    post_count=0,
-                )
-                db.add(stat_record)
+            # Save historical daily stats for graphs (honest series, Task 20)
+            from app.services.stats_history import record_stats
+
+            await record_stats(db, channel.id, stats)
             await db.commit()
             await db.refresh(channel)
         except Exception as e:
@@ -879,27 +858,10 @@ async def recollect_channel_stats(
     if stats.get("adv_reach_48h"):
         channel.adv_reach_48h = stats["adv_reach_48h"]
 
+    from app.services.stats_history import record_stats
+
     daily_stats = stats.get("daily_stats", [])
-    new_records = 0
-    if daily_stats:
-        existing = await db.execute(
-            select(ChannelStats.date).where(ChannelStats.channel_id == channel.id)
-        )
-        existing_dates = {d.strftime("%Y-%m-%d") for d in existing.scalars().all()}
-
-        for ds in daily_stats:
-            if ds["date"] not in existing_dates:
-                db.add(ChannelStats(
-                    channel_id=channel.id,
-                    date=datetime.strptime(ds["date"], "%Y-%m-%d"),
-                    subscribers=ds.get("subscribers", 0),
-                    avg_views=ds.get("avg_views", 0),
-                    avg_reach=ds.get("avg_views", 0),
-                    er=ds.get("er", 0.0),
-                    post_count=ds.get("post_count", 0),
-                ))
-                new_records += 1
-
+    new_records = await record_stats(db, channel.id, stats)
     await db.commit()
 
     return {
@@ -940,27 +902,10 @@ async def recollect_all_channels_stats(
             if stats.get("er"):
                 channel.er = stats["er"]
 
+            from app.services.stats_history import record_stats
+
             daily_stats = stats.get("daily_stats", [])
-            new_records = 0
-            if daily_stats:
-                existing = await db.execute(
-                    select(ChannelStats.date).where(ChannelStats.channel_id == channel.id)
-                )
-                existing_dates = {d.strftime("%Y-%m-%d") for d in existing.scalars().all()}
-
-                for ds in daily_stats:
-                    if ds["date"] not in existing_dates:
-                        db.add(ChannelStats(
-                            channel_id=channel.id,
-                            date=datetime.strptime(ds["date"], "%Y-%m-%d"),
-                            subscribers=ds.get("subscribers", 0),
-                            avg_views=ds.get("avg_views", 0),
-                            avg_reach=ds.get("avg_views", 0),
-                            er=ds.get("er", 0.0),
-                            post_count=ds.get("post_count", 0),
-                        ))
-                        new_records += 1
-
+            new_records = await record_stats(db, channel.id, stats)
             await db.commit()
             results.append({
                 "channel_id": channel.id,
@@ -1330,28 +1275,11 @@ async def admin_refresh_channel_stats(
         if stats.get("channel_age_months"):
             channel.age = f"{stats['channel_age_months']}"
 
-        # Save daily stats with dedup
+        # Save daily stats (honest series, Task 20)
+        from app.services.stats_history import record_stats
+
         daily_stats = stats.get("daily_stats", [])
-        new_stats_count = 0
-        if daily_stats:
-            existing = await db.execute(
-                select(ChannelStats.date).where(ChannelStats.channel_id == channel.id)
-            )
-            existing_dates = {d.strftime("%Y-%m-%d") for d in existing.scalars().all()}
-            for ds in daily_stats:
-                if ds["date"] not in existing_dates:
-                    db.add(ChannelStats(
-                        channel_id=channel.id,
-                        date=datetime.strptime(ds["date"], "%Y-%m-%d"),
-                        subscribers=ds.get("subscribers") or 0,
-                        avg_views=ds.get("avg_views") or 0,
-                        avg_reach=ds.get("avg_views") or 0,
-                        er=ds.get("er") or 0.0,
-                        post_count=ds.get("post_count") or 0,
-                        avg_forwards=ds.get("avg_forwards") or 0,
-                        avg_reactions=ds.get("avg_reactions") or 0,
-                    ))
-                    new_stats_count += 1
+        new_stats_count = await record_stats(db, channel.id, stats)
 
         # Save posts with dedup
         posts_data = stats.get("posts", [])
