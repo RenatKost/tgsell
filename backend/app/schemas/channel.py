@@ -87,6 +87,11 @@ class ChannelResponse(BaseModel):
     fair_price_range: list[float] | None = None
     price_verdict: str = "unknown"  # cheaper / fair / expensive / inflated / unknown
     price_reference_scope: str | None = None  # category / overall
+    # Task 22: quality index (None = «мало даних»)
+    quality_score: int | None = None
+    quality_health: str | None = None  # clean / suspicious / insufficient
+    quality_breakdown: dict | None = None
+    quality_updated_at: datetime | None = None
 
     @model_validator(mode="after")
     def _sanitize_avatar(self):

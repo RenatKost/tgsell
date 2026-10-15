@@ -91,6 +91,9 @@ async def lifespan(app: FastAPI):
     background_tasks.append(loop.create_task(run_bots_background()))
     background_tasks.append(loop.create_task(run_health_monitor(interval_minutes=10)))
     background_tasks.append(loop.create_task(run_checklist_reminders(interval_minutes=30)))
+    # Task 22: quality index from stored data only (no Telethon), <= every 6h
+    from app.services.quality import run_quality_scorer
+    background_tasks.append(loop.create_task(run_quality_scorer(startup_delay_sec=60)))
     yield
     logger.info("Shutting down background tasks…")
     for task in background_tasks:

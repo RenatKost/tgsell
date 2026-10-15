@@ -14,6 +14,7 @@ import Views from '../components/ChanelDetails/Views';
 import PostsList from '../components/ChanelDetails/PostsList';
 import AiAnalysis from '../components/ChanelDetails/AiAnalysis';
 import { PriceEstimate } from '../components/Pricing/PriceVerdict';
+import { QualityBlock } from '../components/Quality/QualityBadge';
 
 const ChannelDetailsPage = () => {
 	const { id } = useParams();
@@ -117,6 +118,7 @@ const ChannelDetailsPage = () => {
 				{/* LEFT SIDEBAR: DetailsCard → Comment → Resources → ChannelHealth */}
 				<div className='flex flex-col gap-4'>
 					<DetailsCard channel={channel} onBuy={handleBuy} onAuction={handleGoAuction} stats={stats} />
+					<QualityBlock channel={channel} />
 					<PriceEstimate channel={channel} />
 
 					{channel.description && (
