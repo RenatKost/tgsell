@@ -1,6 +1,7 @@
 import { trackEvent } from '../utils/tracking';
 import { useEffect, useState, useRef, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { useSearchParams } from 'react-router-dom';
 import CatalogCard from '../components/Cards/CatalogCard';
 import { channelsAPI, bundlesAPI, savedSearchesAPI } from '../services/api';
 import { useAuth } from '../context/AppContext';
@@ -96,8 +97,20 @@ const CatalogPage = () => {
 	}, [search]);
 	const [category, setCategory] = useState('');
 	const [sortBy, setSortBy] = useState('newest');
-	const [page, setPage] = useState(1);
+	// Page lives in the URL (?page=N) so back/forward and shared links keep position.
+	const [searchParams, setSearchParams] = useSearchParams();
+	const page = Math.max(1, parseInt(searchParams.get('page') || '1', 10) || 1);
+	const setPage = useCallback((next, opts = {}) => {
+		setSearchParams((prev) => {
+			const cur = Math.max(1, parseInt(prev.get('page') || '1', 10) || 1);
+			const value = typeof next === 'function' ? next(cur) : next;
+			const sp = new URLSearchParams(prev);
+			if (value > 1) sp.set('page', String(value)); else sp.delete('page');
+			return sp;
+		}, opts);
+	}, [setSearchParams]);
 	const [totalPages, setTotalPages] = useState(1);
+	const [total, setTotal] = useState(0);
 
 	// Quick filters
 	const [roi6, setRoi6] = useState(false);
@@ -147,10 +160,13 @@ const CatalogPage = () => {
 			const params = { ...buildFilters(), sort: sortBy, page, limit: 12 };
 			const { data } = await channelsAPI.getAll(params);
 			setChannels(data.items || data);
+			const items = data.items || data;
 			setTotalPages(data.total_pages || 1);
+			setTotal(typeof data.total === 'number' ? data.total : items.length);
 		} catch (err) {
 			console.error('Failed to load channels:', err);
 			setChannels([]);
+			setTotal(0);
 		} finally {
 			setLoading(false);
 		}
@@ -182,7 +198,7 @@ const CatalogPage = () => {
 		fetchChannels();
 	}, [fetchChannels]);
 
-	const resetPage = () => setPage(1);
+	const resetPage = () => setPage(1, { replace: true });
 
 	return (
 		<section className='pt-28 pb-10'>
@@ -452,7 +468,7 @@ const CatalogPage = () => {
 			{/* Results count */}
 			{!loading && channels.length > 0 && (
 				<p className='text-gray-400 text-xs mb-4'>
-					Знайдено: <span className='text-gray-300 font-medium'>{channels.length}</span>
+					Знайдено: <span className='text-gray-300 font-medium'>{total}</span>
 				</p>
 			)}
 

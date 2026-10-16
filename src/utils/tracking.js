@@ -35,13 +35,52 @@ export const pageFromPath = (path) => {
 	return map[p] || 'other';
 };
 
-export const trackEvent = (type, extra = {}) => {
-	trackingAPI.event({ type, anon: anonId(), ...extra }).catch(() => {});
+// Attribution: utm_* from the landing URL + referer *domain* only (no full URL, no PII).
+// Captured once per tab session and attached to visit events (server dedupes visits).
+const ATTR_KEY = 'tg_attr';
+const UTM_KEYS = ['utm_source', 'utm_medium', 'utm_campaign', 'utm_content', 'utm_term'];
+export const getAttribution = () => {
+	try {
+		const saved = sessionStorage.getItem(ATTR_KEY);
+		if (saved) return JSON.parse(saved);
+		const attr = {};
+		const qs = new URLSearchParams(window.location.search);
+		UTM_KEYS.forEach((k) => { const v = qs.get(k); if (v) attr[k] = v.slice(0, 64); });
+		if (document.referrer) {
+			const host = new URL(document.referrer).hostname.replace(/^www\./, '');
+			if (host && host !== window.location.hostname.replace(/^www\./, '')) attr.ref_domain = host.slice(0, 64);
+		}
+		sessionStorage.setItem(ATTR_KEY, JSON.stringify(attr));
+		return attr;
+	} catch { return {}; }
 };
+
+export const trackEvent = (type, extra = {}) => {
+	const attr = type === 'visit' ? getAttribution() : {};
+	trackingAPI.event({ type, anon: anonId(), ...attr, ...extra }).catch(() => {});
+};
+
+// Server rejects heartbeats closer than HEARTBEAT_MIN_INTERVAL (20 s) per session.
+// Client never sends more often than every 30 s (visibilitychange + interval + duplicated
+// tabs sharing sessionStorage used to collide) and backs off silently on 429.
+const HEARTBEAT_MIN_GAP_MS = 30 * 1000;
+let lastHeartbeatAt = 0;
+let heartbeatBlockedUntil = 0;
+let heartbeatBackoffMs = 0;
 
 export const sendHeartbeat = () => {
 	if (typeof document !== 'undefined' && document.visibilityState !== 'visible') return;
+	const now = Date.now();
+	if (now - lastHeartbeatAt < HEARTBEAT_MIN_GAP_MS || now < heartbeatBlockedUntil) return;
 	const sid = sessionId();
 	if (!sid) return;
-	trackingAPI.heartbeat({ sid, anon: anonId() }).catch(() => {});
+	lastHeartbeatAt = now;
+	trackingAPI.heartbeat({ sid, anon: anonId() })
+		.then(() => { heartbeatBackoffMs = 0; })
+		.catch((err) => {
+			if (err?.response?.status === 429) {
+				heartbeatBackoffMs = Math.min(heartbeatBackoffMs ? heartbeatBackoffMs * 2 : HEARTBEAT_MS, 5 * 60 * 1000);
+				heartbeatBlockedUntil = Date.now() + heartbeatBackoffMs;
+			}
+		});
 };
