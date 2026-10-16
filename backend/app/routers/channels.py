@@ -276,7 +276,9 @@ async def get_channel_health(channel_id: int, db: AsyncSession = Depends(get_db)
 
     subs = channel.subscribers_count or 0
     avg_views = channel.avg_views or 0
-    er = channel.er or 0.0
+    from app.utils.er import reliable_er
+    er_raw = channel.er or 0.0
+    er = reliable_er(channel.er, channel.subscribers_count) or 0.0
     views_hidden = channel.views_hidden
 
     # Get posts with view dynamics
@@ -363,6 +365,8 @@ async def get_channel_health(channel_id: int, db: AsyncSession = Depends(get_db)
             er_label = "Підозріло високий"
             score -= 5
             flags.append("🤔 Надзвичайно високий ER — можлива накрутка реакцій")
+    elif er_raw and er_raw > 0:
+        er_label = "Мало даних"
     else:
         er_label = "Немає даних"
 
@@ -421,6 +425,7 @@ async def get_channel_health(channel_id: int, db: AsyncSession = Depends(get_db)
 async def get_ai_analysis(channel_id: int, db: AsyncSession = Depends(get_db)):
     """Get AI-powered deep analysis of a channel. Cached for 7 days."""
     from app.services.ai_analysis import analyze_channel
+    from app.utils.er import reliable_er as reliable_er_for_ai
 
     # Get channel
     result = await db.execute(select(Channel).where(Channel.id == channel_id))
@@ -441,7 +446,7 @@ async def get_ai_analysis(channel_id: int, db: AsyncSession = Depends(get_db)):
         "category": channel.category,
         "subscribers_count": channel.subscribers_count,
         "avg_views": channel.avg_views,
-        "er": channel.er,
+        "er": reliable_er_for_ai(channel.er, channel.subscribers_count),
         "price": channel.price,
         "monthly_income": channel.monthly_income,
         "age": channel.age,
@@ -485,16 +490,16 @@ async def get_ai_analysis(channel_id: int, db: AsyncSession = Depends(get_db)):
             "date": s.date.isoformat() if s.date else None,
             "subscribers": s.subscribers,
             "avg_views": s.avg_views,
-            "er": s.er,
+            "er": reliable_er_for_ai(s.er, s.subscribers),
         }
         for s in stats
     ]
 
     analysis = await analyze_channel(channel_data, posts_data, stats_data, is_closed=channel.is_closed)
-    if analysis is None:
-        raise HTTPException(status_code=503, detail="AI analysis unavailable")
-    if isinstance(analysis, dict) and analysis.get("error"):
-        raise HTTPException(status_code=503, detail=analysis.get("detail", "AI analysis error"))
+    from app.services.ai_analysis import is_unavailable, unavailable_result
+    if is_unavailable(analysis):
+        # Task 28: 200 + status «аналіз тимчасово недоступний»; never cached.
+        return analysis if isinstance(analysis, dict) else unavailable_result()
 
     # Save to cache (non-blocking — don't fail the request if cache write fails)
     try:

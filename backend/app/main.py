@@ -131,6 +131,10 @@ from app.utils.http_cache import api_no_store  # noqa: E402
 
 app.middleware("http")(api_no_store)
 
+from app.utils.security_headers import security_headers  # noqa: E402
+
+app.middleware("http")(security_headers)
+
 
 # Routers
 app.include_router(auth.router, prefix="/api")
@@ -148,6 +152,10 @@ app.include_router(media.router, prefix="/api")
 app.include_router(support.router, prefix="/api")
 app.include_router(user_activity_router.router, prefix="/api")
 app.include_router(saved_searches_router.router, prefix="/api")
+
+from app.routers import seo as seo_router  # noqa: E402
+
+app.include_router(seo_router.router)  # /robots.txt, /sitemap.xml (before SPA catch-all)
 
 @app.get("/api/health")
 async def health():

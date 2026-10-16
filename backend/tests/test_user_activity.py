@@ -76,7 +76,8 @@ async def test_tracking_dedupe_heartbeat_users_and_funnel(pg_orm, monkeypatch):
         assert (await cl.post("/api/track/event", json={"type": "payment", "anon": "anon-1"})).status_code == 400
         r = await cl.post("/api/track/heartbeat", json={"sid": "session-aaa", "anon": "anon-1"}, headers=tok(ids["buyer"]))
         assert r.status_code == 200 and r.json()["credited"] == 0
-        assert (await cl.post("/api/track/heartbeat", json={"sid": "session-aaa"})).status_code == 429
+        r2 = await cl.post("/api/track/heartbeat", json={"sid": "session-aaa"})
+        assert r2.status_code == 200 and r2.json().get("throttled") is True and r2.json()["credited"] == 0
         # other anonymous visitor (visit only)
         await cl.post("/api/track/event", json={"type": "visit", "anon": "anon-2"})
         await cl.post("/api/track/event", json={"type": "visit", "anon": "anon-3", "page": "catalog"})

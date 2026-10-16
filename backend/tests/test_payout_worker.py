@@ -226,7 +226,10 @@ async def test_master_balance_endpoint_low_alert_and_unknown(env, monkeypatch):
     escrow = env.payouts.escrow_svc
     monkeypatch.setattr(escrow, "get_trx_balance", lambda a: 8.64)
     r = await env.admin.master_wallet_balance(admin=None)
-    assert r["trx"] == 8.64 and r["low"] is True and r["threshold"] == 30.0
+    gm = importlib.import_module("app.services.gas_monitor")
+    # task 28: single source with the admin «Мало газу» badge (~54 TRX at fallback price)
+    assert r["trx"] == 8.64 and r["low"] is True
+    assert r["threshold"] == gm.warning_threshold_trx(gm.cached_energy_fee_sun())
     assert any(c.kwargs.get("alert_key") == "master_trx_low" for c in env.alert.await_args_list)
     env.alert.reset_mock()
     monkeypatch.setattr(escrow, "get_trx_balance", lambda a: None)

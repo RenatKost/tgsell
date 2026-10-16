@@ -1,4 +1,5 @@
 import { Link } from 'react-router-dom';
+import { formatEr, reliableEr } from '../../utils/er';
 
 function fmt(n) {
   if (!n) return '—';
@@ -62,7 +63,7 @@ export default function BundleCard({ bundle }) {
         </div>
         <div className="bg-card-inner rounded-lg p-3">
           <div className="text-lg font-bold text-white">
-            {bundle.avg_er != null ? bundle.avg_er.toFixed(1) + '%' : '—'}
+            {formatEr(bundle.avg_er)}
           </div>
           <div className="text-xs text-gray-500">середній ER</div>
         </div>

@@ -1,4 +1,5 @@
 import { fmtUsdt } from '../utils/money';
+import { formatEr } from '../utils/er';
 import { useEffect, useRef, useState } from 'react';
 import { adminAPI, dealsAPI, bundlesAPI } from '../services/api';
 import { useAuth } from '../context/AppContext';
@@ -803,7 +804,7 @@ const ModerCabinet = () => {
 											</div>
 											<div className='bg-gray-50 dark:bg-slate-700/60 p-3 rounded-xl'>
 												<FontAwesomeIcon icon={faBarChart} className='text-gray-400 mr-1' />
-												<span className='font-semibold text-gray-800 dark:text-gray-200'>{channel.er != null ? channel.er.toFixed(1) + '%' : '—'}</span>
+												<span className='font-semibold text-gray-800 dark:text-gray-200'>{formatEr(channel.er, channel.subscribers_count)}</span>
 												<p className='text-gray-400 text-xs mt-0.5'>ER</p>
 											</div>
 											<div className='bg-gray-50 dark:bg-slate-700/60 p-3 rounded-xl'>
@@ -1021,7 +1022,7 @@ const ModerCabinet = () => {
 											</div>
 											<div className='bg-gray-50 dark:bg-slate-700/60 p-2.5 rounded-xl'>
 												<FontAwesomeIcon icon={faBarChart} className='text-gray-400 mr-1' />
-												<span className='font-semibold text-gray-800 dark:text-gray-200'>{channel.er != null ? channel.er.toFixed(1) + '%' : '—'}</span>
+												<span className='font-semibold text-gray-800 dark:text-gray-200'>{formatEr(channel.er, channel.subscribers_count)}</span>
 												<p className='text-gray-400 text-xs'>ER</p>
 											</div>
 											<div className='bg-gray-50 dark:bg-slate-700/60 p-2.5 rounded-xl'>

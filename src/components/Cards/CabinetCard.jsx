@@ -13,6 +13,7 @@ import {
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { useState } from 'react';
 import { NavLink } from 'react-router-dom';
+import { formatEr, reliableEr } from '../../utils/er';
 
 const statusLabels = {
 	pending: { text: 'На модерації', color: 'text-yellow-700 bg-yellow-50 border-yellow-200' },
@@ -95,7 +96,7 @@ const CabinetCard = ({ channel, onDelete }) => {
 				</div>
 				<div className='bg-white dark:bg-slate-800 p-3 text-center'>
 					<p className='text-xs text-gray-400 dark:text-gray-500 mb-0.5'>ER</p>
-					<p className='font-semibold text-gray-800 dark:text-gray-100 text-sm'>{channel.er != null ? `${channel.er.toFixed(1)}%` : '—'}</p>
+					<p className='font-semibold text-gray-800 dark:text-gray-100 text-sm'>{formatEr(channel.er, channel.subscribers_count)}</p>
 				</div>
 				<div className='bg-white dark:bg-slate-800 p-3 text-center'>
 					<p className='text-xs text-gray-400 dark:text-gray-500 mb-0.5'>Вік</p>

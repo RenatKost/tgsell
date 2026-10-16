@@ -60,13 +60,14 @@ export const trackEvent = (type, extra = {}) => {
 	trackingAPI.event({ type, anon: anonId(), ...attr, ...extra }).catch(() => {});
 };
 
-// Server rejects heartbeats closer than HEARTBEAT_MIN_INTERVAL (20 s) per session.
-// Client never sends more often than every 30 s (visibilitychange + interval + duplicated
-// tabs sharing sessionStorage used to collide) and backs off silently on 429.
+// Server treats heartbeats closer than HEARTBEAT_MIN_INTERVAL (20 s) per session as a
+// no-op (200, throttled) and only answers 429 on real flooding (>12/min per session).
+// Client never sends more often than every 30 s. On 429 it skips exactly one interval
+// (no exponential growth): the gap to the next beat stays < HEARTBEAT_MAX_GAP (120 s),
+// so the server still credits the time in between — activity is not lost.
 const HEARTBEAT_MIN_GAP_MS = 30 * 1000;
 let lastHeartbeatAt = 0;
 let heartbeatBlockedUntil = 0;
-let heartbeatBackoffMs = 0;
 
 export const sendHeartbeat = () => {
 	if (typeof document !== 'undefined' && document.visibilityState !== 'visible') return;
@@ -76,11 +77,9 @@ export const sendHeartbeat = () => {
 	if (!sid) return;
 	lastHeartbeatAt = now;
 	trackingAPI.heartbeat({ sid, anon: anonId() })
-		.then(() => { heartbeatBackoffMs = 0; })
 		.catch((err) => {
 			if (err?.response?.status === 429) {
-				heartbeatBackoffMs = Math.min(heartbeatBackoffMs ? heartbeatBackoffMs * 2 : HEARTBEAT_MS, 5 * 60 * 1000);
-				heartbeatBlockedUntil = Date.now() + heartbeatBackoffMs;
+				heartbeatBlockedUntil = Date.now() + HEARTBEAT_MS;
 			}
 		});
 };

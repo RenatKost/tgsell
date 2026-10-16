@@ -2,6 +2,7 @@ import { faHeart } from '@fortawesome/free-solid-svg-icons';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { useState } from 'react';
 import { useAuth } from '../../context/AppContext';
+import { formatEr, reliableEr } from '../../utils/er';
 
 const Tooltip = ({ children, text, desc }) => {
 	const [show, setShow] = useState(false);
@@ -139,7 +140,7 @@ const DetailsCard = ({ channel, onBuy, onAuction, stats = [] }) => {
 					</div>
 					<div className='border-l-2 border-emerald-400 bg-gray-50 dark:bg-card-inner rounded-r-lg pl-3 pr-2 py-2'>
 						<p className='text-gray-400 text-[10px]'>ER</p>
-						<p className='font-bold text-sm text-gray-800 dark:text-gray-100'>{channel.er != null ? `${channel.er.toFixed(1)}%` : '—'}</p>
+						<p className='font-bold text-sm text-gray-800 dark:text-gray-100'>{formatEr(channel.er, channel.subscribers_count)}</p>
 					</div>
 					<div className='border-l-2 border-orange-400 bg-gray-50 dark:bg-card-inner rounded-r-lg pl-3 pr-2 py-2'>
 						<p className='text-gray-400 text-[10px]'>Вік каналу</p>

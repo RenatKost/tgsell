@@ -55,7 +55,9 @@ class Settings(BaseSettings):
 
     # Service
     service_fee_percent: float = 3.0
-    # Admin alert when master wallet TRX (gas source for payouts) drops below this.
+    # DEPRECATED (task 28): no longer read. The «Мало газу» threshold now comes from
+    # app.services.gas_monitor.warning_threshold_trx (reserve + 3 payouts at live energy price).
+    # Field kept so an existing MASTER_TRX_LOW_THRESHOLD variable doesn't break settings.
     master_trx_low_threshold: float = 30.0
     payment_timeout_hours: int = 2  # window after both sides are ready (payment_pending)
     # 'created' stage (waiting for readiness; the buyer already has the escrow address):

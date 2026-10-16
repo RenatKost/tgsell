@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { motion } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
+import { formatEr, reliableEr } from '../../utils/er';
 
 const AuctionCard = ({ auction, onBid }) => {
 	const navigate = useNavigate();
@@ -190,7 +191,7 @@ const AuctionCard = ({ auction, onBid }) => {
 					<div className='border-l-2 border-emerald-400 bg-gray-50 dark:bg-card-inner rounded-r-lg pl-3 pr-2 py-2'>
 						<p className='text-gray-400 text-[10px]'>ER каналу</p>
 						<p className='font-bold text-sm text-gray-800 dark:text-gray-100'>
-							{auction.er != null ? `${Number(auction.er).toFixed(1)}%` : '—'}
+							{formatEr(auction.er, auction.subscribers_count)}
 						</p>
 					</div>
 
