@@ -30,6 +30,12 @@ class EventIn(BaseModel):
     anon: str | None = Field(None, max_length=128)
     channel_id: int | None = Field(None, ge=1)
     page: str | None = Field(None, max_length=32)
+    utm_source: str | None = Field(None, max_length=200)
+    utm_medium: str | None = Field(None, max_length=200)
+    utm_campaign: str | None = Field(None, max_length=200)
+    utm_content: str | None = Field(None, max_length=200)
+    utm_term: str | None = Field(None, max_length=200)
+    ref_domain: str | None = Field(None, max_length=255)
 
 
 class HeartbeatIn(BaseModel):
@@ -55,8 +61,9 @@ async def track_event(body: EventIn, user_id: int | None = Depends(_optional_use
         await ua.record_event(db, body.type, user_id=user_id, anon_id=anon,
                               object_type="channel", object_id=body.channel_id, page="channel")
     else:
+        attribution = ua.clean_attribution(body.model_dump()) if body.type == "visit" else None
         await ua.record_event(db, body.type, user_id=user_id, anon_id=anon,
-                              object_type="page" if page else None, page=page)
+                              object_type="page" if page else None, page=page, attribution=attribution)
     return None
 
 

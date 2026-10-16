@@ -452,7 +452,7 @@ const HomePage = () => {
       <ActivityTicker />
 
       {/* ── 3. ЯК ЗАРОБИТИ ──────────────────────────────────────────────── */}
-      <section className="py-20">
+      <section id="earn" className="py-20 scroll-mt-20">
         <div className="text-center mb-12">
           <Tag text="Заробіток" />
           <h2 className="text-3xl lg:text-4xl font-black text-gray-900 dark:text-white">Три способи заробити</h2>
@@ -527,7 +527,7 @@ const HomePage = () => {
       </section>
 
       {/* ── 5. КАЛЬКУЛЯТОР ───────────────────────────────────────────────── */}
-      <section className="py-20">
+      <section id="calculator" className="py-20 scroll-mt-20">
         <motion.div
           initial={{ opacity: 0, y: 30 }}
           whileInView={{ opacity: 1, y: 0 }}
@@ -544,7 +544,7 @@ const HomePage = () => {
       </section>
 
       {/* ── 6. ЯК ЦЕ ПРАЦЮЄ ─────────────────────────────────────────────── */}
-      <section className="py-20">
+      <section id="how" className="py-20 scroll-mt-20">
         <div className="text-center mb-12">
           <Tag text="Процес" />
           <h2 className="text-3xl lg:text-4xl font-black text-gray-900 dark:text-white">Як це працює</h2>

@@ -10,20 +10,20 @@ const CATEGORIES = [
 function StepIndicator({ step }) {
   const steps = ['Про сітку', 'Канали', 'Підсумок'];
   return (
-    <div className="flex items-center justify-center gap-2 mb-8">
+    <div className="flex items-center justify-center gap-1 sm:gap-2 mb-8 max-w-full">
       {steps.map((label, i) => {
         const idx = i + 1;
         const active = idx === step;
         const done = idx < step;
         return (
-          <div key={idx} className="flex items-center gap-2">
-            <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold border-2 transition-all
+          <div key={idx} className="flex items-center gap-1 sm:gap-2 min-w-0">
+            <div className={`w-7 h-7 sm:w-8 sm:h-8 shrink-0 rounded-full flex items-center justify-center text-sm font-bold border-2 transition-all
               ${active ? 'border-accent bg-accent text-black' : done ? 'border-accent/60 bg-accent/20 text-accent' : 'border-card-border bg-card-inner text-gray-500'}`}>
               {done ? '✓' : idx}
             </div>
-            <span className={`text-sm ${active ? 'text-white font-medium' : 'text-gray-500'}`}>{label}</span>
+            <span className={`text-xs sm:text-sm whitespace-nowrap ${active ? 'text-white font-medium' : 'text-gray-500'}`}>{label}</span>
             {i < steps.length - 1 && (
-              <div className={`w-10 h-px ${done ? 'bg-accent/60' : 'bg-card-border'}`} />
+              <div className={`w-3 sm:w-10 shrink-0 h-px ${done ? 'bg-accent/60' : 'bg-card-border'}`} />
             )}
           </div>
         );
@@ -119,7 +119,7 @@ export default function BundleSellPage() {
 
   return (
     <div className="min-h-screen bg-page text-white">
-      <div className="max-w-2xl mx-auto px-4 py-12">
+      <div className="max-w-2xl mx-auto px-4 pt-24 md:pt-28 pb-12">
         <h1 className="text-3xl font-bold text-center mb-2">
           Продати <span className="text-accent">сітку каналів</span>
         </h1>

@@ -6,6 +6,7 @@ Anonymous visitors are identified only by sha256(random client id)[:32].
 from __future__ import annotations
 
 import logging
+import re
 from collections import defaultdict
 from datetime import datetime, timedelta
 
@@ -29,7 +30,7 @@ CHANNEL_VIEW_DEDUPE = timedelta(minutes=10)
 SEARCH_DEDUPE = timedelta(seconds=60)
 VISIT_DEDUPE = timedelta(minutes=30)
 
-HEARTBEAT_MIN_INTERVAL = 25  # seconds; frontend sends every 45 s
+HEARTBEAT_MIN_INTERVAL = 20  # seconds; frontend sends every 45 s and never more often than every 30 s
 HEARTBEAT_MAX_CREDIT = 60  # seconds credited per heartbeat
 HEARTBEAT_MAX_GAP = 120  # longer gap = tab hidden / idle, credit nothing
 EVENTS_PER_MINUTE = 30
@@ -44,6 +45,7 @@ async def record_event(
     object_type: str | None = None,
     object_id: int | None = None,
     page: str | None = None,
+    attribution: dict | None = None,
     now: datetime | None = None,
     commit: bool = True,
 ) -> bool:
@@ -63,7 +65,8 @@ async def record_event(
             if (await db.execute(q.limit(1))).first():
                 return False
         db.add(UserEvent(user_id=user_id, anon_id=anon_id, event_type=event_type,
-                         object_type=object_type, object_id=object_id, page=page, created_at=now))
+                         object_type=object_type, object_id=object_id, page=page, created_at=now,
+                         **(attribution or {})))
         if commit:
             await db.commit()
         return True
@@ -276,3 +279,31 @@ async def users_activity(db: AsyncSession, now: datetime | None = None, limit: i
             + r["searches_30d"] + r["favorites_30d"] * 2 + r["deals_30d"] * 5 + r["paid_30d"] * 10
     rows.sort(key=lambda r: (r["activity_score"], r["last_seen_at"] or datetime.min), reverse=True)
     return rows[:limit]
+
+
+# ── Attribution (no PII) ───────────────────────────────────────────────
+ATTR_FIELDS = ("utm_source", "utm_medium", "utm_campaign", "utm_content", "utm_term")
+_UTM_RE = re.compile(r"[^\w.\-+ ]", re.UNICODE)
+_DOMAIN_RE = re.compile(r"^[a-z0-9.-]{1,64}$")
+
+
+def clean_attribution(raw: dict) -> dict:
+    """Keep only short sanitized utm_* values and a bare referer hostname."""
+    out: dict = {}
+    for f in ATTR_FIELDS:
+        v = raw.get(f)
+        if isinstance(v, str):
+            v = _UTM_RE.sub("", v).strip()[:64]
+            if v:
+                out[f] = v
+    ref = raw.get("ref_domain")
+    if isinstance(ref, str):
+        ref = ref.strip().lower()
+        if "//" in ref:
+            ref = ref.split("//", 1)[1]
+        ref = ref.split("/", 1)[0].split("?", 1)[0].split("@")[-1].split(":", 1)[0]
+        if ref.startswith("www."):
+            ref = ref[4:]
+        if ref and _DOMAIN_RE.match(ref):
+            out["ref_domain"] = ref
+    return out

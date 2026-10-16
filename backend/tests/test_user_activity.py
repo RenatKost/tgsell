@@ -64,7 +64,12 @@ async def test_tracking_dedupe_heartbeat_users_and_funnel(pg_orm, monkeypatch):
     tok = lambda uid: {"Authorization": f"Bearer {create_access_token({'sub': str(uid)})}"}
     async with cl:
         # anonymous visit + view; then same browser logs in (anon linked via heartbeat)
-        assert (await cl.post("/api/track/event", json={"type": "visit", "anon": "anon-1", "page": "home"})).status_code == 204
+        assert (await cl.post("/api/track/event", json={"type": "visit", "anon": "anon-1", "page": "home",
+                                                         "utm_source": "instagram", "utm_campaign": "reels",
+                                                         "ref_domain": "l.instagram.com"})).status_code == 204
+        async with pg_orm.session() as db:
+            ev = (await db.execute(select(UserEvent).where(UserEvent.event_type == "visit"))).scalars().first()
+            assert (ev.utm_source, ev.utm_campaign, ev.ref_domain) == ("instagram", "reels", "l.instagram.com")
         await cl.post("/api/track/event", json={"type": "channel_view", "anon": "anon-1", "channel_id": ids["ch"]})
         await cl.post("/api/track/event", json={"type": "channel_view", "anon": "anon-1", "channel_id": ids["ch"]})  # dup
         await cl.post("/api/track/event", json={"type": "search", "anon": "anon-1"})
@@ -123,3 +128,16 @@ async def test_tracking_dedupe_heartbeat_users_and_funnel(pg_orm, monkeypatch):
         # visitors: buyer (anon-1 linked), anon-2, anon-3, lurker, spam
         assert users == {"visit": 5, "channel_view": 3, "deal_start": 1, "payment": 1}
         assert f[0]["steps"][3]["from_prev_pct"] == 100.0
+
+
+def test_clean_attribution_strips_pii():
+    from app.services import user_activity as ua
+    out = ua.clean_attribution({
+        "utm_source": "instagram<script>", "utm_medium": "  ", "utm_campaign": "reels_oct" * 20,
+        "ref_domain": "https://user:pw@WWW.L.Instagram.com:443/path?q=secret",
+    })
+    assert out["utm_source"] == "instagramscript"
+    assert "utm_medium" not in out
+    assert len(out["utm_campaign"]) == 64
+    assert out["ref_domain"] == "l.instagram.com"
+    assert ua.clean_attribution({"ref_domain": "bad domain!"}) == {}

@@ -25,6 +25,13 @@ class UserEvent(Base):
     object_type: Mapped[str | None] = mapped_column(String(16), nullable=True)  # channel | page
     object_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
     page: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    # Attribution (visit events only): utm_* values + referer *domain*, never full URL.
+    utm_source: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    utm_medium: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    utm_campaign: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    utm_content: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    utm_term: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    ref_domain: Mapped[str | None] = mapped_column(String(64), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
 
 
