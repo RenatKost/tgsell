@@ -31,6 +31,7 @@ SEARCH_DEDUPE = timedelta(seconds=60)
 VISIT_DEDUPE = timedelta(minutes=30)
 
 HEARTBEAT_MIN_INTERVAL = 20  # seconds; frontend sends every 45 s and never more often than every 30 s
+HEARTBEAT_MAX_PER_MINUTE = 12  # hard flood cap per session (normal: ~1.3/min, even with 4 tabs on one sid ~5/min)
 HEARTBEAT_MAX_CREDIT = 60  # seconds credited per heartbeat
 HEARTBEAT_MAX_GAP = 120  # longer gap = tab hidden / idle, credit nothing
 EVENTS_PER_MINUTE = 30

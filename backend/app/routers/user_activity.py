@@ -73,8 +73,14 @@ async def track_heartbeat(body: HeartbeatIn, user_id: int | None = Depends(_opti
     key = ua.hash_id(body.sid)
     if not key:
         raise HTTPException(status_code=400, detail="Некоректна сесія")
-    if not ua.limiter.min_interval("hb:" + key, ua.HEARTBEAT_MIN_INTERVAL):
+    # Task 28: a beat closer than HEARTBEAT_MIN_INTERVAL (duplicated tab sharing the sid,
+    # visibilitychange + interval, client retry) is a harmless no-op: 200, nothing written,
+    # last_seen_at untouched, so the next accepted beat credits the whole gap — no data lost
+    # and the client has no reason to back off. 429 only for real flooding.
+    if not ua.limiter.per_minute("hbm:" + key, ua.HEARTBEAT_MAX_PER_MINUTE):
         raise HTTPException(status_code=429, detail="Забагато запитів")
+    if not ua.limiter.min_interval("hb:" + key, ua.HEARTBEAT_MIN_INTERVAL):
+        return {"ok": True, "credited": 0, "throttled": True}
     credited = await ua.heartbeat(db, key, user_id=user_id, anon_id=ua.hash_id(body.anon))
     return {"ok": True, "credited": credited}
 

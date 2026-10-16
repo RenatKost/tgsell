@@ -162,7 +162,9 @@ async def master_trx_status() -> dict:
     from app.services import escrow as escrow_svc
 
     trx = await asyncio.to_thread(escrow_svc.get_trx_balance, master)
-    threshold = float(settings.master_trx_low_threshold)
+    # Task 28: same threshold as the admin «Мало газу» badge (gas_monitor), not a 2nd constant.
+    from app.services import gas_monitor
+    threshold = gas_monitor.warning_threshold_trx(gas_monitor.cached_energy_fee_sun())
     return {
         "address": master,
         "trx": trx,

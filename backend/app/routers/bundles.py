@@ -25,6 +25,7 @@ from app.utils.timeutil import to_naive_utc, utcnow_naive
 from app.utils.avatars import public_channel_avatar_url
 from app.models.user import User
 from app.services.ai_analysis import analyze_bundle
+from app.utils.er import reliable_er
 
 logger = logging.getLogger(__name__)
 
@@ -162,7 +163,7 @@ async def get_bundle_stats(
 
     total_subs = sum(c.subscribers_count or 0 for c in channels)
     total_income = sum(c.monthly_income or 0 for c in channels)
-    er_vals = [c.er for c in channels if c.er is not None]
+    er_vals = [e for e in (reliable_er(c.er, c.subscribers_count) for c in channels) if e is not None]
     avg_er = round(sum(er_vals) / len(er_vals), 2) if er_vals else 0.0
     views_vals = [c.avg_views for c in channels if c.avg_views is not None]
     avg_views = int(sum(views_vals) / len(views_vals)) if views_vals else 0
@@ -335,7 +336,7 @@ async def get_bundle_ai_analysis(
 
     channels = [bc.channel for bc in bundle.bundle_channels if bc.channel is not None]
     total_subs = sum(c.subscribers_count or 0 for c in channels)
-    er_vals = [c.er for c in channels if c.er is not None]
+    er_vals = [e for e in (reliable_er(c.er, c.subscribers_count) for c in channels) if e is not None]
     avg_er = round(sum(er_vals) / len(er_vals), 2) if er_vals else 0.0
 
     bundle_data = {
@@ -352,17 +353,17 @@ async def get_bundle_ai_analysis(
         {
             "channel_name": c.channel_name,
             "subscribers_count": c.subscribers_count or 0,
-            "er": c.er,
+            "er": reliable_er(c.er, c.subscribers_count),
             "avg_views": c.avg_views,
         }
         for c in channels
     ]
 
     analysis = await analyze_bundle(bundle_data, channels_data)
-    if analysis is None:
-        raise HTTPException(status_code=503, detail="AI сервіс недоступний")
-    if isinstance(analysis, dict) and analysis.get("error"):
-        raise HTTPException(status_code=503, detail=analysis.get("detail", "Помилка AI аналізу"))
+    from app.services.ai_analysis import is_unavailable, unavailable_result
+    if is_unavailable(analysis):
+        # Task 28: 200 + status «аналіз тимчасово недоступний»; never cached.
+        return analysis if isinstance(analysis, dict) else unavailable_result()
 
     # Save to cache (non-blocking — don't fail the request if cache write fails)
     try:

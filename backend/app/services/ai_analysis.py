@@ -19,6 +19,164 @@ MODEL = "openai/gpt-oss-120b"
 NO_DATA = "мало даних"
 
 
+UNAVAILABLE_STATUS = "unavailable"
+UNAVAILABLE_DETAIL = "аналіз тимчасово недоступний"
+
+# Task 28: Groq sometimes returns truncated/invalid JSON. Retry + repair.
+GROQ_MAX_ATTEMPTS = 3  # 1 call + 2 retries
+CHANNEL_MAX_TOKENS = 6144
+BUNDLE_MAX_TOKENS = 4096
+# Frontend waits 55 s; all attempts together must fit inside that.
+TOTAL_BUDGET_SEC = 50.0
+SYSTEM_PROMPT = "Ти — експерт-аналітик Telegram-каналів. Відповідай ТІЛЬКИ валідним JSON без markdown-обгортки."
+
+
+def unavailable_result(reason: str = "unavailable") -> dict:
+    """200-payload shown by the UI as «аналіз тимчасово недоступний». Never cached."""
+    return {"status": UNAVAILABLE_STATUS, "error": reason, "detail": UNAVAILABLE_DETAIL}
+
+
+def is_unavailable(result) -> bool:
+    return result is None or (isinstance(result, dict) and bool(result.get("error")))
+
+
+def _strip_fences(text: str) -> str:
+    text = (text or "").strip()
+    if text.startswith("```"):
+        nl = text.find("\n")
+        text = text[nl + 1:] if nl != -1 else text[3:]
+    if text.endswith("```"):
+        text = text[:-3]
+    return text.strip()
+
+
+def _close_truncated(text: str) -> str:
+    """Close an unterminated string / open brackets of a truncated JSON object."""
+    stack: list[str] = []
+    in_str = False
+    esc = False
+    for ch in text:
+        if in_str:
+            if esc:
+                esc = False
+            elif ch == "\\":
+                esc = True
+            elif ch == '"':
+                in_str = False
+            continue
+        if ch == '"':
+            in_str = True
+        elif ch in "{[":
+            stack.append("}" if ch == "{" else "]")
+        elif ch in "}]" and stack:
+            stack.pop()
+    out = text
+    if in_str:
+        if esc:
+            out = out[:-1]
+        out += '"'
+    out = out.rstrip()
+    # drop a dangling separator / key without value
+    import re as _re
+    out = _re.sub(r'(,\s*"[^"]*"\s*:?\s*|,\s*|:\s*)$', "", out)
+    if out.endswith(":"):
+        out = out[:-1]
+    return out + "".join(reversed(stack))
+
+
+def repair_json(text: str):
+    """Best-effort parse of model output. Returns dict or raises json.JSONDecodeError."""
+    import re as _re
+    text = _strip_fences(text)
+    try:
+        return json.loads(text)
+    except json.JSONDecodeError:
+        pass
+    start = text.find("{")
+    if start == -1:
+        raise json.JSONDecodeError("no JSON object", text, 0)
+    body = text[start:]
+    end = body.rfind("}")
+    candidates = []
+    if end != -1:
+        candidates.append(body[: end + 1])
+    candidates.append(body)
+    for cand in candidates:
+        cleaned = _re.sub(r",\s*([}\]])", r"\1", cand)  # trailing commas
+        for variant in (cleaned, _close_truncated(cleaned)):
+            try:
+                result = json.loads(variant)
+                if isinstance(result, dict):
+                    return result
+            except json.JSONDecodeError:
+                continue
+    raise json.JSONDecodeError("unrepairable JSON", text, 0)
+
+
+async def _groq_json(prompt: str, *, temperature: float, max_tokens: int, timeout: float, label: str) -> dict:
+    """Call Groq with retries on invalid/truncated JSON, timeouts and 5xx.
+
+    Returns parsed dict, or unavailable_result(reason) after all attempts.
+    """
+    import time as _time
+    reason = "unavailable"
+    deadline = _time.monotonic() + TOTAL_BUDGET_SEC
+    for attempt in range(1, GROQ_MAX_ATTEMPTS + 1):
+        remaining = deadline - _time.monotonic()
+        if remaining < 5:
+            reason = reason if reason != "unavailable" else "timeout"
+            break
+        try:
+            async with httpx.AsyncClient(timeout=min(timeout, remaining)) as client:
+                resp = await client.post(
+                    GROQ_URL,
+                    headers={
+                        "Authorization": f"Bearer {settings.groq_api_key}",
+                        "Content-Type": "application/json",
+                    },
+                    json={
+                        "model": MODEL,
+                        "messages": [
+                            {"role": "system", "content": SYSTEM_PROMPT},
+                            {"role": "user", "content": prompt},
+                        ],
+                        "temperature": temperature,
+                        "max_tokens": max_tokens,
+                        "response_format": {"type": "json_object"},
+                    },
+                )
+                resp.raise_for_status()
+                data = resp.json()
+            choice = data["choices"][0]
+            text = choice["message"].get("content") or ""
+            try:
+                result = repair_json(text)
+                logger.info("%s: AI analysis ok (attempt %s)", label, attempt)
+                return result
+            except json.JSONDecodeError as e:
+                reason = "parse_error"
+                logger.warning(
+                    "%s: invalid JSON from Groq (attempt %s/%s, finish=%s, len=%s): %s",
+                    label, attempt, GROQ_MAX_ATTEMPTS, choice.get("finish_reason"), len(text), e,
+                )
+        except httpx.HTTPStatusError as e:
+            code = e.response.status_code
+            logger.error("%s: Groq API error %s: %s", label, code, e.response.text[:300])
+            if code in (401, 403):
+                await alert_service_down("Groq AI Analysis", f"{code}")
+                return unavailable_result("api_error")
+            if code == 429:
+                return unavailable_result("rate_limit")
+            reason = "api_error"  # 400 (json validation) / 5xx → retry
+        except httpx.TimeoutException:
+            reason = "timeout"
+            logger.warning("%s: Groq timeout (attempt %s/%s)", label, attempt, GROQ_MAX_ATTEMPTS)
+        except Exception as e:  # noqa: BLE001
+            reason = "unexpected"
+            logger.error("%s: AI analysis failed: %s", label, e)
+    return unavailable_result(reason)
+
+
 def _num(value):
     """Return a float for a usable metric, or None for None/garbage/NaN."""
     if value is None or isinstance(value, bool):
@@ -158,71 +316,20 @@ async def analyze_channel(
     """
     if not settings.groq_api_key:
         logger.warning("GROQ_API_KEY not set — skipping AI analysis")
-        return None
+        return unavailable_result("not_configured")
 
     prompt = build_channel_prompt(channel_data, posts_data, stats_data, is_closed)
-
-    try:
-        async with httpx.AsyncClient(timeout=60.0) as client:
-            resp = await client.post(
-                GROQ_URL,
-                headers={
-                    "Authorization": f"Bearer {settings.groq_api_key}",
-                    "Content-Type": "application/json",
-                },
-                json={
-                    "model": MODEL,
-                    "messages": [
-                        {
-                            "role": "system",
-                            "content": "Ти — експерт-аналітик Telegram-каналів. Відповідай ТІЛЬКИ валідним JSON без markdown-обгортки.",
-                        },
-                        {"role": "user", "content": prompt},
-                    ],
-                    "temperature": 0.7,
-                    "max_tokens": 4096,
-                },
-            )
-            resp.raise_for_status()
-            data = resp.json()
-
-            text = data["choices"][0]["message"]["content"]
-
-            # Clean up potential markdown fences
-            text = text.strip()
-            if text.startswith("```"):
-                first_newline = text.find("\n")
-                text = text[first_newline + 1:] if first_newline != -1 else text[3:]
-            if text.endswith("```"):
-                text = text[:-3]
-            text = text.strip()
-
-            result = json.loads(text)
-            logger.info(f"AI analysis completed for channel '{channel_data.get('channel_name')}'")
-            return result
-
-    except httpx.HTTPStatusError as e:
-        body = e.response.text[:300]
-        logger.error(f"Groq API error {e.response.status_code}: {body}")
-        if e.response.status_code == 429:
-            return {"error": "rate_limit", "detail": "API ліміт вичерпано. Спробуйте через хвилину."}
-        if e.response.status_code in (401, 403):
-            await alert_service_down("Groq AI Analysis", f"{e.response.status_code}: {body}")
-        return {"error": "api_error", "detail": f"Groq API помилка {e.response.status_code}"}
-    except json.JSONDecodeError as e:
-        logger.error(f"Failed to parse Groq response as JSON: {e}")
-        return {"error": "parse_error", "detail": "AI повернув невалідну відповідь. Спробуйте ще раз."}
-    except Exception as e:
-        logger.error(f"AI analysis failed: {e}")
-        await alert_service_down("Groq AI Analysis", str(e))
-        return None
+    return await _groq_json(
+        prompt, temperature=0.7, max_tokens=CHANNEL_MAX_TOKENS, timeout=50.0,
+        label=f"channel '{channel_data.get('channel_name')}'",
+    )
 
 
 async def analyze_bundle(bundle_data: dict, channels_data: list[dict]) -> dict | None:
     """Analyze a bundle of Telegram channels for investment potential."""
     if not settings.groq_api_key:
         logger.warning("GROQ_API_KEY not set — skipping bundle AI analysis")
-        return None
+        return unavailable_result("not_configured")
 
     try:
         # Convert to native types to avoid Decimal formatting errors
@@ -266,50 +373,10 @@ async def analyze_bundle(bundle_data: dict, channels_data: list[dict]) -> dict |
 }}
 ПРАВИЛА: verdict "buy" якщо score>=65 і ROI<=18міс, "avoid" якщо score<40, інакше "hold". Тільки валідний JSON."""
 
-        async with httpx.AsyncClient(timeout=45.0) as client:
-            resp = await client.post(
-                GROQ_URL,
-                headers={
-                    "Authorization": f"Bearer {settings.groq_api_key}",
-                    "Content-Type": "application/json",
-                },
-                json={
-                    "model": MODEL,
-                    "messages": [
-                        {
-                            "role": "system",
-                            "content": "Ти — експерт-аналітик Telegram-каналів. Відповідай ТІЛЬКИ валідним JSON без markdown-обгортки.",
-                        },
-                        {"role": "user", "content": prompt},
-                    ],
-                    "temperature": 0.5,
-                    "max_tokens": 1500,
-                },
-            )
-            resp.raise_for_status()
-            data = resp.json()
-            text = data["choices"][0]["message"]["content"].strip()
-            if text.startswith("```"):
-                first_newline = text.find("\n")
-                text = text[first_newline + 1:] if first_newline != -1 else text[3:]
-            if text.endswith("```"):
-                text = text[:-3]
-            text = text.strip()
-            result = json.loads(text)
-            logger.info(f"Bundle AI analysis completed for '{bundle_data.get('name')}'")
-            return result
-    except httpx.HTTPStatusError as e:
-        body = e.response.text[:300]
-        logger.error(f"Groq API error {e.response.status_code}: {body}")
-        if e.response.status_code == 429:
-            return {"error": "rate_limit", "detail": "API ліміт вичерпано. Спробуйте через хвилину."}
-        return {"error": "api_error", "detail": f"Groq API помилка {e.response.status_code}"}
-    except httpx.TimeoutException:
-        logger.error("Groq bundle analysis timed out")
-        return {"error": "timeout", "detail": "AI аналіз перевищив ліміт часу. Спробуйте ще раз."}
-    except json.JSONDecodeError as e:
-        logger.error(f"Failed to parse Groq bundle response as JSON: {e}")
-        return {"error": "parse_error", "detail": "AI повернув невалідну відповідь. Спробуйте ще раз."}
-    except Exception as e:
-        logger.error(f"Bundle AI analysis failed: {e}")
-        return {"error": "unexpected", "detail": f"Несподівана помилка: {str(e)[:100]}"}
+    except Exception as e:  # noqa: BLE001 — prompt building
+        logger.error(f"Bundle AI prompt failed: {e}")
+        return unavailable_result("unexpected")
+    return await _groq_json(
+        prompt, temperature=0.5, max_tokens=BUNDLE_MAX_TOKENS, timeout=40.0,
+        label=f"bundle '{bundle_data.get('name')}'",
+    )

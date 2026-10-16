@@ -98,7 +98,9 @@ async def test_master_trx_low_alert_text_valid_and_throttled(pg_orm, capture, mo
     await pw.check_master_trx()
     await pw.check_master_trx()  # throttled (same alert_key)
     assert len(_CaptureBot.sent) == 1
-    assert "&lt; 30 TRX" in _CaptureBot.sent[0]
+    gm = importlib.import_module("app.services.gas_monitor")
+    assert f"&lt; {gm.warning_threshold_trx(gm.cached_energy_fee_sun()):.0f} TRX" in _CaptureBot.sent[0]
+    assert "&lt; 30 TRX" not in _CaptureBot.sent[0]
     assert capture.is_valid_telegram_html(_CaptureBot.sent[0])
 
 

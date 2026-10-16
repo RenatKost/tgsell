@@ -27,6 +27,8 @@ const ReachBar = ({ value, label, color, maxVal }) => {
 	);
 };
 
+const UNAVAILABLE_TEXT = 'Аналіз тимчасово недоступний. Спробуйте трохи пізніше.';
+
 const AiAnalysis = ({ channelId, channel }) => {
 	const [data, setData] = useState(null);
 	const [loading, setLoading] = useState(true);
@@ -37,7 +39,12 @@ const AiAnalysis = ({ channelId, channel }) => {
 		setError(null);
 		try {
 			const { data: result } = await channelsAPI.getAiAnalysis(channelId);
-			setData(result);
+			if (result?.status === 'unavailable' || result?.error) {
+				setData(null);
+				setError(UNAVAILABLE_TEXT);
+			} else {
+				setData(result);
+			}
 		} catch (e) {
 			setError(e.response?.data?.detail || 'Аналіз недоступний');
 		} finally {
@@ -90,9 +97,11 @@ const AiAnalysis = ({ channelId, channel }) => {
 						</div>
 					</div>
 				)}
-				<div className='bg-red-50 dark:bg-red-900/20 rounded-lg border border-red-100 dark:border-red-800/40 p-3'>
-					<p className='text-xs text-red-600 dark:text-red-400 mb-2'>⚠️ {error}</p>
-					<button onClick={runAnalysis} className='text-[11px] text-red-500 hover:underline font-medium'>Спробувати ще раз</button>
+				<div className={error === UNAVAILABLE_TEXT
+					? 'bg-amber-50 dark:bg-amber-900/20 rounded-lg border border-amber-100 dark:border-amber-800/40 p-3'
+					: 'bg-red-50 dark:bg-red-900/20 rounded-lg border border-red-100 dark:border-red-800/40 p-3'}>
+					<p className={error === UNAVAILABLE_TEXT ? 'text-xs text-amber-700 dark:text-amber-400 mb-2' : 'text-xs text-red-600 dark:text-red-400 mb-2'}>⚠️ {error}</p>
+					<button onClick={runAnalysis} className={error === UNAVAILABLE_TEXT ? 'text-[11px] text-amber-600 hover:underline font-medium' : 'text-[11px] text-red-500 hover:underline font-medium'}>Спробувати ще раз</button>
 				</div>
 			</div>
 		);

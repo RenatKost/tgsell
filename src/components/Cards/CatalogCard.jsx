@@ -6,6 +6,7 @@ import { useAuth } from '../../context/AppContext';
 import { dealsAPI } from '../../services/api';
 import { PriceVerdictBadge } from '../Pricing/PriceVerdict';
 import { QualityBadge } from '../Quality/QualityBadge';
+import { formatEr, reliableEr } from '../../utils/er';
 
 /* ── Tooltip ─────────────────────────────────────────────────────── */
 const Tooltip = ({ children, text, desc }) => {
@@ -156,7 +157,7 @@ const CatalogCard = ({ channel }) => {
 					<div className='border-l-2 border-emerald-400 bg-gray-50 dark:bg-card-inner rounded-r-lg pl-3 pr-2 py-2'>
 						<p className='text-gray-400 text-[10px]'>ER</p>
 						<p className='font-bold text-sm text-gray-800 dark:text-gray-100'>
-							{channel.er != null ? `${channel.er.toFixed(1)}%` : '—'}
+							{formatEr(channel.er, channel.subscribers_count)}
 						</p>
 					</div>
 					<div className='border-l-2 border-orange-400 bg-gray-50 dark:bg-card-inner rounded-r-lg pl-3 pr-2 py-2'>

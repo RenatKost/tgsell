@@ -5,6 +5,7 @@ import { Zap, Calendar, Radio, DollarSign, Target, Link2, User } from 'lucide-re
 import { bundlesAPI, dealsAPI } from '../services/api';
 import { useAppContext } from '../context/AppContext';
 import { IcoUsers, IcoChart, IcoDollar, IcoSignal, IcoTrophy, IcoPackage, IcoWarning, IcoRocket, IcoTarget, IcoLink, IcoUser } from '../components/Icon3D';
+import { formatEr, reliableEr } from '../utils/er';
 
 function fmt(n) {
   if (n == null) return '—';
@@ -70,8 +71,8 @@ export default function BundleDetailsPage() {
     setAiError('');
     try {
       const res = await bundlesAPI.getAiAnalysis(id);
-      if (res.data?.error) {
-        setAiError(res.data.detail || 'Помилка TgSell аналізу');
+      if (res.data?.status === 'unavailable' || res.data?.error) {
+        setAiError('Аналіз тимчасово недоступний. Спробуйте трохи пізніше.');
       } else {
         setAiAnalysis(res.data);
       }
@@ -129,7 +130,8 @@ export default function BundleDetailsPage() {
   const isSold = bundle.status === 'sold';
 
   // Best channel by ER
-  const sortedByEr = [...channels].sort((a, b) => (b.er || 0) - (a.er || 0));
+  const erOf = (c) => reliableEr(c.er, c.subscribers_count) || 0;
+  const sortedByEr = [...channels].sort((a, b) => erOf(b) - erOf(a));
   const topChannel = sortedByEr[0];
 
   // Quick ROI
@@ -174,7 +176,7 @@ export default function BundleDetailsPage() {
   const erCategories = sortedByEr.map(c =>
     c.channel_name?.length > 14 ? c.channel_name.slice(0, 14) + '…' : c.channel_name || '?'
   );
-  const erSeries = [{ name: 'ER %', data: sortedByEr.map(c => parseFloat((c.er || 0).toFixed(2))) }];
+  const erSeries = [{ name: 'ER %', data: sortedByEr.map(c => parseFloat(erOf(c).toFixed(2))) }];
   const erOptions = {
     chart: { type: 'bar', background: 'transparent', toolbar: { show: false } },
     plotOptions: {
@@ -306,7 +308,7 @@ export default function BundleDetailsPage() {
             </div>
             <div className="bg-card border border-card-border rounded-xl p-4 text-center shadow-neon hover:border-accent/20 transition-colors">
               <div className="flex justify-center mb-2"><IcoChart size="md" /></div>
-              <div className="text-2xl font-black text-accent">{stats.avg_er != null ? stats.avg_er.toFixed(1) + '%' : '—'}</div>
+              <div className="text-2xl font-black text-accent">{formatEr(stats.avg_er)}</div>
               <div className="text-xs text-gray-500 mt-1">Середній ER</div>
             </div>
             <div className="bg-card border border-card-border rounded-xl p-4 text-center shadow-neon hover:border-accent/20 transition-colors">
@@ -351,7 +353,7 @@ export default function BundleDetailsPage() {
                     </div>
                     <div className="flex flex-wrap gap-3 mt-1">
                       <span className="text-xs text-gray-500">{fmt(topChannel.subscribers_count)} підп.</span>
-                      <span className="text-xs font-bold text-accent">ER {topChannel.er?.toFixed(1)}%</span>
+                      <span className="text-xs font-bold text-accent">ER {formatEr(topChannel.er, topChannel.subscribers_count)}</span>
                       {topChannel.avg_views != null && (
                         <span className="text-xs text-gray-500">{fmt(topChannel.avg_views)} перегл.</span>
                       )}
@@ -371,8 +373,8 @@ export default function BundleDetailsPage() {
               <div className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-4">Всі канали сітки</div>
               <div className="space-y-2">
                 {sortedByEr.map((ch, idx) => {
-                  const maxEr = topChannel?.er || 1;
-                  const barPct = ((ch.er || 0) / maxEr) * 100;
+                  const maxEr = (topChannel && erOf(topChannel)) || 1;
+                  const barPct = (erOf(ch) / maxEr) * 100;
                   return (
                     <Link key={ch.id} to={`/channel/${ch.id}`}
                       className="flex items-center gap-3 p-3 rounded-xl bg-card-inner hover:bg-card-hover border border-card-border hover:border-accent/30 transition-all group">
@@ -398,7 +400,7 @@ export default function BundleDetailsPage() {
                       </div>
                       {ch.er != null && (
                         <div className="text-right flex-shrink-0">
-                          <div className="text-accent font-bold text-sm">{ch.er.toFixed(1)}%</div>
+                          <div className="text-accent font-bold text-sm">{formatEr(ch.er, ch.subscribers_count)}</div>
                           <div className="text-[10px] text-gray-600">ER</div>
                         </div>
                       )}

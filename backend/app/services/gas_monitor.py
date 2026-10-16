@@ -93,6 +93,17 @@ def payout_costs_trx(energy_fee_sun: int) -> dict:
             "existing_holder": cost(escrow_svc.ENERGY_FALLBACK_EXISTING_HOLDER)}
 
 
+def warning_threshold_trx(energy_fee_sun: int | None = None) -> float:
+    """Single source of the «Мало газу» threshold (admin panel, alerts, admin API)."""
+    fee = energy_fee_sun or escrow_svc.ENERGY_FEE_FALLBACK_SUN
+    return round(RESERVE_TRX + WARNING_PAYOUTS * payout_costs_trx(fee)["new_receiver"], 2)
+
+
+def cached_energy_fee_sun() -> int | None:
+    payload = _cache.get("payload") or {}
+    return payload.get("energy_fee_sun")
+
+
 def evaluate(resources: dict | None, *, address: str, refused_24h: int = 0, now=None) -> dict:
     """Pure: resources (escrow.get_account_resources) → status dict."""
     now = now or utcnow_naive()
@@ -101,7 +112,7 @@ def evaluate(resources: dict | None, *, address: str, refused_24h: int = 0, now=
     base = {
         "address": address, "energy_fee_sun": fee, "cost_trx": costs, "reserve_trx": RESERVE_TRX,
         "warning_below_payouts": WARNING_PAYOUTS, "critical_below_payouts": CRITICAL_PAYOUTS,
-        "warning_threshold_trx": round(RESERVE_TRX + WARNING_PAYOUTS * costs["new_receiver"], 2),
+        "warning_threshold_trx": warning_threshold_trx(fee),
         "critical_threshold_trx": round(RESERVE_TRX + CRITICAL_PAYOUTS * costs["new_receiver"], 2),
         "target_trx": round(RESERVE_TRX + TARGET_PAYOUTS * costs["new_receiver"], 2),
         "refused_prechecks_24h": refused_24h, "checked_at": now.isoformat() + "Z",

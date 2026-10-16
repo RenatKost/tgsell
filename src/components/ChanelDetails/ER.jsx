@@ -1,6 +1,7 @@
 import ReactApexChart from 'react-apexcharts';
 import { useState } from 'react';
 import ChartModal from './ChartModal';
+import { reliableEr } from '../../utils/er';
 
 const TF = [
 	{ label: 'Все', days: 0 },
@@ -11,7 +12,7 @@ const TF = [
 
 const ER = ({ stats: rawStats = [], current }) => {
 	// ER is only known for real snapshots (null for retro points).
-	const stats = rawStats.filter(s => s.er != null);
+	const stats = rawStats.filter(s => s.er != null && reliableEr(s.er, s.subscribers) != null);
 	const [tf, setTf] = useState(0);
 	const [modal, setModal] = useState(false);
 
