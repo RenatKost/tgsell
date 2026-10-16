@@ -135,6 +135,10 @@ from app.utils.security_headers import security_headers  # noqa: E402
 
 app.middleware("http")(security_headers)
 
+from app.utils.head_support import HeadAsGetMiddleware  # noqa: E402
+
+app.add_middleware(HeadAsGetMiddleware)  # outermost: HEAD -> GET, body stripped
+
 
 # Routers
 app.include_router(auth.router, prefix="/api")
