@@ -5,6 +5,7 @@ import { useEffect, useRef, useState, useCallback } from 'react';
 import { authAPI } from '../../services/api';
 import { useAuth } from '../../context/AppContext';
 import { isInAppBrowser } from '../../utils/inAppBrowser';
+import InAppBrowserBanner from '../InAppBrowserBanner';
 
 const GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID || '';
 const TOKEN_TTL_MS = 5 * 60 * 1000; // matches backend auth_tokens._TTL
@@ -285,12 +286,8 @@ const AuthModal = ({ show, setShow }) => {
 							</div>
 						)}
 
-						{/* Divider */}
-						{GOOGLE_CLIENT_ID && inApp && (
-							<p className='text-xs text-gray-500 dark:text-gray-400 bg-gray-50 dark:bg-slate-700/40 rounded-xl px-4 py-3 w-full'>
-								Вхід через Google недоступний у вбудованому браузері застосунку. Відкрийте сайт у Chrome або Safari, щоб увійти через Google.
-							</p>
-						)}
+						{/* In-app browser: compact note, only inside the login modal */}
+						{inApp && <InAppBrowserBanner />}
 						{GOOGLE_CLIENT_ID && !inApp && (
 							<>
 								<div className='flex items-center gap-3 w-full'>
