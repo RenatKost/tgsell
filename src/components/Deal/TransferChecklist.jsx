@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { dealsAPI } from '../../services/api';
+import { balanceText } from '../Balance/BalanceBadges';
 
 // Server timestamps are naive UTC — append Z so the browser shows local time.
 const formatTime = (iso) => {
@@ -27,7 +28,7 @@ const AutoBadge = ({ item }) => {
 	);
 };
 
-const SideCard = ({ side, editable, busyKey, onToggle, isMine }) => {
+const SideCard = ({ side, editable, busyKey, onToggle, isMine, balance, onBalanceMismatch }) => {
 	const complete = side.required_done === side.required_total;
 	return (
 		<div className={`rounded-xl border-2 p-4 ${complete ? 'border-green-300 bg-green-50/50 dark:bg-green-900/10' : 'border-gray-200 dark:border-slate-600 bg-gray-50 dark:bg-slate-700/40'}`}>
@@ -73,7 +74,22 @@ const SideCard = ({ side, editable, busyKey, onToggle, isMine }) => {
 								{item.label}
 								{!item.required && <span className='ml-1 text-xs text-gray-400'>(необов’язково)</span>}
 							</p>
+							{item.key === 'balance_ok' && balance && (
+								<p className='text-xs font-semibold text-yellow-600 dark:text-yellow-400 mt-0.5'>
+									{balance} <span className='font-normal text-gray-400'>· зі слів продавця</span>
+								</p>
+							)}
 							{item.hint && !item.done && <p className='text-[11px] text-gray-400 mt-0.5'>{item.hint}</p>}
+							{item.key === 'balance_ok' && editable && !item.done && onBalanceMismatch && (
+								<button
+									type='button'
+									onClick={onBalanceMismatch}
+									disabled={busyKey !== null}
+									className='mt-1.5 text-[11px] font-semibold px-2.5 py-1 rounded-lg border border-red-200 text-red-600 hover:bg-red-50 dark:border-red-800 dark:text-red-400 dark:hover:bg-red-900/20 disabled:opacity-40'
+								>
+									Баланс не відповідає
+								</button>
+							)}
 							{item.done && item.done_at && (
 								<p className='text-[11px] text-green-600 dark:text-green-400 mt-0.5'>Виконано {formatTime(item.done_at)}</p>
 							)}
@@ -121,6 +137,20 @@ const TransferChecklist = ({ dealId, dealStatus, onChange, onLoaded, onError }) 
 			if (d.status !== dealStatus) onChange?.();
 		} catch (err) {
 			onError?.(err.response?.data?.detail || 'Не вдалося оновити пункт чек-листа');
+		} finally {
+			setBusyKey(null);
+		}
+	};
+
+	const handleBalanceMismatch = async () => {
+		if (!window.confirm('Баланс не відповідає заявленому? Буде відкрито спір, гарант розгляне угоду.')) return;
+		setBusyKey('balance_ok');
+		try {
+			await dealsAPI.reportBalanceMismatch(dealId);
+			onChange?.();
+			await load();
+		} catch (err) {
+			onError?.(err.response?.data?.detail || 'Не вдалося відкрити спір');
 		} finally {
 			setBusyKey(null);
 		}
@@ -175,6 +205,8 @@ const TransferChecklist = ({ dealId, dealStatus, onChange, onLoaded, onError }) 
 						editable={data.can_edit && mySide === side.side}
 						busyKey={busyKey}
 						onToggle={handleToggle}
+						balance={balanceText(data.balance_stars, data.balance_ton)}
+						onBalanceMismatch={side.side === 'buyer' ? handleBalanceMismatch : null}
 					/>
 				))}
 			</div>

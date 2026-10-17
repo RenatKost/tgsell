@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from pydantic import BaseModel, model_validator
+from pydantic import BaseModel, Field, model_validator
 
 
 class ChannelCreate(BaseModel):
@@ -23,6 +23,9 @@ class ChannelCreate(BaseModel):
     subscribers_count: int | None = None
     avg_views: int | None = None
     er: float | None = None
+    # Task 31: seller-stated balance (optional, >= 0; "зі слів продавця")
+    stars_balance: int | None = Field(default=None, ge=0, le=10**12)
+    ton_balance: float | None = Field(default=None, ge=0, le=10**11)
 
 
 class ChannelUpdate(BaseModel):
@@ -37,6 +40,9 @@ class ChannelUpdate(BaseModel):
     subscribers_count: int | None = None
     avg_views: int | None = None
     er: float | None = None
+    # Task 31: seller-stated balance (optional, >= 0; "зі слів продавця")
+    stars_balance: int | None = Field(default=None, ge=0, le=10**12)
+    ton_balance: float | None = Field(default=None, ge=0, le=10**11)
 
 
 class ChannelResponse(BaseModel):
@@ -92,6 +98,9 @@ class ChannelResponse(BaseModel):
     quality_health: str | None = None  # clean / suspicious / insufficient
     quality_breakdown: dict | None = None
     quality_updated_at: datetime | None = None
+    # Task 31: seller-stated balance (display only)
+    stars_balance: int | None = None
+    ton_balance: float | None = None
 
     @model_validator(mode="after")
     def _sanitize_avatar(self):

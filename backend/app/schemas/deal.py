@@ -10,6 +10,9 @@ class DealCreate(BaseModel):
 
 class DealResponse(BaseModel):
     id: int
+    # Task 31: seller-stated balance snapshot (None for deals without balance)
+    balance_stars: int | None = None
+    balance_ton: float | None = None
     channel_id: int | None = None
     bundle_id: int | None = None
     buyer_id: int
@@ -128,6 +131,9 @@ class DealChecklistResponse(BaseModel):
     last_activity_at: datetime | None = None
     telethon_available: bool = False
     auto_verify_message: str | None = None
+    # Task 31: balance snapshot taken at deal creation (None for older deals)
+    balance_stars: int | None = None
+    balance_ton: float | None = None
 
 
 class ChecklistToggleRequest(BaseModel):

@@ -132,6 +132,8 @@ const SellForm = ({ onBack }) => {
 			subscribers_count: '',
 			avg_views: '',
 			er: '',
+			stars_balance: '',
+			ton_balance: '',
 		},
 		validationSchema: Yup.object({
 			telegram_link: Yup.string()
@@ -166,6 +168,13 @@ const SellForm = ({ onBack }) => {
 					is: true,
 					then: (schema) => schema.required('Вкажіть кількість підписників'),
 				}),
+			stars_balance: Yup.number()
+				.typeError('Введіть ціле число')
+				.integer('Введіть ціле число')
+				.min(0, 'Не може бути відʼємним'),
+			ton_balance: Yup.number()
+				.typeError('Введіть число')
+				.min(0, 'Не може бути відʼємним'),
 		}),
 		onSubmit: async (vals, { resetForm }) => {
 			if (!isAuthenticated) {
@@ -184,6 +193,8 @@ const SellForm = ({ onBack }) => {
 					description: vals.description || null,
 					resources: resources || null,
 					listing_type: vals.listing_type,
+					stars_balance: vals.stars_balance !== '' ? parseInt(vals.stars_balance, 10) : null,
+					ton_balance: vals.ton_balance !== '' ? parseFloat(String(vals.ton_balance).replace(',', '.')) : null,
 				};
 				if (vals.listing_type === 'auction' || vals.listing_type === 'both') {
 					payload.auction_start_price = parseFloat(vals.auction_start_price);
@@ -487,6 +498,42 @@ const SellForm = ({ onBack }) => {
 								</InputField>
 
 								<div></div>
+
+								<InputField label='Баланс каналу в Telegram Stars'>
+									<input
+										className={inputClass}
+										name='stars_balance'
+										value={values.stars_balance}
+										onChange={handleChange}
+										onBlur={handleBlur}
+										type='text'
+										inputMode='numeric'
+										placeholder='Напр. 1500'
+									/>
+									{touched.stars_balance && errors.stars_balance && (
+										<p className='text-red-400 text-xs mt-1'>{errors.stars_balance}</p>
+									)}
+								</InputField>
+
+								<InputField label='Баланс каналу в TON'>
+									<input
+										className={inputClass}
+										name='ton_balance'
+										value={values.ton_balance}
+										onChange={handleChange}
+										onBlur={handleBlur}
+										type='text'
+										inputMode='decimal'
+										placeholder='Напр. 12.5'
+									/>
+									{touched.ton_balance && errors.ton_balance && (
+										<p className='text-red-400 text-xs mt-1'>{errors.ton_balance}</p>
+									)}
+								</InputField>
+
+								<p className='md:col-span-2 text-xs text-gray-500 -mt-2'>
+									Баланс показується покупцям як «зі слів продавця» і не впливає на ціну. Покупець підтвердить його під час передачі каналу.
+								</p>
 
 								<div className='md:col-span-2'>
 									<InputField label='Опис каналу'>

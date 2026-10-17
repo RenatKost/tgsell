@@ -7,6 +7,7 @@ from app.models.channel import Channel
 CATALOG_FILTER_KEYS = (
     "search", "category", "min_price", "max_price", "roi_max", "er_min", "verified_data",
     "ai_recommended", "pps_min", "pps_max", "no_inflation", "min_subscribers", "max_subscribers",
+    "with_balance",  # Task 31: seller-stated Stars or TON balance > 0
 )
 
 
@@ -52,6 +53,8 @@ def apply_catalog_filters(query, f: dict):
             query = query.where(pps_expr <= g("pps_max"))
     if g("no_inflation"):
         query = query.where(Channel.quality_health == "clean")
+    if g("with_balance"):
+        query = query.where((Channel.stars_balance > 0) | (Channel.ton_balance > 0))
     return query
 
 

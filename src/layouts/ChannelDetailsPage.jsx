@@ -16,6 +16,7 @@ import PostsList from '../components/ChanelDetails/PostsList';
 import AiAnalysis from '../components/ChanelDetails/AiAnalysis';
 import { PriceEstimate } from '../components/Pricing/PriceVerdict';
 import { QualityBlock } from '../components/Quality/QualityBadge';
+import BalanceBadges, { hasBalance } from '../components/Balance/BalanceBadges';
 import SimilarChannels from '../components/Similar/SimilarChannels';
 
 const ChannelDetailsPage = () => {
@@ -130,6 +131,13 @@ const ChannelDetailsPage = () => {
 				{/* LEFT SIDEBAR: DetailsCard → Comment → Resources → ChannelHealth */}
 				<div className='flex flex-col gap-4'>
 					<DetailsCard channel={channel} onBuy={handleBuy} onAuction={handleGoAuction} stats={stats} />
+					{hasBalance(channel) && (
+						<div className='bg-white dark:bg-card rounded-2xl border border-gray-100 dark:border-card-border p-4'>
+							<p className='text-xs font-semibold text-gray-500 dark:text-gray-400 mb-2'>Баланс каналу</p>
+							<BalanceBadges stars={channel.stars_balance} ton={channel.ton_balance} />
+							<p className='text-[11px] text-gray-400 mt-2 leading-snug'>Не перевіряється платформою й не входить у ціну. Покупець підтверджує баланс під час передачі каналу.</p>
+						</div>
+					)}
 					<QualityBlock channel={channel} />
 					<PriceEstimate channel={channel} />
 

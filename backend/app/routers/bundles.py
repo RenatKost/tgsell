@@ -42,6 +42,8 @@ def _channel_to_info(channel: Channel) -> BundleChannelInfo:
         avg_views=channel.avg_views,
         er=channel.er,
         category=channel.category or "",
+        stars_balance=channel.stars_balance,
+        ton_balance=channel.ton_balance,
     )
 
 
@@ -243,6 +245,11 @@ async def create_bundle(
             db.add(channel)
             await db.flush()
 
+        if body.channel_balances and idx < len(body.channel_balances) and body.channel_balances[idx]:
+            bal = body.channel_balances[idx]
+            channel.stars_balance = bal.stars_balance
+            channel.ton_balance = bal.ton_balance
+
         bc = BundleChannel(bundle_id=bundle.id, channel_id=channel.id, display_order=idx)
         db.add(bc)
 
@@ -283,8 +290,17 @@ async def update_bundle(
     if bundle.status != BundleStatus.pending:
         raise HTTPException(status_code=400, detail="Can only edit pending bundles")
 
-    for field, value in body.model_dump(exclude_none=True).items():
+    balances = body.channel_balances
+    for field, value in body.model_dump(exclude_none=True, exclude={"channel_balances"}).items():
         setattr(bundle, field, value)
+    if balances:
+        by_id = {bc.channel_id: bc.channel for bc in bundle.bundle_channels}
+        for bal in balances:
+            ch = by_id.get(bal.channel_id)
+            if ch is None:
+                raise HTTPException(status_code=400, detail="Канал не належить до цієї сітки")
+            ch.stars_balance = bal.stars_balance
+            ch.ton_balance = bal.ton_balance
     await db.commit()
     await db.refresh(bundle)
     return _bundle_to_response(bundle)

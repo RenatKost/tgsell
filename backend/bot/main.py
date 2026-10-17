@@ -247,7 +247,7 @@ async def cb_deal_confirm(callback: CallbackQuery):
 
         now = _dt.utcnow()
         items = await checklist_svc.ensure_checklist(db, deal, now)
-        open_own = checklist_svc.open_required_defs(items, checklist_svc.SIDE_BUYER)
+        open_own = checklist_svc.open_required_defs(items, checklist_svc.SIDE_BUYER, deal)
         if open_own:
             await db.commit()
             await callback.answer(

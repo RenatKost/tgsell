@@ -118,6 +118,7 @@ const CatalogPage = () => {
 	const [er20, setEr20] = useState(false);
 	const [verifiedData, setVerifiedData] = useState(false);
 	const [noInflation, setNoInflation] = useState(false);
+	const [withBalance, setWithBalance] = useState(false); // Task 31
 	const [aiRecommended, setAiRecommended] = useState(false);
 	const [priceRange, setPriceRange] = useState([0, PRICE_MAX]);
 	const [ppsBucket, setPpsBucket] = useState('');
@@ -138,6 +139,7 @@ const CatalogPage = () => {
 		if (er20) params.er_min = 20;
 		if (verifiedData) params.verified_data = true;
 		if (noInflation) params.no_inflation = true;
+		if (withBalance) params.with_balance = true;
 		if (aiRecommended) params.ai_recommended = true;
 		if (debouncedPrice[0] > 0) params.min_price = debouncedPrice[0];
 		if (debouncedPrice[1] < PRICE_MAX) params.max_price = debouncedPrice[1];
@@ -152,7 +154,7 @@ const CatalogPage = () => {
 			if (subs.max != null) params.max_subscribers = subs.max;
 		}
 		return params;
-	}, [search, category, roi6, roi12, er20, verifiedData, noInflation, aiRecommended, debouncedPrice, ppsBucket, subsBucket]);
+	}, [search, category, roi6, roi12, er20, verifiedData, noInflation, withBalance, aiRecommended, debouncedPrice, ppsBucket, subsBucket]);
 
 	const fetchChannels = useCallback(async () => {
 		setLoading(true);
@@ -201,7 +203,7 @@ const CatalogPage = () => {
 	const resetPage = () => setPage(1, { replace: true });
 
 	// Mobile «Фільтри» button: number of active filters (category + chips + selects + price)
-	const activeFilterCount = [category, roi6, roi12, er20, verifiedData, noInflation, aiRecommended, ppsBucket, subsBucket,
+	const activeFilterCount = [category, roi6, roi12, er20, verifiedData, noInflation, withBalance, aiRecommended, ppsBucket, subsBucket,
 		priceRange[0] > 0 || priceRange[1] < PRICE_MAX].filter(Boolean).length;
 	const [filtersOpen, setFiltersOpen] = useState(false);
 	useEffect(() => {
@@ -214,7 +216,7 @@ const CatalogPage = () => {
 	}, [filtersOpen]);
 	const resetAll = () => {
 		setRoi6(false); setRoi12(false); setEr20(false);
-		setVerifiedData(false); setNoInflation(false); setAiRecommended(false); setPpsBucket(''); setSubsBucket('');
+		setVerifiedData(false); setNoInflation(false); setWithBalance(false); setAiRecommended(false); setPpsBucket(''); setSubsBucket('');
 		setPriceRange([0, PRICE_MAX]); resetPage();
 	};
 
@@ -355,6 +357,15 @@ const CatalogPage = () => {
 			activeColor='bg-green-500 text-white'
 		/>
 
+		{/* Task 31: з балансом (Stars або TON зі слів продавця) */}
+		<Chip
+			active={withBalance}
+			onClick={() => { setWithBalance(v => !v); resetPage(); }}
+			icon={<span className='text-[11px] leading-none'>⭐</span>}
+			label='з балансом'
+			activeColor='bg-yellow-500 text-black'
+		/>
+
 		{/* AI підбор */}
 		<Chip
 			active={aiRecommended}
@@ -479,7 +490,7 @@ const CatalogPage = () => {
 			{/* Active filter badges (desktop) */}
 			<div className='hidden md:block'>
 			<AnimatePresence>
-				{(roi6 || roi12 || er20 || verifiedData || noInflation || aiRecommended || ppsBucket || subsBucket || priceRange[0] > 0 || priceRange[1] < PRICE_MAX) && (
+				{(roi6 || roi12 || er20 || verifiedData || noInflation || withBalance || aiRecommended || ppsBucket || subsBucket || priceRange[0] > 0 || priceRange[1] < PRICE_MAX) && (
 					<motion.div
 						initial={{ opacity: 0, height: 0 }}
 						animate={{ opacity: 1, height: 'auto' }}
@@ -492,6 +503,7 @@ const CatalogPage = () => {
 						{er20 && <span className='text-xs bg-accent/10 text-accent px-2 py-0.5 rounded-full'>ER &gt; 20%</span>}
 						{verifiedData && <span className='text-xs bg-green-500/10 text-green-400 px-2 py-0.5 rounded-full'>✓ verified data</span>}
 						{noInflation && <span className='text-xs bg-green-500/10 text-green-400 px-2 py-0.5 rounded-full'>без накрутки</span>}
+						{withBalance && <span className='text-xs bg-yellow-500/10 text-yellow-400 px-2 py-0.5 rounded-full'>⭐ з балансом</span>}
 						{aiRecommended && <span className='text-xs bg-accent/10 text-accent px-2 py-0.5 rounded-full'>TgSell підбір</span>}
 						{ppsBucket && <span className='text-xs bg-accent/10 text-accent px-2 py-0.5 rounded-full'>{PPS_BUCKETS.find(b => b.value === ppsBucket)?.label}</span>}
 						{(priceRange[0] > 0 || priceRange[1] < PRICE_MAX) && (

@@ -180,6 +180,10 @@ export const dealsAPI = {
 	toggleChecklistItem: (id, key, done) =>
 		api.post(`/deals/${id}/checklist/${key}`, typeof done === 'boolean' ? { done } : {}),
 
+	// Task 31: buyer reports the stated Stars/TON balance is missing → dispute
+	reportBalanceMismatch: (id) =>
+		api.post(`/deals/${id}/checklist/balance-mismatch`),
+
 	autoVerifyChecklist: (id) =>
 		api.post(`/deals/${id}/checklist/auto-verify`, null, { timeout: 40000 }),
 };

@@ -68,7 +68,55 @@ CHECKLIST_ITEMS: tuple[ChecklistItemDef, ...] = (
         "Перевірив підписників/стату — приблизно як у лоті",
     ),
 )
-ITEMS_BY_KEY: dict[str, ChecklistItemDef] = {d.key: d for d in CHECKLIST_ITEMS}
+# Task 31: conditional buyer item — only for deals whose creation-time snapshot
+# (deal.balance_stars / deal.balance_ton) carries a stated balance > 0.
+BALANCE_ITEM_KEY = "balance_ok"
+BALANCE_ITEM = ChecklistItemDef(
+    BALANCE_ITEM_KEY, SIDE_BUYER, "Баланс Stars/TON на місці",
+    hint="Баланс зі слів продавця; якщо він не відповідає — відкрийте спір",
+)
+ITEMS_BY_KEY: dict[str, ChecklistItemDef] = {d.key: d for d in (*CHECKLIST_ITEMS, BALANCE_ITEM)}
+
+
+def deal_has_balance(deal) -> bool:
+    stars = getattr(deal, "balance_stars", None) or 0
+    ton = getattr(deal, "balance_ton", None) or 0
+    return stars > 0 or ton > 0
+
+
+def format_balance(stars, ton) -> str:
+    parts = []
+    if stars:
+        parts.append(f"⭐ {int(stars)} Stars")
+    if ton:
+        parts.append(f"💎 {float(ton):g} TON")
+    return ", ".join(parts)
+
+
+def balance_snapshot(channel) -> dict:
+    """Deal kwargs snapshotting a channel's stated balance (None when unset/zero)."""
+    stars = getattr(channel, "stars_balance", None)
+    ton = getattr(channel, "ton_balance", None)
+    return {
+        "balance_stars": int(stars) if stars else None,
+        "balance_ton": float(ton) if ton else None,
+    }
+
+
+def bundle_balance_snapshot(channels) -> dict:
+    stars = sum(int(getattr(c, "stars_balance", None) or 0) for c in channels if c is not None)
+    ton = sum(float(getattr(c, "ton_balance", None) or 0) for c in channels if c is not None)
+    return {"balance_stars": stars or None, "balance_ton": round(ton, 9) or None}
+
+
+def checklist_defs(deal=None, items: Iterable = ()) -> tuple[ChecklistItemDef, ...]:
+    """Items applicable to a deal. The balance item applies when the deal has a
+    balance snapshot OR a balance row already exists (fail-closed)."""
+    if (deal is not None and deal_has_balance(deal)) or any(
+        getattr(i, "key", None) == BALANCE_ITEM_KEY for i in items
+    ):
+        return (*CHECKLIST_ITEMS, BALANCE_ITEM)
+    return CHECKLIST_ITEMS
 
 # Reminder thresholds (idle time since last checklist activity).
 REMINDER_6H = timedelta(hours=6)
@@ -85,8 +133,8 @@ SUBSCRIBERS_TOLERANCE = 0.15
 
 # ── Pure helpers ───────────────────────────────────────────────────────
 
-def defs_for_side(side: str) -> list[ChecklistItemDef]:
-    return [d for d in CHECKLIST_ITEMS if d.side == side]
+def defs_for_side(side: str, deal=None, items: Iterable = ()) -> list[ChecklistItemDef]:
+    return [d for d in checklist_defs(deal, list(items)) if d.side == side]
 
 
 def side_for_user(deal, user_id: int | None) -> str | None:
@@ -103,17 +151,18 @@ def _done_keys(items: Iterable) -> set[str]:
     return {i.key for i in items if getattr(i, "done", False)}
 
 
-def open_required_defs(items: Iterable, side: str | None = None) -> list[ChecklistItemDef]:
+def open_required_defs(items: Iterable, side: str | None = None, deal=None) -> list[ChecklistItemDef]:
     """Required items not done. Missing rows count as open (fail-closed)."""
+    items = list(items)
     done = _done_keys(items)
     return [
-        d for d in CHECKLIST_ITEMS
+        d for d in checklist_defs(deal, items)
         if d.required and (side is None or d.side == side) and d.key not in done
     ]
 
 
-def all_required_done(items: Iterable) -> bool:
-    return not open_required_defs(list(items))
+def all_required_done(items: Iterable, deal=None) -> bool:
+    return not open_required_defs(list(items), deal=deal)
 
 
 def side_confirmed(deal, side: str) -> bool:
@@ -129,7 +178,7 @@ def can_advance_to_awaiting_payout(deal, items: Iterable) -> bool:
         deal.status in TRANSFER_STATUSES
         and bool(deal.buyer_confirmed_transfer)
         and bool(deal.seller_confirmed_transfer)
-        and all_required_done(items)
+        and all_required_done(items, deal)
     )
 
 
@@ -161,6 +210,8 @@ def check_toggle_allowed(deal, user_id: int | None, key: str) -> tuple[Checklist
         raise ChecklistError(
             "not_participant", "Відмічати пункти можуть лише учасники угоди", http_status=403
         )
+    if key == BALANCE_ITEM_KEY and not deal_has_balance(deal):
+        raise ChecklistError("unknown_item", "Для цієї угоди баланс не вказано", http_status=404)
     if item_def.side != side:
         raise ChecklistError(
             "wrong_side", "Цей пункт відмічає інша сторона угоди", http_status=403
@@ -189,7 +240,7 @@ def check_confirm_allowed(deal, user_id: int | None, items: Iterable) -> str:
         raise ChecklistError("not_participant", "Access denied", http_status=403)
     if deal.status not in TRANSFER_STATUSES:
         raise ChecklistError("wrong_status", "Угода не в статусі передачі каналу", http_status=400)
-    open_own = open_required_defs(list(items), side)
+    open_own = open_required_defs(list(items), side, deal)
     if open_own:
         raise ChecklistError("checklist_open", checklist_block_message(open_own), http_status=400)
     return side
@@ -200,7 +251,7 @@ def pending_sides(deal, items: Iterable) -> list[str]:
     items = list(items)
     out = []
     for side in SIDES:
-        if open_required_defs(items, side) or not side_confirmed(deal, side):
+        if open_required_defs(items, side, deal) or not side_confirmed(deal, side):
             out.append(side)
     return out
 
@@ -269,7 +320,7 @@ def plan_deal_reminders(deal, items: Iterable, now: datetime) -> ReminderPlan | 
         deal_id=deal.id,
         stages=stages,
         sides=sides,
-        open_labels={s: [d.label for d in open_required_defs(items, s)] for s in sides},
+        open_labels={s: [d.label for d in open_required_defs(items, s, deal)] for s in sides},
         needs_confirm={s: not side_confirmed(deal, s) for s in sides},
         idle_hours=round(idle.total_seconds() / 3600, 1),
     )
@@ -424,7 +475,7 @@ async def ensure_checklist(db, deal: Deal, now: datetime | None = None) -> list[
     now = now or datetime.utcnow()
     existing = await load_items(db, deal.id)
     have = {i.key for i in existing}
-    missing = [d for d in CHECKLIST_ITEMS if d.key not in have]
+    missing = [d for d in checklist_defs(deal, existing) if d.key not in have]
     if missing:
         stmt = pg_insert(DealChecklistItem.__table__).values([
             {"deal_id": deal.id, "side": d.side, "key": d.key,

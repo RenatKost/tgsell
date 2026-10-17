@@ -7,6 +7,7 @@ import { dealsAPI } from '../../services/api';
 import { PriceVerdictBadge } from '../Pricing/PriceVerdict';
 import { QualityBadge } from '../Quality/QualityBadge';
 import { formatEr, reliableEr } from '../../utils/er';
+import BalanceBadges from '../Balance/BalanceBadges';
 
 /* ── Tooltip ─────────────────────────────────────────────────────── */
 const Tooltip = ({ children, text, desc }) => {
@@ -130,6 +131,7 @@ const CatalogCard = ({ channel }) => {
 					)}
 					<QualityBadge channel={channel} />
 					<PriceVerdictBadge channel={channel} />
+					<BalanceBadges stars={channel.stars_balance} ton={channel.ton_balance} size='xs' />
 					{channel.bundle_id ? (
 						<span className='bg-accent/15 text-accent text-[11px] font-bold px-2.5 py-1 rounded-lg border border-accent/30'>
 							📡 В сетці · {channel.bundle_name}
