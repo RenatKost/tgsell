@@ -200,15 +200,209 @@ const CatalogPage = () => {
 
 	const resetPage = () => setPage(1, { replace: true });
 
+	// Mobile «Фільтри» button: number of active filters (category + chips + selects + price)
+	const activeFilterCount = [category, roi6, roi12, er20, verifiedData, noInflation, aiRecommended, ppsBucket, subsBucket,
+		priceRange[0] > 0 || priceRange[1] < PRICE_MAX].filter(Boolean).length;
+	const [filtersOpen, setFiltersOpen] = useState(false);
+	useEffect(() => {
+		if (!filtersOpen) return undefined;
+		const prev = document.body.style.overflow;
+		document.body.style.overflow = 'hidden';
+		const onKey = (e) => { if (e.key === 'Escape') setFiltersOpen(false); };
+		window.addEventListener('keydown', onKey);
+		return () => { document.body.style.overflow = prev; window.removeEventListener('keydown', onKey); };
+	}, [filtersOpen]);
+	const resetAll = () => {
+		setRoi6(false); setRoi12(false); setEr20(false);
+		setVerifiedData(false); setNoInflation(false); setAiRecommended(false); setPpsBucket(''); setSubsBucket('');
+		setPriceRange([0, PRICE_MAX]); resetPage();
+	};
+
+	const categorySelect = (
+<div className='relative'>
+	<select
+		value={category}
+		onChange={(e) => { setCategory(e.target.value); resetPage(); }}
+		className='appearance-none bg-gray-50 dark:bg-card-inner border border-gray-200 dark:border-card-border text-gray-700 dark:text-gray-300 text-[12px] font-semibold pl-3 pr-7 py-1.5 rounded-xl focus:outline-none focus:border-accent cursor-pointer transition-colors'
+	>
+		<option value=''>Категорія</option>
+		{categoryOptions.map(opt => (
+			<option key={opt.label} value={opt.label}>{opt.label}</option>
+		))}
+	</select>
+	<svg className='pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-gray-400' width='10' height='10' viewBox='0 0 12 12'>
+		<path d='M2 4l4 4 4-4' stroke='currentColor' strokeWidth='1.6' strokeLinecap='round' strokeLinejoin='round' fill='none'/>
+	</svg>
+</div>
+	);
+	const sortSelect = (
+<div className='relative'>
+	<select
+		value={sortBy}
+		onChange={(e) => { setSortBy(e.target.value); resetPage(); }}
+		className='appearance-none bg-gray-50 dark:bg-card-inner border border-gray-200 dark:border-card-border text-gray-700 dark:text-gray-300 text-[12px] font-semibold pl-3 pr-7 py-1.5 rounded-xl focus:outline-none focus:border-accent cursor-pointer transition-colors'
+	>
+		<option value='newest'>Новіші</option>
+		<option value='price_asc'>Ціна ↑</option>
+		<option value='price_desc'>Ціна ↓</option>
+		<option value='subscribers_desc'>Підписники ↓</option>
+		<option value='pps_asc'>Ціна за підписника ↑</option>
+		<option value='pps_desc'>Ціна за підписника ↓</option>
+		<option value='quality_desc'>Якість ↓</option>
+		<option value='ppv_asc'>Ціна за перегляд ↑</option>
+	</select>
+	<svg className='pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-gray-400' width='10' height='10' viewBox='0 0 12 12'>
+		<path d='M2 4l4 4 4-4' stroke='currentColor' strokeWidth='1.6' strokeLinecap='round' strokeLinejoin='round' fill='none'/>
+	</svg>
+</div>
+	);
+	const otherFilters = (
+		<>
+		{/* Price per subscriber filter */}
+		<div className='relative'>
+			<select
+				value={ppsBucket}
+				onChange={(e) => { setPpsBucket(e.target.value); resetPage(); }}
+				className='appearance-none bg-gray-50 dark:bg-card-inner border border-gray-200 dark:border-card-border text-gray-700 dark:text-gray-300 text-[12px] font-semibold pl-3 pr-7 py-1.5 rounded-xl focus:outline-none focus:border-accent cursor-pointer transition-colors'
+			>
+				<option value=''>Ціна за підписника</option>
+				{PPS_BUCKETS.map(b => <option key={b.value} value={b.value}>{b.label}</option>)}
+			</select>
+			<svg className='pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-gray-400' width='10' height='10' viewBox='0 0 12 12'>
+				<path d='M2 4l4 4 4-4' stroke='currentColor' strokeWidth='1.6' strokeLinecap='round' strokeLinejoin='round' fill='none'/>
+			</svg>
+		</div>
+
+		{/* Subscribers filter (Task 24) */}
+		<div className='relative'>
+			<select
+				value={subsBucket}
+				onChange={(e) => { setSubsBucket(e.target.value); resetPage(); }}
+				className='appearance-none bg-gray-50 dark:bg-card-inner border border-gray-200 dark:border-card-border text-gray-700 dark:text-gray-300 text-[12px] font-semibold pl-3 pr-7 py-1.5 rounded-xl focus:outline-none focus:border-accent cursor-pointer transition-colors'
+			>
+				<option value=''>Підписники</option>
+				{SUBS_BUCKETS.map(b => <option key={b.value} value={b.value}>{b.label}</option>)}
+			</select>
+			<svg className='pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-gray-400' width='10' height='10' viewBox='0 0 12 12'>
+				<path d='M2 4l4 4 4-4' stroke='currentColor' strokeWidth='1.6' strokeLinecap='round' strokeLinejoin='round' fill='none'/>
+			</svg>
+		</div>
+
+		<div className='h-5 w-px bg-gray-200 dark:bg-card-border mx-1 hidden sm:block' />
+
+		{/* ROI chips */}
+		<Chip
+			active={roi6}
+			onClick={() => { setRoi6(v => !v); if (!roi6) setRoi12(false); resetPage(); }}
+			icon={
+				<svg width='12' height='12' viewBox='0 0 24 24' fill='none'>
+					<path d='M3 17l4-8 4 5 3-3 4 6' stroke='currentColor' strokeWidth='2' strokeLinecap='round' strokeLinejoin='round'/>
+				</svg>
+			}
+			label='ROI < 6 міс.'
+			activeColor='bg-accent text-black'
+		/>
+		<Chip
+			active={roi12}
+			onClick={() => { setRoi12(v => !v); if (!roi12) setRoi6(false); resetPage(); }}
+			icon={
+				<svg width='12' height='12' viewBox='0 0 24 24' fill='none'>
+					<path d='M3 17l4-8 4 5 3-3 4 6' stroke='currentColor' strokeWidth='2' strokeLinecap='round' strokeLinejoin='round'/>
+				</svg>
+			}
+			label='ROI < 12 міс.'
+			activeColor='bg-accent text-black'
+		/>
+		<Chip
+			active={er20}
+			onClick={() => { setEr20(v => !v); resetPage(); }}
+			icon={
+				<svg width='12' height='12' viewBox='0 0 24 24' fill='none'>
+					<path d='M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7z' stroke='currentColor' strokeWidth='2'/>
+					<circle cx='12' cy='12' r='3' stroke='currentColor' strokeWidth='2'/>
+				</svg>
+			}
+			label='ER > 20%'
+			activeColor='bg-accent text-black'
+		/>
+
+		<div className='h-5 w-px bg-gray-200 dark:bg-card-border mx-1 hidden sm:block' />
+
+		{/* Verified data */}
+		<Chip
+			active={verifiedData}
+			onClick={() => { setVerifiedData(v => !v); resetPage(); }}
+			icon={
+				<svg width='12' height='12' viewBox='0 0 24 24' fill='none'>
+					<path d='M12 2l2.4 7.4H22l-6.2 4.5 2.4 7.4L12 17l-6.2 4.3 2.4-7.4L2 9.4h7.6z' stroke='currentColor' strokeWidth='2' strokeLinejoin='round'/>
+				</svg>
+			}
+			label='verified data'
+			activeColor='bg-green-500 text-white'
+		/>
+
+		{/* Task 22: без накрутки */}
+		<Chip
+			active={noInflation}
+			onClick={() => { setNoInflation(v => !v); resetPage(); }}
+			icon={
+				<svg width='12' height='12' viewBox='0 0 24 24' fill='none'>
+					<path d='M12 3l8 3v6c0 4.5-3.4 8.3-8 9-4.6-.7-8-4.5-8-9V6l8-3z' stroke='currentColor' strokeWidth='2' strokeLinejoin='round'/>
+					<path d='M8.5 12l2.5 2.5 4.5-5' stroke='currentColor' strokeWidth='2' strokeLinecap='round' strokeLinejoin='round'/>
+				</svg>
+			}
+			label='без накрутки'
+			activeColor='bg-green-500 text-white'
+		/>
+
+		{/* AI підбор */}
+		<Chip
+			active={aiRecommended}
+			onClick={() => { setAiRecommended(v => !v); resetPage(); }}
+			icon={
+				<svg width='12' height='12' viewBox='0 0 24 24' fill='none'>
+					<rect x='3' y='7' width='18' height='12' rx='2' stroke='currentColor' strokeWidth='2'/>
+					<path d='M8 7V5a4 4 0 018 0v2' stroke='currentColor' strokeWidth='2' strokeLinecap='round'/>
+					<circle cx='12' cy='13' r='2' fill='currentColor'/>
+				</svg>
+			}
+			label='AI-підбор'
+			activeColor='bg-accent text-black'
+		/>
+
+		{/* Price range */}
+		<div className='sm:ml-auto flex items-center gap-2'>
+			<span className='text-[11px] text-gray-400 font-medium whitespace-nowrap'>Ціна USDT</span>
+			<PriceRangeSlider
+				min={0}
+				max={PRICE_MAX}
+				value={priceRange}
+				onChange={(v) => { setPriceRange(v); resetPage(); }}
+			/>
+		</div>
+		</>
+	);
+	const saveSearchRow = (
+		<div className='flex flex-wrap items-center gap-3'>
+	<button
+		onClick={handleSaveSearch}
+		className='inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-[12px] font-semibold border border-accent/50 text-accent hover:bg-accent hover:text-black transition-colors'
+	>
+		🔔 Зберегти пошук
+	</button>
+	{saveMsg && <span className='text-xs text-gray-500 dark:text-gray-400'>{saveMsg}</span>}
+		</div>
+	);
+
 	return (
-		<section className='pt-28 pb-10'>
+		<section className='pt-24 md:pt-28 pb-10'>
 			{/* ── Header row ── */}
-			<div className='flex flex-col sm:flex-row sm:items-end gap-3 mb-5'>
+			<div className='flex flex-col sm:flex-row sm:items-end gap-2 sm:gap-3 mb-3 md:mb-5'>
 				<div>
-					<h1 className='font-black text-2xl md:text-3xl text-gray-900 dark:text-white tracking-tight uppercase'>
+					<h1 className='font-black text-xl md:text-3xl text-gray-900 dark:text-white tracking-tight uppercase'>
 						Каталог каналів
 					</h1>
-					<p className='text-gray-500 dark:text-gray-400 text-sm mt-0.5'>
+					<p className='hidden md:block text-gray-500 dark:text-gray-400 text-sm mt-0.5'>
 						Знайдіть ідеальний Telegram-канал для покупки
 					</p>
 				</div>
@@ -230,183 +424,60 @@ const CatalogPage = () => {
 				</div>
 			</div>
 
-			{/* ── Filter bar ── */}
-			<div className='flex flex-wrap items-center gap-2 mb-6 bg-white dark:bg-card border border-gray-100 dark:border-card-border rounded-2xl px-4 py-3 shadow-sm dark:shadow-neon'>
-
-				{/* Category dropdown */}
-				<div className='relative'>
-					<select
-						value={category}
-						onChange={(e) => { setCategory(e.target.value); resetPage(); }}
-						className='appearance-none bg-gray-50 dark:bg-card-inner border border-gray-200 dark:border-card-border text-gray-700 dark:text-gray-300 text-[12px] font-semibold pl-3 pr-7 py-1.5 rounded-xl focus:outline-none focus:border-accent cursor-pointer transition-colors'
-					>
-						<option value=''>Категорія</option>
-						{categoryOptions.map(opt => (
-							<option key={opt.label} value={opt.label}>{opt.label}</option>
-						))}
-					</select>
-					<svg className='pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-gray-400' width='10' height='10' viewBox='0 0 12 12'>
-						<path d='M2 4l4 4 4-4' stroke='currentColor' strokeWidth='1.6' strokeLinecap='round' strokeLinejoin='round' fill='none'/>
-					</svg>
-				</div>
-
-				{/* Sort dropdown */}
-				<div className='relative'>
-					<select
-						value={sortBy}
-						onChange={(e) => { setSortBy(e.target.value); resetPage(); }}
-						className='appearance-none bg-gray-50 dark:bg-card-inner border border-gray-200 dark:border-card-border text-gray-700 dark:text-gray-300 text-[12px] font-semibold pl-3 pr-7 py-1.5 rounded-xl focus:outline-none focus:border-accent cursor-pointer transition-colors'
-					>
-						<option value='newest'>Новіші</option>
-						<option value='price_asc'>Ціна ↑</option>
-						<option value='price_desc'>Ціна ↓</option>
-						<option value='subscribers_desc'>Підписники ↓</option>
-						<option value='pps_asc'>Ціна за підписника ↑</option>
-						<option value='pps_desc'>Ціна за підписника ↓</option>
-						<option value='quality_desc'>Якість ↓</option>
-						<option value='ppv_asc'>Ціна за перегляд ↑</option>
-					</select>
-					<svg className='pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-gray-400' width='10' height='10' viewBox='0 0 12 12'>
-						<path d='M2 4l4 4 4-4' stroke='currentColor' strokeWidth='1.6' strokeLinecap='round' strokeLinejoin='round' fill='none'/>
-					</svg>
-				</div>
-
-				{/* Price per subscriber filter */}
-				<div className='relative'>
-					<select
-						value={ppsBucket}
-						onChange={(e) => { setPpsBucket(e.target.value); resetPage(); }}
-						className='appearance-none bg-gray-50 dark:bg-card-inner border border-gray-200 dark:border-card-border text-gray-700 dark:text-gray-300 text-[12px] font-semibold pl-3 pr-7 py-1.5 rounded-xl focus:outline-none focus:border-accent cursor-pointer transition-colors'
-					>
-						<option value=''>Ціна за підписника</option>
-						{PPS_BUCKETS.map(b => <option key={b.value} value={b.value}>{b.label}</option>)}
-					</select>
-					<svg className='pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-gray-400' width='10' height='10' viewBox='0 0 12 12'>
-						<path d='M2 4l4 4 4-4' stroke='currentColor' strokeWidth='1.6' strokeLinecap='round' strokeLinejoin='round' fill='none'/>
-					</svg>
-				</div>
-
-				{/* Subscribers filter (Task 24) */}
-				<div className='relative'>
-					<select
-						value={subsBucket}
-						onChange={(e) => { setSubsBucket(e.target.value); resetPage(); }}
-						className='appearance-none bg-gray-50 dark:bg-card-inner border border-gray-200 dark:border-card-border text-gray-700 dark:text-gray-300 text-[12px] font-semibold pl-3 pr-7 py-1.5 rounded-xl focus:outline-none focus:border-accent cursor-pointer transition-colors'
-					>
-						<option value=''>Підписники</option>
-						{SUBS_BUCKETS.map(b => <option key={b.value} value={b.value}>{b.label}</option>)}
-					</select>
-					<svg className='pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-gray-400' width='10' height='10' viewBox='0 0 12 12'>
-						<path d='M2 4l4 4 4-4' stroke='currentColor' strokeWidth='1.6' strokeLinecap='round' strokeLinejoin='round' fill='none'/>
-					</svg>
-				</div>
-
-				<div className='h-5 w-px bg-gray-200 dark:bg-card-border mx-1 hidden sm:block' />
-
-				{/* ROI chips */}
-				<Chip
-					active={roi6}
-					onClick={() => { setRoi6(v => !v); if (!roi6) setRoi12(false); resetPage(); }}
-					icon={
-						<svg width='12' height='12' viewBox='0 0 24 24' fill='none'>
-							<path d='M3 17l4-8 4 5 3-3 4 6' stroke='currentColor' strokeWidth='2' strokeLinecap='round' strokeLinejoin='round'/>
-						</svg>
-					}
-					label='ROI < 6 міс.'
-					activeColor='bg-accent text-black'
-				/>
-				<Chip
-					active={roi12}
-					onClick={() => { setRoi12(v => !v); if (!roi12) setRoi6(false); resetPage(); }}
-					icon={
-						<svg width='12' height='12' viewBox='0 0 24 24' fill='none'>
-							<path d='M3 17l4-8 4 5 3-3 4 6' stroke='currentColor' strokeWidth='2' strokeLinecap='round' strokeLinejoin='round'/>
-						</svg>
-					}
-					label='ROI < 12 міс.'
-					activeColor='bg-accent text-black'
-				/>
-				<Chip
-					active={er20}
-					onClick={() => { setEr20(v => !v); resetPage(); }}
-					icon={
-						<svg width='12' height='12' viewBox='0 0 24 24' fill='none'>
-							<path d='M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7z' stroke='currentColor' strokeWidth='2'/>
-							<circle cx='12' cy='12' r='3' stroke='currentColor' strokeWidth='2'/>
-						</svg>
-					}
-					label='ER > 20%'
-					activeColor='bg-accent text-black'
-				/>
-
-				<div className='h-5 w-px bg-gray-200 dark:bg-card-border mx-1 hidden sm:block' />
-
-				{/* Verified data */}
-				<Chip
-					active={verifiedData}
-					onClick={() => { setVerifiedData(v => !v); resetPage(); }}
-					icon={
-						<svg width='12' height='12' viewBox='0 0 24 24' fill='none'>
-							<path d='M12 2l2.4 7.4H22l-6.2 4.5 2.4 7.4L12 17l-6.2 4.3 2.4-7.4L2 9.4h7.6z' stroke='currentColor' strokeWidth='2' strokeLinejoin='round'/>
-						</svg>
-					}
-					label='verified data'
-					activeColor='bg-green-500 text-white'
-				/>
-
-				{/* Task 22: без накрутки */}
-				<Chip
-					active={noInflation}
-					onClick={() => { setNoInflation(v => !v); resetPage(); }}
-					icon={
-						<svg width='12' height='12' viewBox='0 0 24 24' fill='none'>
-							<path d='M12 3l8 3v6c0 4.5-3.4 8.3-8 9-4.6-.7-8-4.5-8-9V6l8-3z' stroke='currentColor' strokeWidth='2' strokeLinejoin='round'/>
-							<path d='M8.5 12l2.5 2.5 4.5-5' stroke='currentColor' strokeWidth='2' strokeLinecap='round' strokeLinejoin='round'/>
-						</svg>
-					}
-					label='без накрутки'
-					activeColor='bg-green-500 text-white'
-				/>
-
-				{/* AI підбор */}
-				<Chip
-					active={aiRecommended}
-					onClick={() => { setAiRecommended(v => !v); resetPage(); }}
-					icon={
-						<svg width='12' height='12' viewBox='0 0 24 24' fill='none'>
-							<rect x='3' y='7' width='18' height='12' rx='2' stroke='currentColor' strokeWidth='2'/>
-							<path d='M8 7V5a4 4 0 018 0v2' stroke='currentColor' strokeWidth='2' strokeLinecap='round'/>
-							<circle cx='12' cy='13' r='2' fill='currentColor'/>
-						</svg>
-					}
-					label='AI-підбор'
-					activeColor='bg-accent text-black'
-				/>
-
-				{/* Price range */}
-				<div className='sm:ml-auto flex items-center gap-2'>
-					<span className='text-[11px] text-gray-400 font-medium whitespace-nowrap'>Ціна USDT</span>
-					<PriceRangeSlider
-						min={0}
-						max={PRICE_MAX}
-						value={priceRange}
-						onChange={(v) => { setPriceRange(v); resetPage(); }}
-					/>
-				</div>
-			</div>
-
-			{/* Task 24: save current filters */}
-			<div className='flex flex-wrap items-center gap-3 -mt-3 mb-4'>
+			{/* ── Mobile toolbar: «Фільтри» + compact sort ── */}
+			<div className='flex md:hidden items-center gap-2 mb-3'>
 				<button
-					onClick={handleSaveSearch}
-					className='inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-[12px] font-semibold border border-accent/50 text-accent hover:bg-accent hover:text-black transition-colors'
+					type='button'
+					onClick={() => setFiltersOpen(true)}
+					className='inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-[12px] font-semibold border bg-white dark:bg-card text-gray-700 dark:text-gray-200 border-gray-200 dark:border-card-border'
 				>
-					🔔 Зберегти пошук
+					<svg width='12' height='12' viewBox='0 0 24 24' fill='none'>
+						<path d='M3 5h18M6 12h12M10 19h4' stroke='currentColor' strokeWidth='2' strokeLinecap='round'/>
+					</svg>
+					Фільтри
+					{activeFilterCount > 0 && (
+						<span className='ml-0.5 min-w-[18px] h-[18px] px-1 rounded-full bg-accent text-black text-[10px] font-bold inline-flex items-center justify-center'>{activeFilterCount}</span>
+					)}
 				</button>
-				{saveMsg && <span className='text-xs text-gray-500 dark:text-gray-400'>{saveMsg}</span>}
+				<div className='ml-auto'>{sortSelect}</div>
 			</div>
 
-			{/* Active filter badges */}
+			{/* ── Filter bar (desktop) ── */}
+			<div className='hidden md:flex flex-wrap items-center gap-2 mb-6 bg-white dark:bg-card border border-gray-100 dark:border-card-border rounded-2xl px-4 py-3 shadow-sm dark:shadow-neon'>
+				{categorySelect}
+				{sortSelect}
+				{otherFilters}
+			</div>
+
+			{/* Task 24: save current filters (desktop; on mobile it lives in the sheet) */}
+			<div className='hidden md:block -mt-3 mb-4'>{saveSearchRow}</div>
+
+			{/* ── Mobile filters sheet ── */}
+			{filtersOpen && (
+				<div className='md:hidden fixed inset-0 z-[70]' role='dialog' aria-modal='true' aria-label='Фільтри'>
+					<div className='absolute inset-0 bg-black/50' onClick={() => setFiltersOpen(false)} />
+					<div className='absolute bottom-0 inset-x-0 max-h-[85vh] overflow-y-auto rounded-t-2xl bg-white dark:bg-card border-t border-gray-200 dark:border-card-border p-4 pb-[max(1rem,env(safe-area-inset-bottom))]'>
+						<div className='flex items-center justify-between mb-3'>
+							<p className='font-bold text-gray-900 dark:text-white'>Фільтри</p>
+							<button type='button' onClick={() => setFiltersOpen(false)} aria-label='Закрити' className='text-gray-400 text-2xl leading-none'>×</button>
+						</div>
+						<div className='flex flex-wrap items-center gap-2'>
+							{categorySelect}
+							{otherFilters}
+						</div>
+						<div className='mt-4'>{saveSearchRow}</div>
+						<div className='flex gap-2 mt-4'>
+							<button type='button' onClick={() => { setCategory(''); resetAll(); }} className='flex-1 border border-gray-200 dark:border-card-border text-gray-700 dark:text-gray-200 font-semibold py-2.5 rounded-xl text-sm'>Скинути</button>
+							<button type='button' onClick={() => setFiltersOpen(false)} className='flex-1 bg-accent text-black font-bold py-2.5 rounded-xl text-sm'>
+								Показати{!loading ? ` (${total})` : ''}
+							</button>
+						</div>
+					</div>
+				</div>
+			)}
+
+			{/* Active filter badges (desktop) */}
+			<div className='hidden md:block'>
 			<AnimatePresence>
 				{(roi6 || roi12 || er20 || verifiedData || noInflation || aiRecommended || ppsBucket || subsBucket || priceRange[0] > 0 || priceRange[1] < PRICE_MAX) && (
 					<motion.div
@@ -429,11 +500,7 @@ const CatalogPage = () => {
 							</span>
 						)}
 						<button
-							onClick={() => {
-								setRoi6(false); setRoi12(false); setEr20(false);
-								setVerifiedData(false); setNoInflation(false); setAiRecommended(false); setPpsBucket(''); setSubsBucket('');
-								setPriceRange([0, PRICE_MAX]); resetPage();
-							}}
+							onClick={resetAll}
 							className='text-xs text-gray-400 hover:text-red-400 transition-colors ml-1'
 						>
 							Скинути все ×
@@ -441,7 +508,11 @@ const CatalogPage = () => {
 					</motion.div>
 				)}
 			</AnimatePresence>
+			</div>
 
+			{/* On mobile the channel grid comes first so cards are on the first screen; desktop order unchanged. */}
+			<div className='flex flex-col'>
+			<div className='order-2 md:order-1'>
 			{/* Bundles section */}
 			{(bundlesLoading || bundles.length > 0) && (
 				<div className='mb-10'>
@@ -464,7 +535,8 @@ const CatalogPage = () => {
 					<div className='border-b border-card-border mt-8' />
 				</div>
 			)}
-
+			</div>
+			<div className='order-1 md:order-2 mb-10 md:mb-0'>
 			{/* Results count */}
 			{!loading && channels.length > 0 && (
 				<p className='text-gray-400 text-xs mb-4'>
@@ -525,6 +597,8 @@ const CatalogPage = () => {
 					</button>
 				</div>
 			)}
+			</div>
+			</div>
 		</section>
 	);
 };

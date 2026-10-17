@@ -22,12 +22,14 @@ const copyText = async (text) => {
 	}
 };
 
-// Shown only inside in-app browsers (Instagram, Facebook, TikTok…): login works reliably only in a real browser.
+// Compact note shown ONLY inside AuthModal for in-app browsers (Instagram, Facebook, TikTok…).
+// Never rendered on page load. Telegram link login still works in-app; this just offers a real browser.
 const InAppBrowserBanner = () => {
 	const [hidden, setHidden] = useState(() => {
 		try { return sessionStorage.getItem(DISMISS_KEY) === '1'; } catch { return false; }
 	});
 	const [copied, setCopied] = useState(false);
+	const [showHint, setShowHint] = useState(false);
 	if (hidden || !isInAppBrowser()) return null;
 
 	const href = window.location.href;
@@ -45,36 +47,31 @@ const InAppBrowserBanner = () => {
 	};
 
 	return (
-		<div data-inapp-banner className='fixed bottom-0 inset-x-0 z-[60] p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]'>
-			<div className='max-w-md mx-auto rounded-2xl border border-accent/30 bg-white dark:bg-slate-900 shadow-2xl p-4 text-sm'>
-				<div className='flex items-start justify-between gap-3 mb-2'>
-					<p className='font-bold text-gray-900 dark:text-white'>Відкрити в браузері</p>
-					<button onClick={onClose} aria-label='Закрити' className='text-gray-400 hover:text-gray-600 -mt-1 text-lg leading-none'>×</button>
-				</div>
-				<p className='text-gray-500 dark:text-gray-400 mb-3'>
-					Вбудований браузер застосунку блокує вхід через Telegram і Google. Відкрийте сайт у звичайному браузері.
+		<div data-inapp-banner className='w-full text-left text-xs rounded-xl bg-gray-50 dark:bg-slate-700/40 border border-gray-200 dark:border-slate-700 px-3 py-2'>
+			<div className='flex items-start justify-between gap-2'>
+				<p className='text-gray-500 dark:text-gray-400'>
+					Якщо вхід не спрацює — відкрийте сайт у звичайному браузері.
 				</p>
-				{ios && (
-					<p className='text-gray-600 dark:text-gray-300 mb-3'>
-						Натисніть <b>…</b> (або <b>⋯</b>) у правому верхньому куті → <b>«Відкрити в Safari»</b> / <b>«Відкрити в браузері»</b>.
-					</p>
-				)}
-				{!ios && !android && (
-					<p className='text-gray-600 dark:text-gray-300 mb-3'>
-						Натисніть <b>⋮</b> у куті екрана → <b>«Відкрити в браузері»</b>, або скопіюйте посилання.
-					</p>
-				)}
-				<div className='flex gap-2'>
-					{android && (
-						<a href={chromeIntentUrl(href)} className='flex-1 text-center bg-accent text-black font-bold py-2.5 rounded-xl'>
-							Відкрити в Chrome
-						</a>
-					)}
-					<button onClick={onCopy} className='flex-1 border border-gray-200 dark:border-slate-700 text-gray-800 dark:text-white font-semibold py-2.5 rounded-xl'>
-						{copied === 'ok' ? 'Скопійовано ✓' : copied === 'fail' ? 'Не вдалося скопіювати' : 'Копіювати посилання'}
-					</button>
-				</div>
+				<button type='button' onClick={onClose} aria-label='Закрити' className='text-gray-400 hover:text-gray-600 text-base leading-none -mt-0.5'>×</button>
 			</div>
+			<div className='flex flex-wrap gap-x-3 gap-y-1 mt-1.5'>
+				{android && (
+					<a href={chromeIntentUrl(href)} className='font-semibold text-accent underline'>Відкрити в Chrome</a>
+				)}
+				<button type='button' onClick={onCopy} className='font-semibold text-gray-700 dark:text-gray-200 underline'>
+					{copied === 'ok' ? 'Скопійовано ✓' : copied === 'fail' ? 'Не вдалося скопіювати' : 'Копіювати посилання'}
+				</button>
+				{!android && (
+					<button type='button' onClick={() => setShowHint((v) => !v)} className='font-semibold text-gray-700 dark:text-gray-200 underline'>Як відкрити?</button>
+				)}
+			</div>
+			{showHint && (
+				<p className='text-gray-600 dark:text-gray-300 mt-1.5'>
+					{ios
+						? <>Натисніть <b>…</b> угорі праворуч → <b>«Відкрити в Safari»</b> / <b>«Відкрити в браузері»</b>.</>
+						: <>Натисніть <b>⋮</b> у куті екрана → <b>«Відкрити в браузері»</b>.</>}
+				</p>
+			)}
 		</div>
 	);
 };
