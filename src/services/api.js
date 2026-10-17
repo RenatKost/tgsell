@@ -296,6 +296,13 @@ export const adminAPI = {
 	getPendingBundles: () =>
 		api.get('/admin/bundles/pending'),
 
+	// Task 32: staff edit bundle per-channel balances
+	listBundles: (params = {}) =>
+		api.get('/admin/bundles', { params }),
+
+	updateBundleBalances: (id, channel_balances) =>
+		api.put(`/admin/bundles/${id}/balances`, { channel_balances }),
+
 	approveBundle: (id) =>
 		api.post(`/admin/bundles/${id}/approve`),
 
@@ -366,6 +373,10 @@ export const bundlesAPI = {
 
 	update: (id, data) =>
 		api.put(`/bundles/${id}`, data),
+
+	// Task 32: seller edits per-channel balances (no active deal)
+	updateBalances: (id, channel_balances) =>
+		api.put(`/bundles/${id}/balances`, { channel_balances }),
 
 	delete: (id) =>
 		api.delete(`/bundles/${id}`),

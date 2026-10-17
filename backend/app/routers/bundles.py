@@ -12,6 +12,7 @@ from app.database import get_db
 from app.models.bundle import BundleChannel, BundleStatus, ChannelBundle
 from app.models.channel import Channel, ChannelStatus
 from app.schemas.bundle import (
+    BundleBalancesUpdate,
     BundleCreate,
     BundleListResponse,
     BundleResponse,
@@ -294,16 +295,34 @@ async def update_bundle(
     for field, value in body.model_dump(exclude_none=True, exclude={"channel_balances"}).items():
         setattr(bundle, field, value)
     if balances:
-        by_id = {bc.channel_id: bc.channel for bc in bundle.bundle_channels}
-        for bal in balances:
-            ch = by_id.get(bal.channel_id)
-            if ch is None:
-                raise HTTPException(status_code=400, detail="Канал не належить до цієї сітки")
-            ch.stars_balance = bal.stars_balance
-            ch.ton_balance = bal.ton_balance
+        # Task 32: same rules as PUT /bundles/{id}/balances (no active deal).
+        from app.services import bundle_balances as bb
+        await bb.ensure_seller_may_edit(db, bundle, user)
+        bb.apply_balances(bundle, balances)
     await db.commit()
     await db.refresh(bundle)
     return _bundle_to_response(bundle)
+
+
+@router.put("/{bundle_id}/balances", response_model=BundleResponse)
+async def update_bundle_balances(
+    bundle_id: int,
+    body: BundleBalancesUpdate,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Task 32: seller edits per-channel Stars/TON balances while the bundle has no
+    active deal. Existing deals keep their creation-time snapshot (deals.balance_*)."""
+    from app.services import bundle_balances as bb
+
+    bundle = await bb.load_bundle_for_update(db, bundle_id)
+    await bb.ensure_seller_may_edit(db, bundle, user)
+    changes = bb.apply_balances(bundle, body.channel_balances)
+    if changes:
+        logger.info(f"[BUNDLE] #{bundle.id} balances edited by seller user={user.id}: {changes}")
+    await db.commit()
+    db.expire_all()
+    return _bundle_to_response(await bb.load_bundle(db, bundle_id))
 
 
 @router.delete("/{bundle_id}", status_code=status.HTTP_204_NO_CONTENT)

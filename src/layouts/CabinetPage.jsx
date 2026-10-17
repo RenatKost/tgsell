@@ -6,6 +6,8 @@ import { useAuth } from '../context/AppContext';
 import CabinetCard from '../components/Cards/CabinetCard';
 import CatalogCard from '../components/Cards/CatalogCard';
 import SavedSearches from '../components/Cabinet/SavedSearches';
+import BundleBalanceEditor from '../components/Balance/BundleBalanceEditor';
+import BalanceBadges from '../components/Balance/BalanceBadges';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import {
 	faList,
@@ -66,6 +68,7 @@ const CabinetPage = () => {
 	const [deals, setDeals] = useState([]);
 	const [myAuctions, setMyAuctions] = useState([]);
 	const [myBundles, setMyBundles] = useState([]);
+	const [balanceBundle, setBalanceBundle] = useState(null); // Task 32
 	const [loading, setLoading] = useState(true);
 
 	// Auction creation modal
@@ -330,6 +333,16 @@ const CabinetPage = () => {
 									<div className='text-sm text-gray-400 mb-3'>
 										{b.channel_count} каналів · <span className='text-accent font-semibold'>{b.price} USDT</span>
 									</div>
+									{(b.channels || []).some(c => Number(c.stars_balance || 0) > 0 || Number(c.ton_balance || 0) > 0) && (
+										<ul className='mb-3 space-y-1'>
+											{b.channels.map(c => (
+												<li key={c.id} className='text-xs text-gray-400 flex items-center gap-2 flex-wrap'>
+													<span className='truncate'>{c.channel_name}</span>
+													<BalanceBadges stars={c.stars_balance} ton={c.ton_balance} size='xs' caption={false} />
+												</li>
+											))}
+										</ul>
+									)}
 									{b.rejection_reason && (
 										<div className='text-xs text-red-400 mb-3 bg-red-900/20 rounded p-2'>
 											Причина: {b.rejection_reason}
@@ -340,6 +353,13 @@ const CabinetPage = () => {
 											className='flex-1 text-center text-xs py-1.5 rounded-lg bg-card-inner text-gray-300 hover:text-accent border border-card-border transition-all'>
 											Переглянути
 										</NavLink>
+										{b.status !== 'sold' && (
+											<button onClick={() => setBalanceBundle(b)}
+												className='px-3 py-1.5 rounded-lg text-xs bg-card-inner text-yellow-400 hover:text-accent border border-card-border transition-all'
+												title='Баланс Stars/TON каналів (можна змінити, поки по сітці немає активної угоди)'>
+												⭐ Баланс
+											</button>
+										)}
 										{b.status === 'pending' && (
 											<button onClick={async () => {
 												if (!confirm('Видалити сітку?')) return;
@@ -353,6 +373,18 @@ const CabinetPage = () => {
 								</div>
 							))}
 						</div>
+					)}
+					{balanceBundle && (
+						<BundleBalanceEditor
+							title={`Баланс каналів — «${balanceBundle.name}»`}
+							channels={balanceBundle.channels || []}
+							note='Змінити баланс можна, лише поки по сітці немає активної угоди.'
+							onSave={async (channel_balances) => {
+								const { data } = await bundlesAPI.updateBalances(balanceBundle.id, channel_balances);
+								setMyBundles(prev => prev.map(x => (x.id === data.id ? { ...x, ...data } : x)));
+							}}
+							onClose={() => setBalanceBundle(null)}
+						/>
 					)}
 				</>
 			) : activeTab.value === 'auctions' ? (

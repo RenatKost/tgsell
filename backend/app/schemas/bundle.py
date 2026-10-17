@@ -33,6 +33,11 @@ class ChannelBalanceUpdate(ChannelBalanceIn):
     channel_id: int
 
 
+class BundleBalancesUpdate(BaseModel):
+    """Task 32: edit per-channel balances of an existing bundle."""
+    channel_balances: list[ChannelBalanceUpdate] = Field(min_length=1, max_length=100)
+
+
 class BundleCreate(BaseModel):
     name: str
     description: str | None = None
