@@ -51,6 +51,7 @@ def deal_keyboard(deal_id: int, user_role: str) -> InlineKeyboardMarkup:
     """Generate inline keyboard based on deal context."""
     buttons = [
         [InlineKeyboardButton(text="📊 Статус угоди", callback_data=f"deal_status:{deal_id}")],
+        [InlineKeyboardButton(text="📋 Чек-лист передачі", callback_data=f"deal_checklist:{deal_id}")],
     ]
     if user_role == "buyer":
         buttons.append([
@@ -58,6 +59,122 @@ def deal_keyboard(deal_id: int, user_role: str) -> InlineKeyboardMarkup:
             InlineKeyboardButton(text="⚠️ Відкрити спір", callback_data=f"deal_dispute:{deal_id}"),
         ])
     return InlineKeyboardMarkup(inline_keyboard=buttons)
+
+
+# ── Task 32: deal checklist in the bot (balance buttons for the buyer) ──
+
+CB_CHECKLIST = "deal_checklist:"
+CB_BALANCE_OK = "deal_bal_ok:"
+CB_BALANCE_BAD = "deal_bal_bad:"          # asks for confirmation first
+CB_BALANCE_BAD_YES = "deal_bal_bad_yes:"  # confirmed → dispute (same path as the site)
+CB_BALANCE_BAD_NO = "deal_bal_bad_no:"
+
+
+def show_balance_buttons(deal, role: str | None) -> bool:
+    """Balance buttons: buyer only, deal snapshot balance > 0, transfer stage."""
+    from app.services import deal_checklist as checklist_svc
+
+    return (
+        role == "buyer"
+        and checklist_svc.deal_has_balance(deal)
+        and deal.status in checklist_svc.TRANSFER_STATUSES
+    )
+
+
+def checklist_keyboard(deal, role: str | None, items=()) -> InlineKeyboardMarkup:
+    from app.services import deal_checklist as checklist_svc
+
+    rows = []
+    if show_balance_buttons(deal, role):
+        done = {i.key for i in items if getattr(i, "done", False)}
+        row = []
+        if checklist_svc.BALANCE_ITEM_KEY not in done:
+            row.append(InlineKeyboardButton(text="✅ Баланс на місці", callback_data=f"{CB_BALANCE_OK}{deal.id}"))
+        row.append(InlineKeyboardButton(text="⚠️ Баланс не відповідає", callback_data=f"{CB_BALANCE_BAD}{deal.id}"))
+        rows.append(row)
+    rows.append([InlineKeyboardButton(text="🔄 Оновити", callback_data=f"{CB_CHECKLIST}{deal.id}")])
+    return InlineKeyboardMarkup(inline_keyboard=rows)
+
+
+def checklist_text(deal, items) -> str:
+    from app.services import deal_checklist as checklist_svc
+
+    done = {i.key for i in items if getattr(i, "done", False)}
+    lines = [f"<b>📋 Чек-лист передачі — угода #{deal.id}</b>"]
+    bal = checklist_svc.format_balance(deal.balance_stars, deal.balance_ton)
+    if bal and checklist_svc.deal_has_balance(deal):
+        lines.append(f"Баланс каналу (зі слів продавця): {_u(bal)}")
+    for side in checklist_svc.SIDES:
+        lines.append(f"\n<b>{_u(checklist_svc.SIDE_LABELS[side])}:</b>")
+        for d in checklist_svc.defs_for_side(side, deal, items):
+            mark = "✅" if d.key in done else "⬜"
+            lines.append(f"{mark} {_u(d.label)}" + ("" if d.required else " (необов’язково)"))
+    if deal.status not in checklist_svc.TRANSFER_STATUSES:
+        lines.append(f"\nСтатус: {DEAL_STATUS_LABELS.get(deal.status, deal.status.value)}")
+    return "\n".join(lines)
+
+
+async def _bot_user_and_deal(db, tg_id: int, deal_id: int):
+    user = (await db.execute(select(User).where(User.telegram_id == tg_id))).scalar_one_or_none()
+    deal = None
+    if user is not None:
+        deal = (await db.execute(select(Deal).where(Deal.id == deal_id))).scalar_one_or_none()
+    return user, deal
+
+
+def _role_in(deal, user) -> str | None:
+    if deal is None or user is None:
+        return None
+    if deal.buyer_id == user.id:
+        return "buyer"
+    if deal.seller_id == user.id:
+        return "seller"
+    return None
+
+
+_UA_DETAILS = {
+    "Deal not found": "Угоду не знайдено.",
+    "Cannot dispute this deal": "Спір неможливо відкрити в поточному статусі угоди.",
+    "Only deal participants can dispute": "Відкрити спір можуть лише учасники угоди.",
+    "Checklist item missing": "Пункт чек-листа не знайдено — спробуйте ще раз.",
+}
+
+
+def _ua_detail(detail) -> str:
+    """Site handlers sometimes answer in English — the bot always speaks Ukrainian."""
+    text = str(detail)
+    return _UA_DETAILS.get(text, text)
+
+
+def _cb_deal_id(data: str, prefix: str) -> int | None:
+    tail = (data or "")[len(prefix):]
+    return int(tail) if tail.isdigit() else None
+
+
+async def _render_checklist(db, deal, role):
+    from app.services import deal_checklist as checklist_svc
+
+    items = await checklist_svc.load_items(db, deal.id)
+    return checklist_text(deal, items), checklist_keyboard(deal, role, items)
+
+
+async def _buyer_balance_guard(callback: CallbackQuery, user, deal) -> bool:
+    """Server-side authorization for both balance buttons (re-checked on every tap)."""
+    from app.services import deal_checklist as checklist_svc
+
+    if user is None:
+        await callback.answer("Ви не зареєстровані.", show_alert=True)
+        return False
+    if deal is None or deal.buyer_id != user.id:
+        await callback.answer("Ця дія доступна лише покупцю угоди.", show_alert=True)
+        return False
+    if not checklist_svc.deal_has_balance(deal):
+        await callback.answer("Для цієї угоди баланс не вказано.", show_alert=True)
+        return False
+    if user.is_blocked and not deal.blocked_party_allowed:
+        await callback.answer("Акаунт заблоковано — дії по угоді вимкнено адміністратором.", show_alert=True)
+        return False
+    return True
 
 
 # ── Commands ──────────────────────────────────────────────────────────
@@ -179,6 +296,10 @@ async def cmd_deal_status(message: Message):
         f"💰 Сума: {deal.amount_usdt} USDT\n"
         f"📊 Статус: {status_label}\n"
     )
+
+    from app.services import deal_checklist as _cl
+    if _cl.deal_has_balance(deal):
+        text += f"⭐ Баланс (зі слів продавця): {_u(_cl.format_balance(deal.balance_stars, deal.balance_ton))}\n"
 
     if role == "buyer" and deal.status in (DealStatus.created, DealStatus.payment_pending):
         text += f"\n💳 Адреса для оплати:\n<code>{deal.escrow_wallet_address}</code>\n"
@@ -320,6 +441,137 @@ async def cb_deal_dispute(callback: CallbackQuery):
     await callback.answer()
 
 
+@router.callback_query(F.data.startswith(CB_CHECKLIST))
+async def cb_deal_checklist(callback: CallbackQuery):
+    deal_id = _cb_deal_id(callback.data, CB_CHECKLIST)
+    if deal_id is None:
+        await callback.answer()
+        return
+    async with async_session() as db:
+        user, deal = await _bot_user_and_deal(db, callback.from_user.id, deal_id)
+        role = _role_in(deal, user)
+        if role is None:
+            await callback.answer("Немає доступу.", show_alert=True)
+            return
+        text, kb = await _render_checklist(db, deal, role)
+    await callback.message.answer(text, parse_mode=ParseMode.HTML, reply_markup=kb)
+    await callback.answer()
+
+
+@router.callback_query(F.data.startswith(CB_BALANCE_OK))
+async def cb_balance_ok(callback: CallbackQuery):
+    """Buyer: «Баланс на місці» → ticks balance_ok via the site checklist endpoint logic."""
+    from fastapi import HTTPException
+    from app.routers import deals as deals_router
+    from app.schemas.deal import ChecklistToggleRequest
+    from app.services import deal_checklist as checklist_svc
+
+    deal_id = _cb_deal_id(callback.data, CB_BALANCE_OK)
+    if deal_id is None:
+        await callback.answer()
+        return
+    async with async_session() as db:
+        user, deal = await _bot_user_and_deal(db, callback.from_user.id, deal_id)
+        if not await _buyer_balance_guard(callback, user, deal):
+            return
+        user_id = user.id
+    # Fresh session: the site handler loads the deal with its own options/locks.
+    async with async_session() as db:
+        user = await db.get(User, user_id)
+        try:
+            await deals_router.toggle_deal_checklist_item(
+                deal_id, checklist_svc.BALANCE_ITEM_KEY,
+                body=ChecklistToggleRequest(done=True), user=user, db=db,
+            )
+        except HTTPException as e:
+            await db.rollback()
+            await callback.answer(_ua_detail(e.detail), show_alert=True)
+            return
+    async with async_session() as db:
+        deal = (await db.execute(select(Deal).where(Deal.id == deal_id))).scalar_one()
+        text, kb = await _render_checklist(db, deal, "buyer")
+    logger.info(f"[BOT] deal #{deal_id}: buyer confirmed balance_ok via Telegram (user={user_id})")
+    try:
+        await callback.message.edit_text(text, parse_mode=ParseMode.HTML, reply_markup=kb)
+    except Exception:
+        await callback.message.answer(text, parse_mode=ParseMode.HTML, reply_markup=kb)
+    await callback.answer("✅ Баланс підтверджено")
+
+
+@router.callback_query(F.data.startswith(CB_BALANCE_BAD_YES))
+async def cb_balance_bad_yes(callback: CallbackQuery):
+    """Confirmed «Баланс не відповідає» → same code path as
+    POST /api/deals/{id}/checklist/balance-mismatch (→ open_dispute)."""
+    from fastapi import HTTPException
+    from app.routers import deals as deals_router
+
+    deal_id = _cb_deal_id(callback.data, CB_BALANCE_BAD_YES)
+    if deal_id is None:
+        await callback.answer()
+        return
+    async with async_session() as db:
+        user, deal = await _bot_user_and_deal(db, callback.from_user.id, deal_id)
+        if not await _buyer_balance_guard(callback, user, deal):
+            return
+        if user.is_blocked:  # the site endpoint requires a non-blocked user (get_current_user)
+            await callback.answer("Акаунт заблоковано — відкриття спору недоступне. Зверніться до підтримки.", show_alert=True)
+            return
+        user_id = user.id
+    # Fresh session: the site handler loads the deal with its own options.
+    async with async_session() as db:
+        user = await db.get(User, user_id)
+        try:
+            await deals_router.report_balance_mismatch(deal_id, user=user, db=db)
+        except HTTPException as e:
+            await db.rollback()
+            await callback.answer(_ua_detail(e.detail), show_alert=True)
+            return
+    try:
+        await callback.message.edit_reply_markup(reply_markup=None)
+    except Exception:
+        pass
+    await callback.message.answer(
+        f"⚠️ Спір по угоді #{deal_id} відкрито: баланс не відповідає заявленому. "
+        f"Гарант розгляне ситуацію."
+    )
+    await callback.answer()
+
+
+@router.callback_query(F.data.startswith(CB_BALANCE_BAD_NO))
+async def cb_balance_bad_no(callback: CallbackQuery):
+    try:
+        await callback.message.edit_text("Скасовано — спір не відкрито.")
+    except Exception:
+        pass
+    await callback.answer("Скасовано")
+
+
+@router.callback_query(F.data.startswith(CB_BALANCE_BAD))
+async def cb_balance_bad(callback: CallbackQuery):
+    """Step 1 of «Баланс не відповідає»: ask for confirmation, change nothing."""
+    from app.services import deal_checklist as checklist_svc
+
+    deal_id = _cb_deal_id(callback.data, CB_BALANCE_BAD)
+    if deal_id is None:
+        await callback.answer()
+        return
+    async with async_session() as db:
+        user, deal = await _bot_user_and_deal(db, callback.from_user.id, deal_id)
+        if not await _buyer_balance_guard(callback, user, deal):
+            return
+        stated = checklist_svc.format_balance(deal.balance_stars, deal.balance_ton)
+    kb = InlineKeyboardMarkup(inline_keyboard=[[
+        InlineKeyboardButton(text="⚠️ Так, відкрити спір", callback_data=f"{CB_BALANCE_BAD_YES}{deal_id}"),
+        InlineKeyboardButton(text="Скасувати", callback_data=f"{CB_BALANCE_BAD_NO}{deal_id}"),
+    ]])
+    await callback.message.answer(
+        f"Баланс каналу не відповідає заявленому ({stated})?\n\n"
+        f"Буде відкрито спір по угоді #{deal_id}, гарант розгляне ситуацію. Підтвердіть.",
+        reply_markup=kb,
+    )
+    await callback.answer()
+
+
 # ── Notification helpers (called from backend services) ───────────────
 
 async def notify_new_deal(bot: Bot, deal: Deal, buyer: User, seller: User):
@@ -390,10 +642,14 @@ async def notify_payment_received(bot: Bot, deal: Deal, buyer: User, seller: Use
         "на сторінці угоди (2FA, адмін, Transfer Ownership, сторонні адміни)."
     )
 
+    # Task 32: open the transfer checklist right from the notification
+    kb = InlineKeyboardMarkup(inline_keyboard=[[
+        InlineKeyboardButton(text="📋 Чек-лист передачі", callback_data=f"{CB_CHECKLIST}{deal.id}"),
+    ]])
     for user, msg in [(buyer, buyer_text), (seller, seller_text)]:
         if user.telegram_id:
             try:
-                await bot.send_message(user.telegram_id, msg, parse_mode=ParseMode.HTML)
+                await bot.send_message(user.telegram_id, msg, parse_mode=ParseMode.HTML, reply_markup=kb)
                 logger.info(f"[NOTIFY] User {user.telegram_id} notified about payment for deal #{deal.id}")
             except Exception as e:
                 logger.error(f"[NOTIFY] Failed to notify user {user.telegram_id}: {e}", exc_info=True)

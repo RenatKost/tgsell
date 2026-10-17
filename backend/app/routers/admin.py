@@ -15,6 +15,7 @@ from app.models.auction import Auction, AuctionBid
 from app.models.channel import Channel, ChannelStatus
 from app.models.deal import Deal, DealStatus, Transaction, TransactionStatus, TransactionType
 from app.models.user import User, UserRole
+from app.schemas.bundle import BundleBalancesUpdate
 from app.schemas.channel import ChannelResponse, ChannelUpdate
 from app.schemas.deal import DealResolveRequest, DealResponse
 from app.services.moderation import audit
@@ -1922,6 +1923,80 @@ async def reject_bundle(
 
     return {"ok": True, "bundle_id": bundle_id, "status": "rejected", "reason": reason}
 
+
+
+# ── Task 32: bundle per-channel balances (staff can always edit) ───────
+
+def _admin_bundle_item(b, active: bool) -> dict:
+    return {
+        "id": b.id,
+        "name": b.name,
+        "status": getattr(b.status, "value", b.status),
+        "seller_id": b.seller_id,
+        "price": b.price,
+        "has_active_deal": active,
+        "channels": [
+            {
+                "id": bc.channel.id,
+                "channel_name": bc.channel.channel_name,
+                "telegram_link": bc.channel.telegram_link,
+                "stars_balance": bc.channel.stars_balance,
+                "ton_balance": bc.channel.ton_balance,
+            }
+            for bc in (b.bundle_channels or []) if bc.channel is not None
+        ],
+    }
+
+
+@router.get("/bundles")
+async def admin_list_bundles(
+    search: str | None = Query(None, max_length=200),
+    limit: int = Query(30, ge=1, le=100),
+    admin: User = Depends(get_admin_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Staff: any bundle (any status) with per-channel stated balances."""
+    from app.models.bundle import BundleChannel, ChannelBundle
+    from app.services import bundle_balances as bb
+
+    q = (
+        select(ChannelBundle)
+        .options(selectinload(ChannelBundle.bundle_channels).selectinload(BundleChannel.channel))
+        .order_by(ChannelBundle.id.desc())
+        .limit(limit)
+    )
+    if search:
+        s = search.strip().lstrip("#")
+        if s.isdigit():
+            q = q.where(ChannelBundle.id == int(s))
+        else:
+            q = q.where(ChannelBundle.name.ilike(f"%{s}%"))
+    bundles = (await db.execute(q)).scalars().all()
+    items = [_admin_bundle_item(b, await bb.has_active_deal(db, b)) for b in bundles]
+    return {"items": items, "total": len(items)}
+
+
+
+
+@router.put("/bundles/{bundle_id}/balances")
+async def admin_update_bundle_balances(
+    bundle_id: int,
+    body: BundleBalancesUpdate,
+    admin: User = Depends(get_admin_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Staff (admin/moderator): edit per-channel balances at any time, audited.
+    Never touches deals.balance_* — existing deals keep their snapshot."""
+    from app.services import bundle_balances as bb
+
+    bundle = await bb.load_bundle_for_update(db, bundle_id)
+    changes = bb.apply_balances(bundle, body.channel_balances)
+    if changes:
+        audit(db, admin, "bundle.balances_edit", "bundle", bundle.id, changes=changes)
+    await db.commit()
+    db.expire_all()
+    bundle = await bb.load_bundle(db, bundle_id)
+    return _admin_bundle_item(bundle, await bb.has_active_deal(db, bundle))
 
 
 # ── Inactive channels (task 15 item 1) ─────────────────────────────────
