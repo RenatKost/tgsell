@@ -70,6 +70,8 @@ def _deal_to_response(deal: Deal, channel: Channel | None = None, buyer: User | 
         created_at=deal.created_at,
         paid_at=deal.paid_at,
         completed_at=deal.completed_at,
+        balance_stars=deal.balance_stars,
+        balance_ton=deal.balance_ton,
     )
 
 
@@ -95,7 +97,7 @@ async def create_deal(
 
         res = await db.execute(
             select(ChannelBundle)
-            .options(_si(ChannelBundle.bundle_channels))
+            .options(_si(ChannelBundle.bundle_channels).selectinload(BundleChannel.channel))
             .where(ChannelBundle.id == body.bundle_id)
         )
         bundle = res.scalar_one_or_none()
@@ -133,6 +135,8 @@ async def create_deal(
             escrow_private_key_encrypted=encrypted_private_key,
             amount_usdt=bundle.price,
             service_fee=fee,
+            # Task 31: snapshot of seller-stated balance (sum over bundle channels)
+            **checklist_svc.bundle_balance_snapshot([bc.channel for bc in bundle.bundle_channels]),
             # 'created' stage timeout (auto-cancel only if escrow balance is confirmed 0)
             payment_deadline_at=created_stage_deadline(utcnow_naive()),
         )
@@ -211,6 +215,8 @@ async def create_deal(
         escrow_private_key_encrypted=encrypted_private_key,
         amount_usdt=channel.price,
         service_fee=fee,
+        # Task 31: snapshot of seller-stated balance (later lot edits don't change it)
+        **checklist_svc.balance_snapshot(channel),
         # 'created' stage timeout (auto-cancel only if escrow balance is confirmed 0)
         payment_deadline_at=created_stage_deadline(utcnow_naive()),
     )
@@ -484,7 +490,7 @@ def _checklist_response(
 
     def _side(side: str) -> ChecklistSideResponse:
         out = []
-        for d in checklist_svc.defs_for_side(side):
+        for d in checklist_svc.defs_for_side(side, deal, items):
             row = by_key.get(d.key)
             out.append(ChecklistItemResponse(
                 key=d.key, side=d.side, label=d.label, hint=d.hint,
@@ -519,7 +525,9 @@ def _checklist_response(
         can_edit=active and my_side is not None,
         seller=_side(checklist_svc.SIDE_SELLER),
         buyer=_side(checklist_svc.SIDE_BUYER),
-        all_required_done=checklist_svc.all_required_done(items),
+        all_required_done=checklist_svc.all_required_done(items, deal),
+        balance_stars=deal.balance_stars,
+        balance_ton=deal.balance_ton,
         last_activity_at=deal.last_checklist_activity_at,
         telethon_available=telethon_ok,
         auto_verify_message=auto_verify_message,
@@ -599,6 +607,30 @@ async def auto_verify_deal_checklist(
     return _checklist_response(deal, items, user, auto_verify_message=message)
 
 
+# Task 31. NOTE: declared before /checklist/{key} so "balance-mismatch" is not captured as a key.
+@router.post("/{deal_id}/checklist/balance-mismatch", response_model=DealResponse)
+async def report_balance_mismatch(
+    deal_id: int,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Buyer: «баланс не відповідає» → opens a dispute via the existing dispute flow."""
+    deal = (await db.execute(
+        select(Deal)
+        .options(selectinload(Deal.channel), selectinload(Deal.buyer), selectinload(Deal.seller))
+        .where(Deal.id == deal_id)
+    )).scalar_one_or_none()
+    if not deal:
+        raise HTTPException(status_code=404, detail="Deal not found")
+    if deal.buyer_id != user.id:
+        raise HTTPException(status_code=403, detail="Повідомити про невідповідність балансу може лише покупець")
+    if not checklist_svc.deal_has_balance(deal):
+        raise HTTPException(status_code=400, detail="Для цієї угоди баланс не вказано")
+    stated = checklist_svc.format_balance(deal.balance_stars, deal.balance_ton)
+    reason = f"Баланс не відповідає заявленому продавцем ({stated})"
+    return await open_dispute(deal_id, DealDisputeRequest(reason=reason), user, db)
+
+
 @router.post("/{deal_id}/checklist/{key}", response_model=DealChecklistResponse)
 async def toggle_deal_checklist_item(
     deal_id: int,
@@ -642,7 +674,7 @@ async def toggle_deal_checklist_item(
         raise HTTPException(status_code=e.http_status, detail=e.message)
 
     if new_done != bool(row.done):
-        was_side_complete = not checklist_svc.open_required_defs(items, side)
+        was_side_complete = not checklist_svc.open_required_defs(items, side, deal)
         row.done = new_done
         row.done_by = user.id if new_done else None
         row.done_at = now if new_done else None
@@ -656,7 +688,7 @@ async def toggle_deal_checklist_item(
             f"{checklist_svc.SIDE_LABELS[side]} {'відмітив' if new_done else 'зняв позначку'}: {_item_def.label}",
             event="checklist_item",
         )
-        if not was_side_complete and not checklist_svc.open_required_defs(items, side):
+        if not was_side_complete and not checklist_svc.open_required_defs(items, side, deal):
             label = checklist_svc.SIDE_LABELS[side]
             await _add_system_message(
                 db, deal.id, user.id,

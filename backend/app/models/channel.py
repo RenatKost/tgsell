@@ -2,8 +2,8 @@ import enum
 from datetime import datetime
 
 from sqlalchemy import (
-    BigInteger, Boolean, DateTime, Enum, Float, ForeignKey,
-    Integer, JSON, String, Text, UniqueConstraint, func,
+    BigInteger, Boolean, CheckConstraint, DateTime, Enum, Float, ForeignKey,
+    Integer, JSON, Numeric, String, Text, UniqueConstraint, func,
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -25,6 +25,11 @@ class ListingType(str, enum.Enum):
 
 class Channel(Base):
     __tablename__ = "channels"
+    __table_args__ = (
+        # Task 31 (migration 0043)
+        CheckConstraint("stars_balance IS NULL OR stars_balance >= 0", name="ck_channels_stars_balance_nonneg"),
+        CheckConstraint("ton_balance IS NULL OR ton_balance >= 0", name="ck_channels_ton_balance_nonneg"),
+    )
 
     id: Mapped[int] = mapped_column(primary_key=True)
     seller_id: Mapped[int] = mapped_column(ForeignKey("users.id"))
@@ -92,6 +97,11 @@ class Channel(Base):
     quality_health: Mapped[str | None] = mapped_column(String(20), nullable=True)
     quality_breakdown: Mapped[dict | None] = mapped_column(JSON, nullable=True)
     quality_updated_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+
+    # Task 31: seller-stated Telegram Stars / TON balance (migration 0043).
+    # Trusted as stated ("зі слів продавця"); never affects price/fair price/quality/AI.
+    stars_balance: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    ton_balance: Mapped[float | None] = mapped_column(Numeric(20, 9, asdecimal=False), nullable=True)
 
     # Relationships
     seller = relationship("User", back_populates="channels", foreign_keys=[seller_id])

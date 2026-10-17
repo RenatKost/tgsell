@@ -4,7 +4,7 @@ from datetime import datetime
 from sqlalchemy import (
     JSON, Index,
     BigInteger, Boolean, CheckConstraint, DateTime, Enum, Float, ForeignKey,
-    Integer, String, Text, UniqueConstraint, func,
+    Integer, Numeric, String, Text, UniqueConstraint, func,
 )
 from sqlalchemy import text as sa_text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
@@ -96,6 +96,9 @@ class Deal(Base):
     # Transfer checklist + reminder dedup (migration 0022).
     # Dedup fields are reset on every checklist activity (tick/confirm), so each
     # idle period gets at most one 6h reminder, one 24h reminder, one 48h admin alert.
+    # Task 31: snapshot of the seller-stated balance at deal creation (migration 0043).
+    balance_stars: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    balance_ton: Mapped[float | None] = mapped_column(Numeric(20, 9, asdecimal=False), nullable=True)
     checklist_started_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     last_checklist_activity_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     reminder_6h_sent_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)

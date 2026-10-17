@@ -217,6 +217,7 @@ async def get_all_deals(
             status=d.status.value, escrow_wallet_address=d.escrow_wallet_address,
             amount_usdt=d.amount_usdt, service_fee=d.service_fee,
             deal_group_chat_id=d.deal_group_chat_id, dispute_reason=d.dispute_reason,
+            balance_stars=d.balance_stars, balance_ton=d.balance_ton,
             created_at=d.created_at, paid_at=d.paid_at, completed_at=d.completed_at,
         ))
     return responses
@@ -241,6 +242,7 @@ def _admin_deal_response(deal: Deal) -> DealResponse:
         status=deal.status.value, escrow_wallet_address=deal.escrow_wallet_address,
         amount_usdt=deal.amount_usdt, service_fee=deal.service_fee,
         deal_group_chat_id=deal.deal_group_chat_id, dispute_reason=deal.dispute_reason,
+        balance_stars=deal.balance_stars, balance_ton=deal.balance_ton,
         created_at=deal.created_at, paid_at=deal.paid_at, completed_at=deal.completed_at,
         seller_payout_address=deal.seller_payout_address,
         payout_tx_hash=deal.payout_tx_hash,
@@ -1811,10 +1813,17 @@ async def get_pending_bundles(
         channel_links: list[str] = []
         if channel_ids:
             ch_rows = (await db.execute(
-                select(Channel.telegram_link, Channel.channel_name)
+                select(Channel.telegram_link, Channel.channel_name, Channel.stars_balance, Channel.ton_balance)
                 .where(Channel.id.in_(channel_ids))
             )).all()
-            channel_links = [f"{r[1]} ({r[0]})" for r in ch_rows]
+            # Task 31: show the seller-stated balance to the moderator
+            from app.services.deal_checklist import format_balance
+            channel_links = []
+            for r in ch_rows:
+                bal = format_balance(r[2], r[3])
+                channel_links.append(
+                    f"{r[1]} ({r[0]})" + (f" · {bal} (зі слів продавця)" if bal else "")
+                )
 
         items.append({
             "id": b.id,

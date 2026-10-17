@@ -83,6 +83,7 @@ async def list_channels(
     no_inflation: bool | None = Query(None, description="Task 22: only channels with quality health 'clean'"),
     min_subscribers: int | None = Query(None, ge=0),
     max_subscribers: int | None = Query(None, ge=0),
+    with_balance: bool | None = Query(None, description="Task 31: seller-stated Stars or TON balance > 0"),
     db: AsyncSession = Depends(get_db),
 ):
     """List channels with filters, search, sorting and pagination."""
@@ -105,7 +106,7 @@ async def list_channels(
         search=search, category=category, min_price=min_price, max_price=max_price, roi_max=roi_max,
         er_min=er_min, verified_data=verified_data, ai_recommended=ai_recommended, pps_min=pps_min,
         pps_max=pps_max, no_inflation=no_inflation, min_subscribers=min_subscribers,
-        max_subscribers=max_subscribers,
+        max_subscribers=max_subscribers, with_balance=with_balance,
     ))
     pps_expr = Channel.price / Channel.subscribers_count
     priceable = (Channel.subscribers_count > 0) & (Channel.price > 0) & Channel.is_closed.is_(False)
@@ -551,6 +552,8 @@ async def create_channel(
             auction_bid_step=body.auction_bid_step,
             auction_duration_hours=body.auction_duration_hours,
             is_closed=body.is_closed,
+            stars_balance=body.stars_balance,
+            ton_balance=body.ton_balance,
             status=ChannelStatus.pending,
         )
         db.add(channel)

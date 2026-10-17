@@ -50,17 +50,28 @@ export default function BundleSellPage() {
 
   // Step 2 state
   const [links, setLinks] = useState(['', '']);
+  // Task 31: per-channel seller-stated balance, aligned with links
+  const [balances, setBalances] = useState([{ stars: '', ton: '' }, { stars: '', ton: '' }]);
+  const updateBalance = (i, key, val) => {
+    setBalances(prev => prev.map((b, idx) => (idx === i ? { ...b, [key]: val } : b)));
+  };
 
   const handleFormChange = (e) => {
     setForm(prev => ({ ...prev, [e.target.name]: e.target.value }));
   };
 
   const addLink = () => {
-    if (links.length < 20) setLinks(prev => [...prev, '']);
+    if (links.length < 20) {
+      setLinks(prev => [...prev, '']);
+      setBalances(prev => [...prev, { stars: '', ton: '' }]);
+    }
   };
 
   const removeLink = (i) => {
-    if (links.length > 2) setLinks(prev => prev.filter((_, idx) => idx !== i));
+    if (links.length > 2) {
+      setLinks(prev => prev.filter((_, idx) => idx !== i));
+      setBalances(prev => prev.filter((_, idx) => idx !== i));
+    }
   };
 
   const updateLink = (i, val) => {
@@ -77,6 +88,11 @@ export default function BundleSellPage() {
   const validateStep2 = () => {
     const filled = links.filter(l => l.trim());
     if (filled.length < 2) return 'Додайте щонайменше 2 канали';
+    for (const b of balances) {
+      if (b.stars !== '' && !/^\d+$/.test(String(b.stars).trim())) return 'Баланс Stars — ціле невідʼємне число';
+      const ton = String(b.ton).trim().replace(',', '.');
+      if (ton !== '' && (Number.isNaN(Number(ton)) || Number(ton) < 0)) return 'Баланс TON — невідʼємне число';
+    }
     return '';
   };
 
@@ -106,6 +122,17 @@ export default function BundleSellPage() {
         monthly_income: form.monthly_income ? Number(form.monthly_income) : undefined,
         resources: form.resources.trim() || undefined,
         channel_links: links.filter(l => l.trim()),
+        channel_balances: links
+          .map((l, i) => ({ l, b: balances[i] || { stars: '', ton: '' } }))
+          .filter(({ l }) => l.trim())
+          .map(({ b }) => {
+            const stars = String(b.stars).trim();
+            const ton = String(b.ton).trim().replace(',', '.');
+            return {
+              stars_balance: stars === '' ? null : parseInt(stars, 10),
+              ton_balance: ton === '' ? null : Number(ton),
+            };
+          }),
       };
       const res = await bundlesAPI.create(payload);
       navigate('/cabinet', { state: { tab: 'bundles', bundleCreated: res.data.id } });
@@ -199,16 +226,27 @@ export default function BundleSellPage() {
             <p className="text-sm text-gray-400">Вставте посилання на Telegram-канали (@username або t.me/...)</p>
 
             {links.map((link, i) => (
-              <div key={i} className="flex gap-2 items-center">
-                <input value={link} onChange={e => updateLink(i, e.target.value)}
-                  placeholder={`Канал ${i + 1} — @username або https://t.me/...`}
-                  className="flex-1 bg-card-inner border border-card-border rounded-lg px-4 py-2.5 text-white placeholder-gray-600 focus:outline-none focus:border-accent/50 text-sm" />
-                {links.length > 2 && (
-                  <button onClick={() => removeLink(i)}
-                    className="text-red-400 hover:text-red-300 px-2 py-1 text-lg leading-none">×</button>
-                )}
+              <div key={i} className="space-y-1.5">
+                <div className="flex gap-2 items-center">
+                  <input value={link} onChange={e => updateLink(i, e.target.value)}
+                    placeholder={`Канал ${i + 1} — @username або https://t.me/...`}
+                    className="flex-1 bg-card-inner border border-card-border rounded-lg px-4 py-2.5 text-white placeholder-gray-600 focus:outline-none focus:border-accent/50 text-sm" />
+                  {links.length > 2 && (
+                    <button onClick={() => removeLink(i)}
+                      className="text-red-400 hover:text-red-300 px-2 py-1 text-lg leading-none">×</button>
+                  )}
+                </div>
+                <div className="flex gap-2">
+                  <input value={balances[i]?.stars ?? ''} onChange={e => updateBalance(i, 'stars', e.target.value)}
+                    inputMode="numeric" placeholder="⭐ Stars (необовʼязково)"
+                    className="flex-1 min-w-0 bg-card-inner border border-card-border rounded-lg px-3 py-1.5 text-white placeholder-gray-600 focus:outline-none focus:border-accent/50 text-xs" />
+                  <input value={balances[i]?.ton ?? ''} onChange={e => updateBalance(i, 'ton', e.target.value)}
+                    inputMode="decimal" placeholder="💎 TON (необовʼязково)"
+                    className="flex-1 min-w-0 bg-card-inner border border-card-border rounded-lg px-3 py-1.5 text-white placeholder-gray-600 focus:outline-none focus:border-accent/50 text-xs" />
+                </div>
               </div>
             ))}
+            <p className="text-xs text-gray-500">Баланс каналу в Stars/TON показується як «зі слів продавця» і не впливає на ціну.</p>
 
             {links.length < 20 && (
               <button onClick={addLink}

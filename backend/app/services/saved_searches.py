@@ -26,7 +26,7 @@ logger = logging.getLogger(__name__)
 MAX_PER_USER = 10
 NOTIFY_COOLDOWN = timedelta(hours=1)
 NAME_MAX = 100
-FILTER_BOOL = {"verified_data", "ai_recommended", "no_inflation"}
+FILTER_BOOL = {"verified_data", "ai_recommended", "no_inflation", "with_balance"}
 FILTER_FLOAT = {"min_price", "max_price", "er_min", "pps_min", "pps_max"}
 FILTER_INT = {"roi_max", "min_subscribers", "max_subscribers"}
 FILTER_STR = {"search", "category"}
@@ -71,6 +71,8 @@ def filters_label(f: dict) -> str:
         parts.append(f"{lo or 0}–{hi if hi is not None else '∞'} підп.")
     if f.get("no_inflation"):
         parts.append("без накрутки")
+    if f.get("with_balance"):
+        parts.append("з балансом")
     if f.get("verified_data"):
         parts.append("перевірені дані")
     if f.get("ai_recommended"):

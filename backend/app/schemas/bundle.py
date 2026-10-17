@@ -1,5 +1,5 @@
 from datetime import datetime
-from pydantic import BaseModel, field_validator, model_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 
 class BundleChannelInfo(BaseModel):
@@ -11,6 +11,8 @@ class BundleChannelInfo(BaseModel):
     avg_views: int | None = None
     er: float | None = None
     category: str = ""
+    stars_balance: int | None = None
+    ton_balance: float | None = None
 
     @model_validator(mode="after")
     def _sanitize_avatar(self):
@@ -21,6 +23,16 @@ class BundleChannelInfo(BaseModel):
     model_config = {"from_attributes": True}
 
 
+class ChannelBalanceIn(BaseModel):
+    """Task 31: seller-stated per-channel balance in a bundle."""
+    stars_balance: int | None = Field(default=None, ge=0, le=10**12)
+    ton_balance: float | None = Field(default=None, ge=0, le=10**11)
+
+
+class ChannelBalanceUpdate(ChannelBalanceIn):
+    channel_id: int
+
+
 class BundleCreate(BaseModel):
     name: str
     description: str | None = None
@@ -29,6 +41,8 @@ class BundleCreate(BaseModel):
     monthly_income: float | None = None
     resources: str | None = None
     channel_links: list[str]
+    # Task 31: optional, aligned with channel_links by index
+    channel_balances: list[ChannelBalanceIn | None] | None = None
 
     @field_validator("channel_links")
     @classmethod
@@ -67,6 +81,7 @@ class BundleUpdate(BaseModel):
     price: float | None = None
     monthly_income: float | None = None
     resources: str | None = None
+    channel_balances: list[ChannelBalanceUpdate] | None = None
 
 
 class BundleResponse(BaseModel):

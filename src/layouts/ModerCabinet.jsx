@@ -7,6 +7,7 @@ import UsersPanel from '../components/Admin/UsersPanel';
 import DealChat from '../components/DealChat/DealChat';
 import AuditLogPanel from '../components/Admin/AuditLogPanel';
 import InactiveChannelsPanel from '../components/Admin/InactiveChannelsPanel';
+import BalanceBadges, { balanceText } from '../components/Balance/BalanceBadges';
 import { GasCard, SummaryCard, TransactionsPanel, PayoutQueuePanel, EscrowOverview } from '../components/Admin/MoneyPanels';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import {
@@ -334,6 +335,8 @@ const ModerCabinet = () => {
 			price: channel.price || '',
 			monthly_income: channel.monthly_income || '',
 			description: channel.description || '',
+			stars_balance: channel.stars_balance ?? '',
+			ton_balance: channel.ton_balance ?? '',
 		});
 	};
 
@@ -343,7 +346,15 @@ const ModerCabinet = () => {
 				...editData,
 				price: parseFloat(editData.price) || 0,
 				monthly_income: editData.monthly_income ? parseFloat(editData.monthly_income) : null,
+				// Task 31: empty → null (cleared); must be >= 0
+				stars_balance: editData.stars_balance === '' ? null : parseInt(editData.stars_balance, 10),
+				ton_balance: editData.ton_balance === '' ? null : parseFloat(String(editData.ton_balance).replace(',', '.')),
 			};
+			if ((payload.stars_balance !== null && (Number.isNaN(payload.stars_balance) || payload.stars_balance < 0))
+				|| (payload.ton_balance !== null && (Number.isNaN(payload.ton_balance) || payload.ton_balance < 0))) {
+				alert('Баланс має бути невідʼємним числом (Stars — ціле)');
+				return;
+			}
 			const { data } = await adminAPI.updateChannel(id, payload);
 			setAllChannels(prev => prev.map(c => (c.id === id ? data : c)));
 			setEditId(null);
@@ -780,6 +791,7 @@ const ModerCabinet = () => {
 															<span className='text-xs px-2 py-0.5 rounded-full bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400 font-medium'>🔒 Закритий (дані продавця)</span>
 														)}
 													</div>
+													<BalanceBadges stars={channel.stars_balance} ton={channel.ton_balance} className='mt-1.5' />
 												</div>
 											</div>
 											<div className='flex gap-3'>
@@ -1035,6 +1047,7 @@ const ModerCabinet = () => {
 												<p className='text-gray-400 text-xs'>категорія</p>
 											</div>
 										</div>
+										<BalanceBadges stars={channel.stars_balance} ton={channel.ton_balance} className='mt-3' />
 										{channel.seller_telegram && (
 											<p className='mt-3 text-sm bg-purple-50 dark:bg-purple-900/20 text-gray-700 dark:text-gray-300 p-2.5 rounded-xl'>
 												<span className='font-semibold'>Telegram:</span>{' '}
@@ -1060,6 +1073,14 @@ const ModerCabinet = () => {
 												<div>
 													<label className='text-xs text-gray-500 dark:text-gray-400 font-medium'>Опис</label>
 													<input value={editData.description} onChange={e => setEditData({ ...editData, description: e.target.value })} className='w-full border border-gray-200 dark:border-slate-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-slate-700 text-gray-800 dark:text-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-300 focus:border-transparent' />
+												</div>
+												<div>
+													<label className='text-xs text-gray-500 dark:text-gray-400 font-medium'>Баланс Stars (зі слів продавця)</label>
+													<input inputMode='numeric' value={editData.stars_balance} onChange={e => setEditData({ ...editData, stars_balance: e.target.value })} className='w-full border border-gray-200 dark:border-slate-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-slate-700 text-gray-800 dark:text-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-300 focus:border-transparent' />
+												</div>
+												<div>
+													<label className='text-xs text-gray-500 dark:text-gray-400 font-medium'>Баланс TON (зі слів продавця)</label>
+													<input inputMode='decimal' value={editData.ton_balance} onChange={e => setEditData({ ...editData, ton_balance: e.target.value })} className='w-full border border-gray-200 dark:border-slate-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-slate-700 text-gray-800 dark:text-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-300 focus:border-transparent' />
 												</div>
 												<button onClick={() => handleSaveEdit(channel.id)} className='bg-[#27ae60] text-white px-5 py-2 rounded-xl text-sm font-semibold hover:bg-[#219a52] duration-300 flex items-center gap-2 w-fit shadow-sm'>
 													<FontAwesomeIcon icon={faSave} /> Зберегти
@@ -1187,6 +1208,11 @@ const ModerCabinet = () => {
 										<p className='text-gray-600 dark:text-gray-300 mb-2'>
 											<span className='font-semibold'>Канал:</span> {deal.channel_name || ('#' + deal.channel_id)} · <span className='font-semibold'>Сума:</span> {fmtUsdt(deal.amount_usdt)} USDT
 										</p>
+										{balanceText(deal.balance_stars, deal.balance_ton) && (
+											<p className='text-gray-600 dark:text-gray-300 mb-2'>
+												<span className='font-semibold'>Заявлений баланс (на момент угоди):</span> {balanceText(deal.balance_stars, deal.balance_ton)} <span className='text-xs text-gray-400'>зі слів продавця</span>
+											</p>
+										)}
 										<p className='text-gray-600 dark:text-gray-300 mb-2'>
 											<span className='font-semibold'>Покупець:</span> {deal.buyer_name || '—'} · <span className='font-semibold'>Продавець:</span> {deal.seller_name || '—'}
 										</p>

@@ -6,6 +6,7 @@ import { bundlesAPI, dealsAPI } from '../services/api';
 import { useAppContext } from '../context/AppContext';
 import { IcoUsers, IcoChart, IcoDollar, IcoSignal, IcoTrophy, IcoPackage, IcoWarning, IcoRocket, IcoTarget, IcoLink, IcoUser } from '../components/Icon3D';
 import { formatEr, reliableEr } from '../utils/er';
+import BalanceBadges from '../components/Balance/BalanceBadges';
 
 function fmt(n) {
   if (n == null) return '—';
@@ -397,6 +398,7 @@ export default function BundleDetailsPage() {
                           </div>
                           <span className="text-xs text-gray-500 flex-shrink-0">{fmt(ch.subscribers_count)} підп.</span>
                         </div>
+                        <BalanceBadges stars={ch.stars_balance} ton={ch.ton_balance} size="xs" className="mt-1" />
                       </div>
                       {ch.er != null && (
                         <div className="text-right flex-shrink-0">
