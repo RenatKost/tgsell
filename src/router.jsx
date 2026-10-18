@@ -18,6 +18,9 @@ import ContactsPage from './layouts/ContactsPage';
 import PrivateRoute from './components/PrivateRoute';
 import BundleSellPage from './layouts/BundleSellPage';
 import BundleDetailsPage from './layouts/BundleDetailsPage';
+import BuyChannelLanding from './layouts/BuyChannelLanding';
+import SellChannelLanding from './layouts/SellChannelLanding';
+import ChannelPriceCalculatorPage from './layouts/ChannelPriceCalculatorPage';
 
 export const router = createBrowserRouter([
 	{
@@ -108,6 +111,18 @@ export const router = createBrowserRouter([
 			{
 				path: '/contacts',
 				element: <ContactsPage />,
+			},
+			{
+				path: '/kupyty-telegram-kanal',
+				element: <BuyChannelLanding />,
+			},
+			{
+				path: '/prodaty-telegram-kanal',
+				element: <SellChannelLanding />,
+			},
+			{
+				path: '/skilky-koshtuye-telegram-kanal',
+				element: <ChannelPriceCalculatorPage />,
 			},
 			{
 				path: '/terms',
