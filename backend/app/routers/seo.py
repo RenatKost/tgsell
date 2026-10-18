@@ -20,6 +20,9 @@ STATIC_PAGES = [
     ("/", "daily", "1.0"),
     ("/catalog", "hourly", "0.9"),
     ("/auction", "hourly", "0.8"),
+    ("/kupyty-telegram-kanal", "weekly", "0.9"),
+    ("/prodaty-telegram-kanal", "weekly", "0.9"),
+    ("/skilky-koshtuye-telegram-kanal", "weekly", "0.8"),
     ("/sell", "monthly", "0.6"),
     ("/sell-bundle", "monthly", "0.5"),
     ("/faq", "monthly", "0.5"),
@@ -37,6 +40,9 @@ Disallow: /api/
 Disallow: /cabinet
 Disallow: /profile
 Disallow: /deal/
+Allow: /kupyty-telegram-kanal
+Allow: /prodaty-telegram-kanal
+Allow: /skilky-koshtuye-telegram-kanal
 
 Sitemap: {SITE_URL}/sitemap.xml
 """

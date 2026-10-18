@@ -27,14 +27,16 @@ const cols = [
     title: 'Покупцям',
     links: [
       { to: '/catalog', label: 'Каталог каналів' },
+      { to: '/kupyty-telegram-kanal', label: 'Купити Telegram-канал' },
       { to: '/auction', label: 'Аукціони' },
-      { to: '/#calculator', label: 'Калькулятор ціни' },
+      { to: '/skilky-koshtuye-telegram-kanal', label: 'Скільки коштує канал' },
     ],
   },
   {
     title: 'Продавцям',
     links: [
       { to: '/sell', label: 'Виставити канал' },
+      { to: '/prodaty-telegram-kanal', label: 'Продати Telegram-канал' },
       { to: '/#how', label: 'Як це працює' },
       { to: '/#earn', label: 'Як заробити' },
     ],

@@ -8,7 +8,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import FileResponse, Response
+from fastapi.responses import FileResponse, HTMLResponse, Response
 
 from app.config import settings
 from app.routers import auth, channels, deals, admin, users, favorites, auctions, activity, media, support
@@ -198,6 +198,9 @@ if STATIC_DIR.exists():
         "faq",
         "contacts",
         "terms",
+        "kupyty-telegram-kanal",
+        "prodaty-telegram-kanal",
+        "skilky-koshtuye-telegram-kanal",
     }
     SPA_PREFIXES = (
         "channel/",
@@ -225,7 +228,10 @@ h1{font-size:4rem;margin:0;color:#334155}h2{margin:.5rem 0;font-size:1.5rem}p{co
         if full_path and file_path.is_file():
             return FileResponse(file_path)
         if _is_spa_path(full_path):
-            return FileResponse(STATIC_DIR / "index.html")
+            # Per-route title/description/canonical/OG injected server-side for crawlers.
+            from app.utils.spa_meta import render_index
+            return HTMLResponse(render_index(STATIC_DIR / "index.html", full_path),
+                                headers={"Cache-Control": "no-cache"})
         not_found = STATIC_DIR / "404.html"
         if not_found.is_file():
             return FileResponse(not_found, status_code=404)
