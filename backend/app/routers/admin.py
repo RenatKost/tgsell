@@ -2050,3 +2050,16 @@ async def remove_channel_from_market(
     await db.commit()
     logger.info(f"[ADMIN] Channel #{channel.id} removed from market by admin #{admin.id}: {channel.removed_reason}")
     return {"id": channel.id, "status": channel.status.value}
+
+
+# ── Weekly stats (read-only, superadmin) ──────────────────────────────
+
+@router.get("/stats/weekly")
+async def admin_weekly_stats(
+    admin: User = Depends(get_superadmin_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Same numbers as the Monday report to the admin group (last 7 days)."""
+    from app.services.weekly_stats import collect_weekly_stats
+
+    return await collect_weekly_stats(db)

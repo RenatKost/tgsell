@@ -23,6 +23,7 @@ from app.tasks.stats_collector import run_stats_collector, run_view_tracker
 from app.tasks.auction_manager import run_auction_manager
 from app.tasks.health_monitor import run_health_monitor
 from app.tasks.checklist_reminders import run_checklist_reminders
+from app.tasks.weekly_report import run_weekly_report
 from bot.main import run_bots_background
 
 from app.utils.logging_setup import setup_logging  # noqa: E402
@@ -93,6 +94,7 @@ async def lifespan(app: FastAPI):
     background_tasks.append(loop.create_task(run_bots_background()))
     background_tasks.append(loop.create_task(run_health_monitor(interval_minutes=10)))
     background_tasks.append(loop.create_task(run_checklist_reminders(interval_minutes=30)))
+    background_tasks.append(loop.create_task(run_weekly_report()))
     # Task 22: quality index from stored data only (no Telethon), <= every 6h
     from app.services.quality import run_quality_scorer
     background_tasks.append(loop.create_task(run_quality_scorer(startup_delay_sec=60)))

@@ -21,6 +21,7 @@ from app.models.bundle import ChannelBundle, BundleChannel  # noqa: F401
 from app.models.support import SupportMessage  # noqa: F401
 from app.models.monitoring import MasterWalletSnapshot  # noqa: F401
 from app.models.chat import DealAttachment, DealChatPresence, DealChatRead, DealChatTgLink  # noqa: F401
+from app.models.report import ScheduledReportRun  # noqa: F401
 
 config = context.config
 

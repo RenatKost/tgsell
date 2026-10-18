@@ -35,10 +35,10 @@ def test_migration_0043_shape():
     assert mig.count("nullable=True") == 4  # existing rows stay NULL (deals #3, #6, #29 …)
     assert "stars_balance >= 0" in mig and "ton_balance >= 0" in mig
     assert "def downgrade" in mig and mig.count("op.drop_column") == 4
-    # 0043 is the single head
+    # linear history: only 0044 (weekly report log) builds on 0043
     heads = [p.name for p in (BACKEND_ROOT / "alembic/versions").glob("*.py")
              if 'down_revision = "0043"' in p.read_text(encoding="utf-8")]
-    assert heads == []
+    assert heads == ["0044_scheduled_report_runs.py"]
 
 
 @pytest.mark.asyncio

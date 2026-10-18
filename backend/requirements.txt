@@ -27,3 +27,4 @@ cryptography==42.0.2
 # Utils
 python-dotenv==1.0.0
 Pillow==11.0.0
+tzdata>=2024.1  # zoneinfo Europe/Chisinau for the weekly report (slim image)
