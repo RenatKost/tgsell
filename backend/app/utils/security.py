@@ -13,6 +13,7 @@ from app.database import get_db
 from app.models.user import User
 
 security = HTTPBearer()
+_optional_security = HTTPBearer(auto_error=False)
 
 
 def create_access_token(data: dict) -> str:
@@ -76,6 +77,41 @@ async def get_current_user_or_blocked(
     if not user or not user.is_active:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="User not found")
     return user
+
+
+async def get_optional_user(
+    credentials: HTTPAuthorizationCredentials | None = Depends(_optional_security),
+    db: AsyncSession = Depends(get_db),
+) -> User | None:
+    """Viewer for public endpoints: the active user behind a valid access token, else None.
+
+    Never raises: a missing/invalid/expired token simply means an anonymous viewer.
+    """
+    if credentials is None:
+        return None
+    try:
+        payload = jwt.decode(credentials.credentials, settings.jwt_secret_key,
+                             algorithms=[settings.jwt_algorithm])
+    except JWTError:
+        return None
+    if payload.get("type") != "access" or payload.get("sub") is None:
+        return None
+    try:
+        user_id = int(payload["sub"])
+    except (TypeError, ValueError):
+        return None
+    user = (await db.execute(select(User).where(User.id == user_id))).scalar_one_or_none()
+    if not user or not user.is_active:
+        return None
+    return user
+
+
+def is_admin(user: User | None) -> bool:
+    """Same rule as get_superadmin_user (role == admin; moderators excluded)."""
+    if user is None:
+        return False
+    role = getattr(user.role, "value", user.role)
+    return role == "admin"
 
 
 def blocked_detail(user: User) -> str:
