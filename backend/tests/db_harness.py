@@ -135,7 +135,7 @@ _ISOLATED_PREFIXES = (
     # Everything that binds to app.database.Base / async_session at import time.
     "app.database", "app.models", "app.routers", "app.tasks", "bot.",
     "app.services.deal_checklist", "app.services.deal_lifecycle", "app.services.user_activity", "app.services.similar", "app.services.saved_searches",
-    "app.services.catalog_filters",
+    "app.services.catalog_filters", "app.services.weekly_stats",
     "app.services.payment_deadlines", "app.services.checklist_autoverify",
     "app.services.payouts", "app.tasks.payout_worker", "app.services.moderation",
     "app.services.chat", "app.services.gas_monitor", "app.services.chat_bridge", "app.services.pricing",
