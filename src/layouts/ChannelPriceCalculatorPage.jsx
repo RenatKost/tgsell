@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import usePageMeta from '../hooks/usePageMeta';
 import { A, Card, Cta, PageShell, Section } from '../components/Seo/SeoBlocks';
-import { MARKET, estimate, usd } from '../seo/marketData';
+import { estimate, usd } from '../seo/marketData';
 
 const PATH = '/skilky-koshtuye-telegram-kanal';
 const PRESETS = [1000, 5000, 10000];
@@ -28,7 +28,7 @@ const ChannelPriceCalculatorPage = () => {
 		<PageShell
 			badge="Калькулятор"
 			h1={meta.h1}
-			lead="Скільки коштує телеграм канал з 1000, 5000 чи 10000 підписників? Нижче — орієнтовна оцінка на основі цін реальних оголошень про продаж українських Telegram-каналів."
+			lead="Скільки коштує телеграм канал з 1000, 5000 чи 10000 підписників? Нижче — орієнтовна оцінка на основі аналізу актуальних ринкових цін на українські Telegram-канали."
 		>
 			<Card>
 				<Section title="Типові оцінки">
@@ -67,26 +67,15 @@ const ChannelPriceCalculatorPage = () => {
 				</Section>
 
 				<Section title="Як рахується оцінка">
-					<p>
-						Оцінка = кількість підписників × медіанна ціна за підписника. Основне значення — <strong>${MARKET.medianPerSub}</strong> за
-						підписника: медіана для всіх лотів ({MARKET.nPerSub} оголошень із ціною та кількістю підписників).
-					</p>
-					<p>
-						Діапазон — від <strong>${MARKET.lowPerSub}</strong> (медіана для мереж/сіток каналів, {MARKET.nNetwork} лотів) до{' '}
-						<strong>${MARKET.highPerSub}</strong> (медіана для окремих каналів, {MARKET.nChannel} лотів).
-					</p>
-					<p>
-						Дані: {MARKET.listings} унікальних оголошень про продаж українських Telegram-каналів у публічному Telegram-каналі-біржі
-						за {MARKET.period}. Ціни в гривнях перераховано в долари за курсом {MARKET.uahRate} грн/$.
-					</p>
+					<p>Оцінка = кількість підписників × середня ринкова ціна за підписника.</p>
+					<p>Оцінка базується на аналізі актуальних ринкових цін на українські Telegram-канали.</p>
 				</Section>
 
 				<div className="rounded-xl border border-amber-400/30 bg-amber-400/5 p-4 text-sm text-gray-600 dark:text-gray-300">
 					<p className="font-bold text-amber-500 mb-1">Це лише орієнтовна оцінка</p>
 					<p>
-						Розрахунок базується на цінах запиту в оголошеннях, а не на фактичних сумах закритих угод. Реальна вартість
-						конкретного каналу залежить від охоплень, тематики, якості аудиторії, історії та попиту, тому може суттєво
-						відрізнятися. Для приватних каналів із заявками на вступ медіана значно нижча.
+						Реальна вартість конкретного каналу залежить від охоплень, тематики, якості аудиторії, історії та попиту,
+						тому може суттєво відрізнятися від оцінки. Для приватних каналів оцінка зазвичай нижча.
 					</p>
 				</div>
 			</Card>
