@@ -72,7 +72,32 @@ def test_calculator_numbers_match_market_data():
     assert num("medianPerSub") == data["overall"]["pps"]
     assert num("lowPerSub") == data["segments"]["network"]["pps"]
     assert num("highPerSub") == data["segments"]["channel"]["pps"]
-    assert num("nPerSub") == data["overall"]["n"]
+
+
+# Methodology (sample sizes, source, period, FX rate) must never be user-visible.
+METHODOLOGY_LEAKS = ["152", "158", "65 лот", "82 лот", "оголошен", "бірж", "41.5", "41,5", "15.07", "15.10",
+                     "ціни запиту", "ціна запиту", "медіан", "tumobog"]
+
+
+def test_calculator_methodology_not_disclosed():
+    calc = spa_meta.route_meta()["/skilky-koshtuye-telegram-kanal"]
+    for field in ("title", "description", "h1"):
+        assert not any(b in calc[field] for b in METHODOLOGY_LEAKS), field
+    html = spa_meta.inject_meta(INDEX, "skilky-koshtuye-telegram-kanal")
+    fallback = html[html.index('<div id="root">'):html.index("</main></div>")]
+    assert not any(b in fallback for b in METHODOLOGY_LEAKS)
+    assert "актуальних ринкових цін" in calc["description"]
+    src = (REPO / "src" / "layouts" / "ChannelPriceCalculatorPage.jsx").read_text(encoding="utf-8")
+    assert not any(b in src for b in METHODOLOGY_LEAKS)
+    assert "MARKET." not in src  # no raw coefficients / counts rendered
+    assert "Оцінка базується на аналізі актуальних ринкових цін на українські Telegram-канали" in src
+    js = (REPO / "src" / "seo" / "marketData.js").read_text(encoding="utf-8")
+    code = "\n".join(l for l in js.splitlines() if not l.lstrip().startswith("//"))
+    for k in ("listings", "nPerSub", "nNetwork", "nChannel", "period", "uahRate"):
+        assert not re.search(rf"\b{k}\b", code), k
+    for f in ["BuyChannelLanding.jsx", "SellChannelLanding.jsx"]:
+        lsrc = (REPO / "src" / "layouts" / f).read_text(encoding="utf-8")
+        assert not any(b in lsrc for b in ["152", "158", "41.5", "медіан", "реальних оголошень", "ціни оголошень"]), f
 
 
 def test_sitemap_and_robots_include_landings(pg_orm):
