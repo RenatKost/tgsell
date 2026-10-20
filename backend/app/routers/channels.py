@@ -22,7 +22,8 @@ from app.schemas.channel import (
 )
 from app.services.moderation import not_blocked_seller
 from app.services.pricing import apply_estimate, load_market
-from app.utils.security import get_current_user
+from app.utils.security import get_current_user, get_optional_user
+from app.services.listing_visibility import visible_channel_or_404, can_view_unpublished, PUBLIC_CHANNEL_STATUSES
 from app.utils.timeutil import to_naive_utc, utcnow_naive
 
 logger = logging.getLogger(__name__)
@@ -85,6 +86,7 @@ async def list_channels(
     max_subscribers: int | None = Query(None, ge=0),
     with_balance: bool | None = Query(None, description="Task 31: seller-stated Stars or TON balance > 0"),
     db: AsyncSession = Depends(get_db),
+    viewer: User | None = Depends(get_optional_user),
 ):
     """List channels with filters, search, sorting and pagination."""
     query = select(Channel)
@@ -92,6 +94,9 @@ async def list_channels(
     if seller_id:
         # Show all channels for a specific seller (any status)
         query = query.where(Channel.seller_id == seller_id)
+        if not can_view_unpublished(viewer, seller_id):
+            query = query.where(Channel.status.in_(PUBLIC_CHANNEL_STATUSES))
+            query = query.where(not_blocked_seller(Channel.seller_id))
         if status_filter:
             query = query.where(Channel.status == status_filter)
     else:
@@ -171,29 +176,23 @@ async def list_channels(
 
 
 @router.get("/{channel_id}/similar")
-async def similar_channels(channel_id: int, limit: int = Query(6, ge=1, le=6), db: AsyncSession = Depends(get_db)):
+async def similar_channels(channel_id: int, limit: int = Query(6, ge=1, le=6), db: AsyncSession = Depends(get_db),
+                           viewer: User | None = Depends(get_optional_user)):
     """Task 24: up to 6 similar public listings (same category, close subs and $/view, best quality first)."""
     from app.services.similar import find_similar
-    base = (await db.execute(
-        select(Channel).where(Channel.id == channel_id).where(not_blocked_seller(Channel.seller_id))
-    )).scalar_one_or_none()
-    if not base:
-        raise HTTPException(status_code=404, detail="Channel not found")
+    base = await visible_channel_or_404(db, channel_id, viewer)
     market = await load_market(db)
     items = await find_similar(db, base, market, limit=limit)
     return {"channel_id": channel_id, "items": items}
 
 
 @router.get("/{channel_id}", response_model=ChannelResponse)
-async def get_channel(channel_id: int, db: AsyncSession = Depends(get_db)):
-    """Get channel details by ID. Includes active auction data if present."""
+async def get_channel(channel_id: int, db: AsyncSession = Depends(get_db),
+                      viewer: User | None = Depends(get_optional_user)):
+    """Get channel details by ID. Includes active auction data if present.
+    Unpublished lots: 404 for everyone except the owner and staff (task 33)."""
     from app.models.auction import Auction, AuctionStatus
-    result = await db.execute(
-        select(Channel).where(Channel.id == channel_id).where(not_blocked_seller(Channel.seller_id))
-    )
-    channel = result.scalar_one_or_none()
-    if not channel:
-        raise HTTPException(status_code=404, detail="Channel not found")
+    channel = await visible_channel_or_404(db, channel_id, viewer)
     data = ChannelResponse.model_validate(channel)
     # Attach active auction info if channel is on auction
     if channel.listing_type in ("auction", "both"):
@@ -216,8 +215,10 @@ async def get_channel(channel_id: int, db: AsyncSession = Depends(get_db)):
 
 
 @router.get("/{channel_id}/stats", response_model=list[ChannelStatsResponse])
-async def get_channel_stats(channel_id: int, db: AsyncSession = Depends(get_db)):
+async def get_channel_stats(channel_id: int, db: AsyncSession = Depends(get_db),
+                            viewer: User | None = Depends(get_optional_user)):
     """Get historical stats for a channel."""
+    await visible_channel_or_404(db, channel_id, viewer)
     result = await db.execute(
         select(ChannelStats)
         .where(ChannelStats.channel_id == channel_id)
@@ -233,12 +234,10 @@ async def get_channel_posts(
     limit: int = Query(50, ge=1, le=200),
     offset: int = Query(0, ge=0),
     db: AsyncSession = Depends(get_db),
+    viewer: User | None = Depends(get_optional_user),
 ):
     """Get individual posts for a channel with detailed stats."""
-    # Verify channel exists
-    ch = await db.execute(select(Channel.id).where(Channel.id == channel_id))
-    if not ch.scalar_one_or_none():
-        raise HTTPException(status_code=404, detail="Channel not found")
+    await visible_channel_or_404(db, channel_id, viewer)
 
     # Count total
     total_result = await db.execute(
@@ -265,15 +264,12 @@ async def get_channel_posts(
 
 
 @router.get("/{channel_id}/health")
-async def get_channel_health(channel_id: int, db: AsyncSession = Depends(get_db)):
+async def get_channel_health(channel_id: int, db: AsyncSession = Depends(get_db),
+                             viewer: User | None = Depends(get_optional_user)):
     """Analyze channel health: bot detection, engagement quality, view patterns."""
     from app.schemas.channel import ChannelHealthResponse
 
-    # Get channel
-    result = await db.execute(select(Channel).where(Channel.id == channel_id))
-    channel = result.scalar_one_or_none()
-    if not channel:
-        raise HTTPException(status_code=404, detail="Channel not found")
+    channel = await visible_channel_or_404(db, channel_id, viewer)
 
     subs = channel.subscribers_count or 0
     avg_views = channel.avg_views or 0
@@ -423,16 +419,13 @@ async def get_channel_health(channel_id: int, db: AsyncSession = Depends(get_db)
 
 
 @router.get("/{channel_id}/ai-analysis")
-async def get_ai_analysis(channel_id: int, db: AsyncSession = Depends(get_db)):
+async def get_ai_analysis(channel_id: int, db: AsyncSession = Depends(get_db),
+                          viewer: User | None = Depends(get_optional_user)):
     """Get AI-powered deep analysis of a channel. Cached for 7 days."""
     from app.services.ai_analysis import analyze_channel
     from app.utils.er import reliable_er as reliable_er_for_ai
 
-    # Get channel
-    result = await db.execute(select(Channel).where(Channel.id == channel_id))
-    channel = result.scalar_one_or_none()
-    if not channel:
-        raise HTTPException(status_code=404, detail="Channel not found")
+    channel = await visible_channel_or_404(db, channel_id, viewer)
 
     # Return cached result if fresher than 7 days
     if channel.ai_cache and channel.ai_cache_updated_at:

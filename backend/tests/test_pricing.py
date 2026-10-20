@@ -60,9 +60,9 @@ def test_case_81_inflated_subscribers():
     assert r["price_verdict"] == "inflated" and r["fair_price_range"] is None
 
 
-def test_views_above_subs_is_inflated():
+def test_views_above_subs_is_not_auto_inflated_task33():
     m = build_market()
-    assert _est(m, subscribers=500, avg_views=1200, price=100)["price_verdict"] == "inflated"
+    assert _est(m, subscribers=500, avg_views=1200, price=100)["price_verdict"] != "inflated"
 
 
 def test_stale_views_ignored():

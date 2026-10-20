@@ -440,7 +440,7 @@ async def test_admin_balances_show_unknown_not_zero_and_cache(env):
     assert r2["cached"] is True and r3["cached"] is True
     assert len(env.chain.calls) == calls_after_first
 
-    admin_router._escrow_balances_cache["at"] -= 61  # expire
+    admin_router._escrow_balances_cache["at"] -= admin_router.ESCROW_BALANCES_CACHE_TTL_SEC + 1  # expire
     async with env.orm.session() as db:
         r4 = await admin_router.check_escrow_balances(refresh=False, admin=None, db=db)
     assert r4["cached"] is False and len(env.chain.calls) == calls_after_first + 3

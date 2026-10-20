@@ -13,8 +13,12 @@ affecting a segment once it has at least MIN_DEALS of them.
 Rules
 - Unpriceable (closed, 0 subs, price <= 0) -> "unknown".
 - Views are used only when fresh: not hidden and the last post is not older
-  than FRESH_VIEWS_DAYS. Fresh views/subs < MIN_VIEW_RATIO (2%) or
-  > MAX_VIEW_RATIO -> "inflated" (likely bought subs / bought views).
+  than FRESH_VIEWS_DAYS. Fresh views/subs < MIN_VIEW_RATIO (2%) -> "inflated"
+  (likely bought subs) in every category.
+- Task 33: views/subs > MAX_VIEW_RATIO is NOT an auto-verdict any more (reach
+  channels — jobs, regional, classifieds — legitimately get views from search
+  and forwards). Outside HIGH_REACH_CATEGORIES it only raises an info flag for
+  moderators (see high_views_flag); inside them the upper threshold is skipped.
 - Fair price = median of the available estimates (subs*pps, views*ppv),
   range = fair ±FAIR_BAND.
 - Price differs from fair by more than MAX_RATIO (3x) either way -> numbers
@@ -39,6 +43,16 @@ MAX_VIEW_RATIO = 1.5
 FRESH_VIEWS_DAYS = 30
 DEAL_WEIGHT = 5
 MIN_DEALS = 3
+
+# Task 33: categories where views > subscribers is normal (existing category values).
+# vacancies/jobs → «Вакансія/Робота»; regional → «Регіональні»; classifieds/ads and
+# shops → «Товари/Магазини». Events/afisha has no category yet; the aliases below
+# are accepted if such categories are added later.
+HIGH_REACH_CATEGORIES = frozenset({
+    "Вакансія/Робота", "Регіональні", "Товари/Магазини",
+    "Афіша/Події", "Афіша", "Події", "Оголошення",
+})
+HIGH_VIEWS_FLAG = "переглядів більше за підписників — перевірте джерела"
 
 VERDICT_CHEAPER = "cheaper"
 VERDICT_FAIR = "fair"
@@ -162,7 +176,7 @@ def estimate(market: Market, *, category, price, subscribers, avg_views, is_clos
     out["price_per_view"] = price_per_view(price, subscribers, views, is_closed)
     if views is not None:
         ratio = views / subscribers
-        if ratio < MIN_VIEW_RATIO or ratio > MAX_VIEW_RATIO:
+        if ratio < MIN_VIEW_RATIO:
             out["price_verdict"] = VERDICT_INFLATED
             return out
     ref, scope = market.ref_for(category)
@@ -187,6 +201,22 @@ def estimate(market: Market, *, category, price, subscribers, avg_views, is_clos
     else:
         out["price_verdict"] = VERDICT_FAIR
     return out
+
+
+def upper_threshold_applies(category) -> bool:
+    return (category or "") not in HIGH_REACH_CATEGORIES
+
+
+def high_views_flag(*, category, subscribers, avg_views, is_closed=False,
+                    views_hidden=False, last_post_date=None, now=None) -> str | None:
+    """Moderator-only info flag (no verdict): fresh views/subs > MAX_VIEW_RATIO
+    outside HIGH_REACH_CATEGORIES."""
+    if is_closed or not subscribers or subscribers <= 0 or not upper_threshold_applies(category):
+        return None
+    views = fresh_views(avg_views, views_hidden, last_post_date, now)
+    if views is not None and views / subscribers > MAX_VIEW_RATIO:
+        return HIGH_VIEWS_FLAG
+    return None
 
 
 async def load_market(db) -> Market:

@@ -215,6 +215,25 @@ if STATIC_DIR.exists():
 h1{font-size:4rem;margin:0;color:#334155}h2{margin:.5rem 0;font-size:1.5rem}p{color:#94a3b8}a{color:#00FF88;font-weight:600;text-decoration:none}</style>
 </head><body><div><h1>404</h1><h2>Сторінку не знайдено</h2><p>Такої адреси на TgSell немає.</p><a href="/">На головну</a></div></body></html>"""
 
+    async def _channel_page_meta(channel_id: int) -> dict:
+        """Task 33: per-channel <head> for crawlers; unpublished/blocked → noindex, no details."""
+        from sqlalchemy import select as _select
+        from app.database import async_session
+        from app.models.channel import Channel
+        from app.services.moderation import not_blocked_seller
+        from app.utils.spa_meta import channel_meta
+        try:
+            async with async_session() as db:
+                ch = (await db.execute(
+                    _select(Channel).where(Channel.id == channel_id)
+                    .where(not_blocked_seller(Channel.seller_id))
+                )).scalar_one_or_none()
+                return channel_meta(ch)
+        except Exception as e:  # DB hiccup: serve generic page, not a 500
+            logger.warning("channel meta lookup failed for %s: %s", channel_id, type(e).__name__)
+            return channel_meta(None) | {"noindex": False, "title": "Telegram-канал на продаж — TgSell",
+                                         "description": "Telegram-канал на продаж на TgSell."}
+
     def _is_spa_path(full_path: str) -> bool:
         path = (full_path or "").strip("/")
         if path in SPA_EXACT:
@@ -229,8 +248,12 @@ h1{font-size:4rem;margin:0;color:#334155}h2{margin:.5rem 0;font-size:1.5rem}p{co
             return FileResponse(file_path)
         if _is_spa_path(full_path):
             # Per-route title/description/canonical/OG injected server-side for crawlers.
-            from app.utils.spa_meta import render_index
-            return HTMLResponse(render_index(STATIC_DIR / "index.html", full_path),
+            from app.utils.spa_meta import render_index, channel_id_from_path, channel_meta
+            override = None
+            ch_id = channel_id_from_path(full_path)
+            if ch_id is not None:
+                override = await _channel_page_meta(ch_id)
+            return HTMLResponse(render_index(STATIC_DIR / "index.html", full_path, override),
                                 headers={"Cache-Control": "no-cache"})
         not_found = STATIC_DIR / "404.html"
         if not_found.is_file():

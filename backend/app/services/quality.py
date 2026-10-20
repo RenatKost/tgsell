@@ -9,7 +9,7 @@ Components (max points):
   er          30  fresh views of posts in the last 30 days / subscribers
   regularity  25  active posting days in 30 days + evenness of gaps
   growth      20  subscriber growth over ~30 (or 7) days from real snapshots
-  integrity   25  Task 21 "inflated" verdict (MAX_VIEW_RATIO 150%) and sharp
+  integrity   25  Task 21 "inflated" verdict (views < 2% of subs; task 33: high ER is not penalised) and sharp
                   subscriber jumps between real snapshots
 
 ER and regularity are required; growth / integrity may be missing and then
@@ -26,7 +26,7 @@ from statistics import mean, pstdev
 
 from sqlalchemy import insert, select, update
 
-from app.services.pricing import MAX_VIEW_RATIO, MIN_VIEW_RATIO, VERDICT_INFLATED
+from app.services.pricing import MIN_VIEW_RATIO, VERDICT_INFLATED
 from app.utils.timeutil import utcnow_naive
 
 logger = logging.getLogger(__name__)
@@ -43,7 +43,7 @@ INFLATED_CAP = 25
 RECOMPUTE_HOURS = 6
 # Bump when the formula changes: stored scores of an older version are
 # recomputed right away, regardless of the 6h skip.
-FORMULA_VERSION = 2
+FORMULA_VERSION = 3  # task 33: high ER no longer inflated/capped
 WEIGHTS = {"er": 30, "regularity": 25, "growth": 20, "integrity": 25}
 
 HEALTH_CLEAN = "clean"
@@ -77,10 +77,8 @@ def score_channel(*, subscribers, is_closed=False, views_hidden=False,
         reasons.append("few_posts_30d")
     else:
         ratio = mean(viewed) / subscribers
-        if ratio > MAX_VIEW_RATIO:
-            pts = 0.0
-        else:
-            pts = WEIGHTS["er"] * _clamp(ratio / ER_FULL)
+        # Task 33: high ER is not penalised (no zeroing, no inflated cap).
+        pts = WEIGHTS["er"] * _clamp(ratio / ER_FULL)
         comps["er"] = {"points": round(pts, 1), "max": WEIGHTS["er"], "value": round(ratio * 100, 1),
                        "posts": len(viewed)}
 
@@ -115,7 +113,7 @@ def score_channel(*, subscribers, is_closed=False, views_hidden=False,
     if price_verdict is not None:
         inflated = price_verdict == VERDICT_INFLATED
     else:
-        inflated = ratio is not None and (ratio < MIN_VIEW_RATIO or ratio > MAX_VIEW_RATIO)
+        inflated = ratio is not None and ratio < MIN_VIEW_RATIO
     snaps = sorted((datetime(d.year, d.month, d.day), s) for d, s in snapshots if s)
     jumps = 0
     for (d1, s1), (d2, s2) in zip(snaps, snaps[1:]):
