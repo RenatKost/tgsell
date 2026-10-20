@@ -140,6 +140,7 @@ _ISOLATED_PREFIXES = (
     "app.services.payouts", "app.tasks.payout_worker", "app.services.moderation",
     "app.services.chat", "app.services.gas_monitor", "app.services.chat_bridge", "app.services.pricing",
     "app.utils.security", "app.services.channel_availability", "app.services.fee_sweep",
+    "app.services.listing_visibility",
 )
 
 

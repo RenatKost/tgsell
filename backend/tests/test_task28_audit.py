@@ -151,7 +151,8 @@ async def test_bundle_endpoint_returns_200_unavailable_and_does_not_cache(pg_orm
     async with pg_orm.session() as db:
         from app.models.channel import Channel
         ch = await db.get(Channel, cid)
-        b = ChannelBundle(seller_id=ch.seller_id, name="B28", price=100)
+        from app.models.bundle import BundleStatus
+        b = ChannelBundle(seller_id=ch.seller_id, name="B28", price=100, status=BundleStatus.approved)
         db.add(b)
         await db.commit()
         bid = b.id

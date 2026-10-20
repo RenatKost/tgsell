@@ -266,6 +266,20 @@ export const EscrowOverview = () => {
 							<div>Очікує збору: <b>{fmt(d.totals.pending_sweep_usdt)}</b> ({d.totals.pending_sweep_count} угод, мін. {d.fee_sweep_min_usdt})</div>
 							<div>Рішення за Ренатом: <b>{fmt(d.totals.renat_decision_usdt)}</b> (#29, #3)</div>
 						</div>
+						{d.onchain && (
+							<div className='mt-2 p-2 rounded border border-gray-200 dark:border-slate-600'>
+								<div className='flex items-center justify-between gap-2'>
+									<div>На всіх ескроу-адресах (у мережі, усі угоди зокрема скасовані): <b>{d.onchain.unknown_count > 0 ? '≥ ' : ''}{fmt(d.onchain.total_usdt)} USDT</b>
+										{d.onchain.unknown_count > 0 && <span className='text-orange-600'> · невідомо: {d.onchain.unknown_count} адрес{d.onchain.last_known_unknown_usdt ? ` (останнє відоме ${fmt(d.onchain.last_known_unknown_usdt)} USDT)` : ''}</span>}
+									</div>
+									<button onClick={() => load(true)} className='px-2 py-0.5 rounded bg-[#3498db] text-white text-xs whitespace-nowrap'>Оновити баланси</button>
+								</div>
+								<div className='text-xs text-gray-400'>Лише читання, переказів немає. Перевірено: {when(d.balances_checked_at)}{d.cached ? ' (кеш)' : ''}</div>
+								{d.onchain.addresses?.length > 0 && <div className='mt-1 text-xs'>{d.onchain.addresses.map(a => (
+									<div key={a.address}>#{a.deal_ids.join(', #')} · <span className='font-mono'>{short(a.address)}</span> · {a.balance_usdt === null ? <span className='text-orange-600'>невідомо{a.last_known_usdt != null ? ` (було ${fmt(a.last_known_usdt, 6)})` : ''}</span> : <b>{fmt(a.balance_usdt, 6)} USDT</b>}</div>
+								))}</div>}
+							</div>
+						)}
 						{d.totals.pending_sweep_count > 0 && <button onClick={collectAll} className='mt-2 px-3 py-1 rounded bg-green-600 text-white'>Зібрати все</button>}
 						{d.treasury_txs?.length > 0 && <div className='mt-2 text-xs'>{d.treasury_txs.map(t => (
 							<div key={t.id}>#{t.deal_id} · {fmt(t.amount, 6)} USDT · {t.status}{t.tronscan_url && <> · <a href={t.tronscan_url} target='_blank' rel='noopener noreferrer' className='text-[#3498db]'>{short(t.tx_hash)}</a></>}</div>

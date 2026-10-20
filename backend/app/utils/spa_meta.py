@@ -54,15 +54,81 @@ def _set_canonical(html: str, url: str) -> str:
     return html.replace("</head>", f"  {tag}\n</head>", 1)
 
 
-def inject_meta(html: str, full_path: str) -> str:
+# Task 33: static meta for /catalog (not an SEO landing: no no-JS h1 fallback).
+EXTRA_ROUTE_META: dict[str, dict[str, str]] = {
+    "/catalog": {
+        "title": "Каталог Telegram-каналів на продаж — TgSell",
+        "description": ("Каталог Telegram-каналів на продаж: фільтри за тематикою, ціною, "
+                        "кількістю підписників і переглядами. Безпечна угода через гарант-ескроу в USDT."),
+    },
+}
+
+_CHANNEL_RE = re.compile(r"^/channel/(\d+)$")
+
+
+def channel_id_from_path(full_path: str) -> int | None:
+    m = _CHANNEL_RE.match(normalize_path(full_path))
+    return int(m.group(1)) if m else None
+
+
+def _fmt_int(n) -> str:
+    return f"{int(n or 0):,}".replace(",", "\u00a0")
+
+
+def _fmt_price(p) -> str:
+    v = float(p or 0)
+    return _fmt_int(v) if v == int(v) else f"{v:,.2f}".replace(",", "\u00a0")
+
+
+def channel_meta(channel) -> dict:
+    """Per-channel meta for /channel/:id. channel=None → unknown lot (noindex).
+
+    Only publicly visible facts (name, subscribers, price, avatar) — never internal
+    methodology. Unpublished lots (pending/rejected/removed) get a generic noindex
+    page without any details.
+    """
+    from app.services.listing_visibility import channel_is_public
+    from app.utils.avatars import public_channel_avatar_url
+    if channel is None or not channel_is_public(channel):
+        return {"title": "Оголошення недоступне — TgSell",
+                "description": "Це оголошення недоступне або ще не опубліковане на TgSell.",
+                "noindex": True}
+    name = (channel.channel_name or "Telegram-канал").strip()
+    subs = _fmt_int(channel.subscribers_count)
+    price = _fmt_price(channel.price)
+    sold = getattr(channel.status, "value", channel.status) == "sold"
+    title = f"{name} — Telegram-канал на продаж, {subs} підписників | TgSell"
+    if sold:
+        title = f"{name} — Telegram-канал (продано) | TgSell"
+    desc = (f"Telegram-канал «{name}»: {subs} підписників, ціна {price} USDT. "
+            "Купівля через гарант-ескроу TgSell — кошти продавцю лише після передачі каналу.")
+    if sold:
+        desc = f"Telegram-канал «{name}»: {subs} підписників. Канал уже продано через TgSell."
+    meta = {"title": title, "description": desc}
+    avatar = public_channel_avatar_url(channel.id, channel.avatar_url)
+    if avatar:
+        meta["image"] = SITE_URL + avatar
+    return meta
+
+
+def _set_robots(html: str, value: str) -> str:
+    return _set_meta(html, "name", "robots", value)
+
+
+def inject_meta(html: str, full_path: str, override: dict | None = None) -> str:
     path = normalize_path(full_path)
     canon_path = CANONICAL_ALIASES.get(path, path)
     url = SITE_URL + ("/" if canon_path == "/" else canon_path)
     html = _set_canonical(html, url)
     html = _set_meta(html, "property", "og:url", url)
-    meta = route_meta().get(path)
+    meta = override or route_meta().get(path) or EXTRA_ROUTE_META.get(path)
     if not meta:
         return html
+    if meta.get("noindex"):
+        html = _set_robots(html, "noindex, nofollow")
+    if meta.get("image"):
+        html = _set_meta(html, "property", "og:image", meta["image"])
+        html = _set_meta(html, "name", "twitter:image", meta["image"])
     title, desc = meta["title"], meta["description"]
     html = _sub(r"<title>.*?</title>", f"<title>{escape(title, quote=False)}</title>", html)
     html = _set_meta(html, "name", "description", desc)
@@ -83,6 +149,13 @@ def _render_cached(index_path: str, mtime_ns: int, full_path: str) -> str:
     return inject_meta(Path(index_path).read_text(encoding="utf-8"), full_path)
 
 
-def render_index(index_file: Path, full_path: str) -> str:
+@lru_cache(maxsize=2)
+def _index_text(index_path: str, mtime_ns: int) -> str:
+    return Path(index_path).read_text(encoding="utf-8")
+
+
+def render_index(index_file: Path, full_path: str, override: dict | None = None) -> str:
     path = normalize_path(full_path)
+    if override is not None:  # dynamic (DB-backed) meta: never cached
+        return inject_meta(_index_text(str(index_file), index_file.stat().st_mtime_ns), path, override)
     return _render_cached(str(index_file), index_file.stat().st_mtime_ns, path)

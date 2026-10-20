@@ -47,7 +47,8 @@ def test_other_pages_get_own_canonical_only():
     html = spa_meta.inject_meta(INDEX, "catalog")
     assert 'rel="canonical" href="https://tgsell.me/catalog"' in html
     assert _meta(html, "property", "og:url") == ["https://tgsell.me/catalog"]
-    assert re.search(r"<title>TgSell — Біржа Telegram каналів", html)
+    assert f"<title>{spa_meta.EXTRA_ROUTE_META['/catalog']['title']}</title>" in html  # task 33
+    assert re.search(r"<title>TgSell — Біржа Telegram каналів", spa_meta.inject_meta(INDEX, "faq"))
     assert 'href="https://tgsell.me/oferta"' in spa_meta.inject_meta(INDEX, "terms")
     assert 'href="https://tgsell.me/"' in spa_meta.inject_meta(INDEX, "")
 

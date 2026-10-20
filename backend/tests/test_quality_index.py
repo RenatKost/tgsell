@@ -49,10 +49,11 @@ def test_inflated_low_views_capped():
     assert r["breakdown"]["components"]["integrity"]["inflated"] is True
 
 
-def test_views_above_150pct_inflated_but_149_not():
+def test_views_above_150pct_not_inflated_task33():
     hi = score_channel(subscribers=1000, posts=_posts(views=1510), snapshots=[], now=NOW)
     ok = score_channel(subscribers=1000, posts=_posts(views=1490), snapshots=[], now=NOW)
-    assert hi["health"] == "suspicious" and ok["health"] == "clean"
+    assert hi["health"] == "clean" and ok["health"] == "clean"
+    assert hi["score"] > 25 and hi["breakdown"]["components"]["integrity"]["inflated"] is False
 
 
 def test_sharp_subscriber_jump_penalised():

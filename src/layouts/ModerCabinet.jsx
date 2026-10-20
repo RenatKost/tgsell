@@ -776,6 +776,9 @@ const ModerCabinet = () => {
 												)}
 												<div>
 													<h3 className='font-bold text-lg text-gray-800 dark:text-white'>{channel.channel_name}</h3>
+													{channel.moderation_flags?.length > 0 && channel.moderation_flags.map(f => (
+														<div key={f} className='mt-1 text-xs px-2 py-1 rounded-lg bg-sky-50 text-sky-700 dark:bg-sky-900/20 dark:text-sky-300 border border-sky-200 dark:border-sky-800/40'>ℹ️ {f}</div>
+													))}
 													<div className='flex items-center gap-2 mt-1'>
 														<a href={channel.telegram_link} target='_blank' rel='noopener noreferrer' className='text-blue-500 text-sm hover:underline'>
 															{channel.telegram_link} <FontAwesomeIcon icon={faExternalLinkAlt} size='xs' />

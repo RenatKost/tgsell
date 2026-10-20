@@ -64,7 +64,16 @@ async def get_pending_channels(
         .order_by(Channel.created_at.asc())
     )
     channels = result.scalars().all()
-    return [ChannelResponse.model_validate(c) for c in channels]
+    from app.services.pricing import high_views_flag
+    out = []
+    for c in channels:
+        r = ChannelResponse.model_validate(c)
+        flag = high_views_flag(category=c.category, subscribers=c.subscribers_count, avg_views=c.avg_views,
+                               is_closed=bool(c.is_closed), views_hidden=bool(c.views_hidden),
+                               last_post_date=c.last_post_date)
+        r.moderation_flags = [flag] if flag else []
+        out.append(r)
+    return out
 
 
 @router.post("/channels/{channel_id}/approve", response_model=ChannelResponse)
@@ -1030,37 +1039,13 @@ async def master_wallet_balance(admin: User = Depends(get_admin_user)):
     return await check_master_trx()
 
 
-ESCROW_BALANCES_CACHE_TTL_SEC = 60
+ESCROW_BALANCES_CACHE_TTL_SEC = 300
 ESCROW_BALANCES_MIN_REFRESH_SEC = 10
 _escrow_balances_cache: dict = {"at": 0.0, "payload": None}
 _escrow_balances_lock = asyncio.Lock()
 
 
-def _collect_escrow_balances(rows: list[tuple[int, str, str]]) -> dict:
-    """Blocking: one throttled TronGrid read per escrow. Unknown ≠ 0."""
-    from app.services.escrow import BalanceUnavailable, fetch_usdt_balance
-
-    with_funds, unknown = [], []
-    for deal_id, escrow, status_value in rows:
-        try:
-            balance = fetch_usdt_balance(escrow)
-        except BalanceUnavailable as e:
-            unknown.append({
-                "deal_id": deal_id, "escrow": escrow, "status": status_value,
-                "balance_usdt": None, "error": "unknown", "detail": str(e)[:200],
-            })
-            continue
-        if balance > 0:
-            with_funds.append({
-                "deal_id": deal_id, "escrow": escrow, "status": status_value, "balance_usdt": balance,
-            })
-    return {
-        "wallets_with_funds": with_funds,
-        "total": sum(w["balance_usdt"] for w in with_funds),
-        "unknown": unknown,
-        "unknown_count": len(unknown),
-        "checked_count": len(rows),
-    }
+from app.services.escrow_balances import collect_escrow_balances as _collect_escrow_balances  # noqa: E402
 
 
 @router.get("/escrow/balances")
@@ -1071,7 +1056,7 @@ async def check_escrow_balances(
 ):
     """USDT balances of all escrow wallets.
 
-    Cached for 60s (``refresh=true`` bypasses it, at most once per 10s). TronGrid reads
+    Cached for 5 min (``refresh=true`` bypasses it, at most once per 10s). TronGrid reads
     are throttled; wallets whose balance could not be read are listed in ``unknown``
     (shown as "помилка/невідомо" in the UI) — they are NOT counted as 0.
     """
@@ -1090,7 +1075,7 @@ async def check_escrow_balances(
             select(Deal.id, Deal.escrow_wallet_address, Deal.status).order_by(Deal.id.desc())
         )
         rows = [(d_id, addr, st.value if hasattr(st, "value") else str(st)) for d_id, addr, st in result.all()]
-        payload = await asyncio.to_thread(_collect_escrow_balances, rows)
+        payload = await asyncio.to_thread(_collect_escrow_balances, rows, cached)
         payload["checked_at"] = utcnow_naive().isoformat() + "Z"
         _escrow_balances_cache["payload"] = payload
         _escrow_balances_cache["at"] = _time.monotonic()

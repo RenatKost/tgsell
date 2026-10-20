@@ -92,6 +92,7 @@ class ChannelResponse(BaseModel):
     price_per_view: float | None = None
     fair_price_range: list[float] | None = None
     price_verdict: str = "unknown"  # cheaper / fair / expensive / inflated / unknown
+    moderation_flags: list[str] = []  # task 33: staff-only info flags (filled in /admin/channels/pending)
     price_reference_scope: str | None = None  # category / overall
     # Task 22: quality index (None = «мало даних»)
     quality_score: int | None = None

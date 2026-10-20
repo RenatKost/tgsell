@@ -8,11 +8,17 @@ _TOKEN_RE = re.compile(r"(bot)?\d{6,12}:[A-Za-z0-9_-]{30,}")
 _NOISY_LOGGERS = ("httpx", "httpcore", "aiohttp.access", "aiohttp.client", "aiogram.event")
 
 
+# Task 33: one-time login tokens in query strings (uvicorn access log of
+# /api/auth/bot-check?token=...): mask the value, keep the parameter name.
+_QUERY_TOKEN_RE = re.compile(r"([?&](?:token|access_token|refresh_token)=)[^&\s\"']+", re.IGNORECASE)
+
+
 def redact(text) -> str:
-    """Replace any Telegram bot token in text with a placeholder."""
+    """Replace any Telegram bot token / query-string token in text with a placeholder."""
     if text is None:
         return text
-    return _TOKEN_RE.sub(lambda m: (m.group(1) or "") + "<redacted>", str(text))
+    out = _TOKEN_RE.sub(lambda m: (m.group(1) or "") + "<redacted>", str(text))
+    return _QUERY_TOKEN_RE.sub(lambda m: m.group(1) + "***", out)
 
 
 class TokenRedactFilter(logging.Filter):
@@ -33,6 +39,9 @@ def setup_log_hygiene() -> None:
     for name in _NOISY_LOGGERS:
         logging.getLogger(name).setLevel(logging.WARNING)
     flt = TokenRedactFilter()
+    access = logging.getLogger("uvicorn.access")  # bot-check ?token=... in access lines
+    if not any(isinstance(f, TokenRedactFilter) for f in access.filters):
+        access.addFilter(flt)
     for handler in logging.getLogger().handlers:
         if not any(isinstance(f, TokenRedactFilter) for f in handler.filters):
             handler.addFilter(flt)

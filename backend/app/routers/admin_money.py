@@ -352,7 +352,14 @@ async def escrow_overview(
     return {"items": items, "treasury_address": fs.settings.treasury_address,
             "fee_sweep_min_usdt": fs.settings.fee_sweep_min_usdt,
             "treasury_txs": [_tx_row(t) for t in treasury_txs[:50]], "totals": {k: round(v, 6) if isinstance(v, float) else v for k, v in totals.items()},
-            "balances_checked_at": balances.get("checked_at"), "cached": balances.get("cached")}
+            "balances_checked_at": balances.get("checked_at"), "cached": balances.get("cached"),
+            # Task 33: real on-chain USDT across ALL escrow addresses (any deal status). Read-only.
+            "onchain": {"total_usdt": balances.get("onchain_total_usdt", balances.get("total", 0.0)),
+                        "unknown_count": balances.get("onchain_unknown_count", 0),
+                        "last_known_unknown_usdt": balances.get("onchain_last_known_unknown_usdt", 0.0),
+                        "address_count": balances.get("address_count"),
+                        "addresses": [a for a in balances.get("addresses", [])
+                                      if a.get("balance_usdt") or a.get("balance_usdt") is None]}}
 
 
 @router.get("/gas")

@@ -21,7 +21,8 @@ from app.schemas.bundle import (
     BundleChannelInfo,
 )
 from app.services.moderation import not_blocked_seller
-from app.utils.security import get_current_user
+from app.utils.security import get_current_user, get_optional_user
+from app.services.listing_visibility import ensure_bundle_visible, can_view_unpublished
 from app.utils.timeutil import to_naive_utc, utcnow_naive
 from app.utils.avatars import public_channel_avatar_url
 from app.models.user import User
@@ -82,6 +83,7 @@ async def list_bundles(
     search: str | None = None,
     seller_id: int | None = None,
     db: AsyncSession = Depends(get_db),
+    viewer: User | None = Depends(get_optional_user),
 ):
     """List approved bundles (public) or all bundles for a specific seller."""
     query = (
@@ -94,6 +96,9 @@ async def list_bundles(
 
     if seller_id is not None:
         query = query.where(ChannelBundle.seller_id == seller_id)
+        if not can_view_unpublished(viewer, seller_id):
+            query = query.where(ChannelBundle.status.in_((BundleStatus.approved, BundleStatus.sold)))
+            query = query.where(not_blocked_seller(ChannelBundle.seller_id))
     else:
         query = query.where(ChannelBundle.status == BundleStatus.approved)
         query = query.where(not_blocked_seller(ChannelBundle.seller_id))
@@ -127,6 +132,7 @@ async def list_bundles(
 async def get_bundle(
     bundle_id: int,
     db: AsyncSession = Depends(get_db),
+    viewer: User | None = Depends(get_optional_user),
 ):
     """Get bundle by ID (public if approved)."""
     result = await db.execute(
@@ -140,8 +146,7 @@ async def get_bundle(
     bundle = result.scalar_one_or_none()
     if not bundle:
         raise HTTPException(status_code=404, detail="Bundle not found")
-    if bundle.status not in (BundleStatus.approved, BundleStatus.sold):
-        raise HTTPException(status_code=404, detail="Bundle not found")
+    ensure_bundle_visible(bundle, viewer)
     return _bundle_to_response(bundle)
 
 
@@ -149,6 +154,7 @@ async def get_bundle(
 async def get_bundle_stats(
     bundle_id: int,
     db: AsyncSession = Depends(get_db),
+    viewer: User | None = Depends(get_optional_user),
 ):
     """Aggregate stats for a bundle."""
     result = await db.execute(
@@ -157,10 +163,10 @@ async def get_bundle_stats(
             selectinload(ChannelBundle.bundle_channels).selectinload(BundleChannel.channel)
         )
         .where(ChannelBundle.id == bundle_id)
+        .where(not_blocked_seller(ChannelBundle.seller_id))
     )
     bundle = result.scalar_one_or_none()
-    if not bundle:
-        raise HTTPException(status_code=404, detail="Bundle not found")
+    ensure_bundle_visible(bundle, viewer)
 
     channels = [bc.channel for bc in bundle.bundle_channels if bc.channel is not None]
 
@@ -349,6 +355,7 @@ async def delete_bundle(
 async def get_bundle_ai_analysis(
     bundle_id: int,
     db: AsyncSession = Depends(get_db),
+    viewer: User | None = Depends(get_optional_user),
 ):
     """AI-powered investment analysis for a bundle. Cached for 7 days."""
     result = await db.execute(
@@ -357,10 +364,10 @@ async def get_bundle_ai_analysis(
             selectinload(ChannelBundle.bundle_channels).selectinload(BundleChannel.channel)
         )
         .where(ChannelBundle.id == bundle_id)
+        .where(not_blocked_seller(ChannelBundle.seller_id))
     )
     bundle = result.scalar_one_or_none()
-    if not bundle:
-        raise HTTPException(status_code=404, detail="Bundle not found")
+    ensure_bundle_visible(bundle, viewer)
 
     # Return cached result if fresher than 7 days
     if bundle.ai_cache and bundle.ai_cache_updated_at:
