@@ -292,4 +292,5 @@ def test_migration_0044_single_head():
     versions = Path(__file__).resolve().parents[1] / "alembic" / "versions"
     mig = (versions / "0044_scheduled_report_runs.py").read_text(encoding="utf-8")
     assert 'revision = "0044"' in mig and 'down_revision = "0043"' in mig
-    assert [p.name for p in versions.glob("*.py") if 'down_revision = "0044"' in p.read_text(encoding="utf-8")] == []
+    assert [p.name for p in versions.glob("*.py") if 'down_revision = "0044"' in p.read_text(encoding="utf-8")] == [
+        "0045_unpublish_test_bundle_and_lot61.py"]
