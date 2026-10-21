@@ -234,6 +234,24 @@ h1{font-size:4rem;margin:0;color:#334155}h2{margin:.5rem 0;font-size:1.5rem}p{co
             return channel_meta(None) | {"noindex": False, "title": "Telegram-канал на продаж — TgSell",
                                          "description": "Telegram-канал на продаж на TgSell."}
 
+    async def _bundle_page_meta(bundle_id: int) -> dict:
+        """Task 34: /bundle/:id <head>; unpublished/blocked → noindex, no details."""
+        from sqlalchemy import select as _select
+        from app.database import async_session
+        from app.models.bundle import ChannelBundle
+        from app.services.moderation import not_blocked_seller
+        from app.utils.spa_meta import bundle_meta
+        try:
+            async with async_session() as db:
+                b = (await db.execute(
+                    _select(ChannelBundle).where(ChannelBundle.id == bundle_id)
+                    .where(not_blocked_seller(ChannelBundle.seller_id))
+                )).scalar_one_or_none()
+                return bundle_meta(b)
+        except Exception as e:
+            logger.warning("bundle meta lookup failed for %s: %s", bundle_id, type(e).__name__)
+            return bundle_meta(None)
+
     def _is_spa_path(full_path: str) -> bool:
         path = (full_path or "").strip("/")
         if path in SPA_EXACT:
@@ -253,6 +271,11 @@ h1{font-size:4rem;margin:0;color:#334155}h2{margin:.5rem 0;font-size:1.5rem}p{co
             ch_id = channel_id_from_path(full_path)
             if ch_id is not None:
                 override = await _channel_page_meta(ch_id)
+            else:
+                from app.utils.spa_meta import bundle_id_from_path
+                b_id = bundle_id_from_path(full_path)
+                if b_id is not None:
+                    override = await _bundle_page_meta(b_id)
             return HTMLResponse(render_index(STATIC_DIR / "index.html", full_path, override),
                                 headers={"Cache-Control": "no-cache"})
         not_found = STATIC_DIR / "404.html"

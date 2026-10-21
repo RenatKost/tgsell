@@ -66,6 +66,27 @@ EXTRA_ROUTE_META: dict[str, dict[str, str]] = {
 _CHANNEL_RE = re.compile(r"^/channel/(\d+)$")
 
 
+_BUNDLE_RE = re.compile(r"^/bundle/(\d+)$")
+
+
+def bundle_id_from_path(full_path: str) -> int | None:
+    m = _BUNDLE_RE.match(normalize_path(full_path))
+    return int(m.group(1)) if m else None
+
+
+def bundle_meta(bundle) -> dict:
+    """Per-bundle meta for /bundle/:id. Unpublished/unknown → generic noindex, no details."""
+    from app.services.listing_visibility import bundle_is_public
+    if bundle is None or not bundle_is_public(bundle):
+        return {"title": "Оголошення недоступне — TgSell",
+                "description": "Це оголошення недоступне або ще не опубліковане на TgSell.",
+                "noindex": True}
+    name = (bundle.name or "Сітка Telegram-каналів").strip()
+    price = _fmt_price(bundle.price)
+    return {"title": f"{name} — сітка Telegram-каналів на продаж | TgSell",
+            "description": f"Сітка Telegram-каналів «{name}», ціна {price} USDT. Купівля через гарант-ескроу TgSell."}
+
+
 def channel_id_from_path(full_path: str) -> int | None:
     m = _CHANNEL_RE.match(normalize_path(full_path))
     return int(m.group(1)) if m else None
