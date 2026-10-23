@@ -13,6 +13,7 @@ class BundleChannelInfo(BaseModel):
     category: str = ""
     stars_balance: int | None = None
     ton_balance: float | None = None
+    is_closed: bool = False
 
     @model_validator(mode="after")
     def _sanitize_avatar(self):
@@ -48,6 +49,19 @@ class BundleCreate(BaseModel):
     channel_links: list[str]
     # Task 31: optional, aligned with channel_links by index
     channel_balances: list[ChannelBalanceIn | None] | None = None
+    # Optional seller-stated subscriber counts, aligned with channel_links by index.
+    # Used only for closed (invite-link) channels that can't be read automatically.
+    channel_subscribers: list[int | None] | None = None
+
+    @field_validator("channel_subscribers")
+    @classmethod
+    def validate_subscribers(cls, v):
+        if v is None:
+            return v
+        for n in v:
+            if n is not None and not (0 <= n <= 100_000_000):
+                raise ValueError("subscribers must be between 0 and 100000000")
+        return v
 
     @field_validator("channel_links")
     @classmethod

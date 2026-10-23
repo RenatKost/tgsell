@@ -728,3 +728,87 @@ async def collect_channel_stats(telegram_link: str, message_limit: int = 5000) -
 
     result["check"] = {"ok": bool(bot_info or telethon_stats), "reason": last_check_errors.get(username.lower())}
     return result
+
+
+# ── Closed (invite-link) channels: subscriber count without joining ───────
+
+_INVITE_PREVIEW_RE = None
+
+
+def _connected_client_or_none():
+    """The already-connected Telethon client, or None. Never creates/connects a client."""
+    client = _telethon_client
+    try:
+        if client is not None and _telethon_status == "connected" and client.is_connected():
+            return client
+    except Exception:
+        pass
+    return None
+
+
+def parse_invite_preview_count(html: str) -> int | None:
+    """Subscriber count from the public t.me/+hash preview page («N subscribers/members»)."""
+    import re
+
+    global _INVITE_PREVIEW_RE
+    if _INVITE_PREVIEW_RE is None:
+        _INVITE_PREVIEW_RE = re.compile(
+            r'tgme_page_extra">\s*([\d][\d\s\u00a0\u202f,.]*)\s*(?:subscribers?|members?)', re.I)
+    m = _INVITE_PREVIEW_RE.search(html or "")
+    if not m:
+        return None
+    digits = re.sub(r"\D", "", m.group(1))
+    return int(digits) if digits else None
+
+
+async def _invite_count_via_telethon(invite_hash: str) -> int | None:
+    client = _connected_client_or_none()
+    if client is None:
+        return None
+    try:
+        from telethon.errors import FloodWaitError
+        from telethon.tl.functions.messages import CheckChatInviteRequest
+    except Exception:
+        return None
+    try:
+        res = await client(CheckChatInviteRequest(hash=invite_hash))  # read-only, does not join
+    except FloodWaitError as e:
+        logger.warning(f"[STATS] CheckChatInvite flood wait {getattr(e, 'seconds', '?')}s — using t.me preview")
+        return None
+    except Exception as e:
+        logger.info(f"[STATS] CheckChatInvite failed: {e}")
+        return None
+    count = getattr(res, "participants_count", None)
+    if not count:
+        chat = getattr(res, "chat", None)
+        count = getattr(chat, "participants_count", None)
+    return int(count) if count else None
+
+
+async def _invite_count_via_preview(invite_hash: str) -> int | None:
+    import httpx
+
+    try:
+        async with httpx.AsyncClient(timeout=15.0, follow_redirects=True) as http:
+            r = await http.get(f"https://t.me/+{invite_hash}")
+        if r.status_code != 200:
+            return None
+        return parse_invite_preview_count(r.text)
+    except Exception as e:
+        logger.info(f"[STATS] invite preview failed: {e}")
+        return None
+
+
+async def collect_invite_subscribers(telegram_link: str) -> int | None:
+    """Subscriber count of a closed channel by its invite link, never joining it.
+
+    1) existing connected Telethon client → messages.CheckChatInvite (participants_count);
+    2) fallback: public t.me/+hash preview page.
+    """
+    ident, kind = parse_telegram_link(telegram_link or "")
+    if kind != "invite" or not ident:
+        return None
+    count = await _invite_count_via_telethon(ident)
+    if not count:
+        count = await _invite_count_via_preview(ident)
+    return count if count and count > 0 else None

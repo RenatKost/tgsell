@@ -28,6 +28,7 @@ const ReachBar = ({ value, label, color, maxVal }) => {
 };
 
 const UNAVAILABLE_TEXT = 'Аналіз тимчасово недоступний. Спробуйте трохи пізніше.';
+const PREPARING_TEXT = 'Аналіз готується — збираємо статистику каналу. Зазирніть трохи пізніше.';
 
 const AiAnalysis = ({ channelId, channel }) => {
 	const [data, setData] = useState(null);
@@ -39,7 +40,10 @@ const AiAnalysis = ({ channelId, channel }) => {
 		setError(null);
 		try {
 			const { data: result } = await channelsAPI.getAiAnalysis(channelId);
-			if (result?.status === 'unavailable' || result?.error) {
+			if (result?.status === 'preparing') {
+				setData(null);
+				setError(PREPARING_TEXT);
+			} else if (result?.status === 'unavailable' || result?.error) {
 				setData(null);
 				setError(UNAVAILABLE_TEXT);
 			} else {
@@ -97,11 +101,11 @@ const AiAnalysis = ({ channelId, channel }) => {
 						</div>
 					</div>
 				)}
-				<div className={error === UNAVAILABLE_TEXT
+				<div className={(error === UNAVAILABLE_TEXT || error === PREPARING_TEXT)
 					? 'bg-amber-50 dark:bg-amber-900/20 rounded-lg border border-amber-100 dark:border-amber-800/40 p-3'
 					: 'bg-red-50 dark:bg-red-900/20 rounded-lg border border-red-100 dark:border-red-800/40 p-3'}>
-					<p className={error === UNAVAILABLE_TEXT ? 'text-xs text-amber-700 dark:text-amber-400 mb-2' : 'text-xs text-red-600 dark:text-red-400 mb-2'}>⚠️ {error}</p>
-					<button onClick={runAnalysis} className={error === UNAVAILABLE_TEXT ? 'text-[11px] text-amber-600 hover:underline font-medium' : 'text-[11px] text-red-500 hover:underline font-medium'}>Спробувати ще раз</button>
+					<p className={(error === UNAVAILABLE_TEXT || error === PREPARING_TEXT) ? 'text-xs text-amber-700 dark:text-amber-400 mb-2' : 'text-xs text-red-600 dark:text-red-400 mb-2'}>{error === PREPARING_TEXT ? '⏳' : '⚠️'} {error}</p>
+					<button onClick={runAnalysis} className={(error === UNAVAILABLE_TEXT || error === PREPARING_TEXT) ? 'text-[11px] text-amber-600 hover:underline font-medium' : 'text-[11px] text-red-500 hover:underline font-medium'}>Спробувати ще раз</button>
 				</div>
 			</div>
 		);

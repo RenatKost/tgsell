@@ -46,6 +46,7 @@ def _channel_to_info(channel: Channel) -> BundleChannelInfo:
         category=channel.category or "",
         stars_balance=channel.stars_balance,
         ton_balance=channel.ton_balance,
+        is_closed=bool(channel.is_closed),
     )
 
 
@@ -208,6 +209,8 @@ async def create_bundle(
     db.add(bundle)
     await db.flush()  # get bundle.id
 
+    from app.services.channel_stats import parse_telegram_link
+    channel_ids: list[int] = []
     for idx, link in enumerate(body.channel_links):
         # Normalize link
         username = link.strip()
@@ -248,6 +251,7 @@ async def create_bundle(
                 category=body.category or "Інше",
                 price=0.0,
                 status=ChannelStatus.pending,
+                is_closed=parse_telegram_link(link)[1] == "invite",
             )
             db.add(channel)
             await db.flush()
@@ -257,10 +261,19 @@ async def create_bundle(
             channel.stars_balance = bal.stars_balance
             channel.ton_balance = bal.ton_balance
 
+        subs = (body.channel_subscribers[idx]
+                if body.channel_subscribers and idx < len(body.channel_subscribers) else None)
+        if subs and channel.is_closed:
+            # Seller-stated count for a closed channel (auto-refresh may overwrite it later)
+            channel.subscribers_count = subs
+
         bc = BundleChannel(bundle_id=bundle.id, channel_id=channel.id, display_order=idx)
         db.add(bc)
+        channel_ids.append(channel.id)
 
     await db.commit()
+    from app.tasks.stats_collector import schedule_stats_refresh
+    schedule_stats_refresh(channel_ids)
 
     # Reload with relationships
     result = await db.execute(
@@ -369,14 +382,22 @@ async def get_bundle_ai_analysis(
     bundle = result.scalar_one_or_none()
     ensure_bundle_visible(bundle, viewer)
 
-    # Return cached result if fresher than 7 days
+    channels = [bc.channel for bc in bundle.bundle_channels if bc.channel is not None]
+
+    # Never analyse empty / unverified stats (no «0 підписників» audits).
+    from app.services import stats_readiness as sr
+    if not await sr.channels_ready(db, channels):
+        return sr.preparing_result()
+    fp = sr.stats_fingerprint(channels)
+
+    # Cached result: fresher than 7 days AND built from exactly these stats
     if bundle.ai_cache and bundle.ai_cache_updated_at:
         # ai_cache_updated_at is naive TIMESTAMP (UTC)
         age = utcnow_naive() - to_naive_utc(bundle.ai_cache_updated_at)
-        if age < timedelta(days=7):
-            return json.loads(bundle.ai_cache)
+        cached = sr.load_cache(bundle.ai_cache, fp)
+        if cached is not None and age < timedelta(days=7):
+            return cached
 
-    channels = [bc.channel for bc in bundle.bundle_channels if bc.channel is not None]
     total_subs = sum(c.subscribers_count or 0 for c in channels)
     er_vals = [e for e in (reliable_er(c.er, c.subscribers_count) for c in channels) if e is not None]
     avg_er = round(sum(er_vals) / len(er_vals), 2) if er_vals else 0.0
@@ -409,7 +430,7 @@ async def get_bundle_ai_analysis(
 
     # Save to cache (non-blocking — don't fail the request if cache write fails)
     try:
-        bundle.ai_cache = json.dumps(analysis, ensure_ascii=False)
+        bundle.ai_cache = sr.dump_cache(analysis, fp)
         bundle.ai_cache_updated_at = utcnow_naive()  # naive TIMESTAMP (UTC); asyncpg rejects aware
         await db.commit()
     except Exception as cache_err:
