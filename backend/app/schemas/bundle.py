@@ -118,6 +118,8 @@ class BundleResponse(BaseModel):
     moderated_at: datetime | None = None
     channels: list[BundleChannelInfo] = []
     channel_count: int = 0
+    total_subscribers: int = 0
+    avg_er: float | None = None
 
     model_config = {"from_attributes": True}
 

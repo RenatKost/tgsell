@@ -12,6 +12,13 @@ export default function BundleCard({ bundle }) {
   const channels = bundle.channels || [];
   const avatarSlice = channels.slice(0, 5);
   const extra = channels.length - 5;
+  const totalSubs = bundle.total_subscribers
+    ?? channels.reduce((s, c) => s + (c.subscribers_count || 0), 0);
+  const erVals = channels
+    .map((c) => reliableEr(c.er, c.subscribers_count))
+    .filter((e) => e != null);
+  const avgEr = bundle.avg_er
+    ?? (erVals.length ? erVals.reduce((a, b) => a + b, 0) / erVals.length : null);
 
   return (
     <Link to={`/bundle/${bundle.id}`}
@@ -58,12 +65,12 @@ export default function BundleCard({ bundle }) {
       {/* Metrics grid */}
       <div className="grid grid-cols-2 gap-3 mb-4">
         <div className="bg-card-inner rounded-lg p-3">
-          <div className="text-lg font-bold text-white">{fmt(bundle.total_subscribers)}</div>
+          <div className="text-lg font-bold text-white">{fmt(totalSubs)}</div>
           <div className="text-xs text-gray-500">∑ підписників</div>
         </div>
         <div className="bg-card-inner rounded-lg p-3">
           <div className="text-lg font-bold text-white">
-            {formatEr(bundle.avg_er)}
+            {formatEr(avgEr)}
           </div>
           <div className="text-xs text-gray-500">середній ER</div>
         </div>

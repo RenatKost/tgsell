@@ -56,6 +56,10 @@ def _bundle_to_response(bundle: ChannelBundle) -> BundleResponse:
         for bc in (bundle.bundle_channels or [])
         if bc.channel is not None
     ]
+    raw = [bc.channel for bc in (bundle.bundle_channels or []) if bc.channel is not None]
+    total_subs = sum(c.subscribers_count or 0 for c in raw)
+    er_vals = [e for e in (reliable_er(c.er, c.subscribers_count) for c in raw) if e is not None]
+    avg_er = round(sum(er_vals) / len(er_vals), 2) if er_vals else None
     return BundleResponse(
         id=bundle.id,
         seller_id=bundle.seller_id,
@@ -71,6 +75,8 @@ def _bundle_to_response(bundle: ChannelBundle) -> BundleResponse:
         moderated_at=bundle.moderated_at,
         channels=channels,
         channel_count=len(channels),
+        total_subscribers=total_subs,
+        avg_er=avg_er,
     )
 
 
