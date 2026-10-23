@@ -102,6 +102,8 @@ class ChannelResponse(BaseModel):
     # Task 31: seller-stated balance (display only)
     stars_balance: int | None = None
     ton_balance: float | None = None
+    # Admin-set warning for buyers (migration 0046)
+    buyer_warning: str | None = None
 
     @model_validator(mode="after")
     def _sanitize_avatar(self):

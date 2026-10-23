@@ -2114,3 +2114,116 @@ async def admin_weekly_stats(
     from app.services.weekly_stats import collect_weekly_stats
 
     return await collect_weekly_stats(db)
+
+
+# ── Unpublish / republish with reason + buyer warning ─────────────────
+
+class ChannelUnpublishRequest(BaseModel):
+    reason: str = Field(min_length=3, max_length=1000)
+
+
+class BuyerWarningRequest(BaseModel):
+    buyer_warning: str | None = Field(default=None, max_length=2000)
+
+
+async def _notify_seller_channel(db: AsyncSession, channel: Channel, kind: str, reason: str | None = None) -> None:
+    """Best-effort Telegram notification to the seller via the alerts bot (same as bundles)."""
+    try:
+        from aiogram import Bot
+        from app.config import settings
+        from bot.main import notify_channel_republished, notify_channel_unpublished
+
+        seller = (await db.execute(select(User).where(User.id == channel.seller_id))).scalar_one_or_none()
+        bot = Bot(token=settings.bot_token_alerts)
+        try:
+            if kind == "unpublish":
+                await notify_channel_unpublished(bot, channel, seller, reason or "")
+            else:
+                await notify_channel_republished(bot, channel, seller)
+        finally:
+            await bot.session.close()
+    except Exception as e:
+        logger.warning(f"[ADMIN] Channel #{channel.id} {kind}: seller notification failed: {e}")
+
+
+@router.post("/channels/{channel_id}/unpublish")
+async def unpublish_channel(
+    channel_id: int,
+    body: ChannelUnpublishRequest,
+    admin: User = Depends(get_admin_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """«Зняти з публікації / відхилити з причиною»: non-destructive (status → rejected,
+    reason in rejection_reason), audited, seller notified. Reversible via /republish."""
+    from app.services.channel_availability import LISTED_STATUSES, removal_blockers
+
+    reason = body.reason.strip()
+    if len(reason) < 3:
+        raise HTTPException(status_code=400, detail="Вкажіть причину зняття з публікації")
+    channel = (await db.execute(select(Channel).where(Channel.id == channel_id).with_for_update())).scalar_one_or_none()
+    if channel is None:
+        raise HTTPException(status_code=404, detail="Channel not found")
+    if channel.status not in LISTED_STATUSES:
+        raise HTTPException(status_code=400, detail=f"Лот у статусі {channel.status.value} — не опублікований")
+    blockers = await removal_blockers(db, channel.id)
+    if blockers:
+        raise HTTPException(status_code=409, detail="Неможливо зняти з публікації: " + "; ".join(blockers))
+    prev = channel.status.value
+    channel.status = ChannelStatus.rejected
+    channel.rejection_reason = reason
+    channel.moderator_id = admin.id
+    channel.moderated_at = utcnow_naive()
+    audit(db, admin, "channel.unpublish", "channel", channel.id, prev_status=prev, reason=reason)
+    await db.commit()
+    logger.info(f"[ADMIN] Channel #{channel.id} unpublished by admin #{admin.id}")
+    await _notify_seller_channel(db, channel, "unpublish", reason)
+    return {"id": channel.id, "status": channel.status.value, "reason": reason, "prev_status": prev}
+
+
+@router.post("/channels/{channel_id}/republish")
+async def republish_channel(
+    channel_id: int,
+    admin: User = Depends(get_admin_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Restore a lot unpublished by admin (rejected/removed) back to approved. Audited."""
+    channel = (await db.execute(select(Channel).where(Channel.id == channel_id).with_for_update())).scalar_one_or_none()
+    if channel is None:
+        raise HTTPException(status_code=404, detail="Channel not found")
+    if channel.status == ChannelStatus.approved:
+        return {"id": channel.id, "status": channel.status.value}
+    if channel.status not in (ChannelStatus.rejected, ChannelStatus.removed):
+        raise HTTPException(status_code=400, detail=f"Лот у статусі {channel.status.value} — відновлення неможливе")
+    prev = channel.status.value
+    prev_reason = channel.rejection_reason if prev == "rejected" else channel.removed_reason
+    channel.status = ChannelStatus.approved
+    channel.rejection_reason = None
+    channel.removed_at = None
+    channel.removed_by_id = None
+    channel.removed_reason = None
+    channel.moderator_id = admin.id
+    channel.moderated_at = utcnow_naive()
+    audit(db, admin, "channel.republish", "channel", channel.id, prev_status=prev, prev_reason=prev_reason)
+    await db.commit()
+    logger.info(f"[ADMIN] Channel #{channel.id} republished by admin #{admin.id}")
+    await _notify_seller_channel(db, channel, "republish")
+    return {"id": channel.id, "status": channel.status.value, "prev_status": prev}
+
+
+@router.put("/channels/{channel_id}/buyer-warning")
+async def set_buyer_warning(
+    channel_id: int,
+    body: BuyerWarningRequest,
+    admin: User = Depends(get_admin_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Set/clear «Попередження для покупця» (empty → NULL). Audited."""
+    channel = (await db.execute(select(Channel).where(Channel.id == channel_id))).scalar_one_or_none()
+    if channel is None:
+        raise HTTPException(status_code=404, detail="Channel not found")
+    value = (body.buyer_warning or "").strip() or None
+    prev = channel.buyer_warning
+    channel.buyer_warning = value
+    audit(db, admin, "channel.buyer_warning", "channel", channel.id, prev=prev, value=value)
+    await db.commit()
+    return {"id": channel.id, "buyer_warning": value}

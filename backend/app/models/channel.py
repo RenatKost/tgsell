@@ -103,6 +103,9 @@ class Channel(Base):
     stars_balance: Mapped[int | None] = mapped_column(Integer, nullable=True)
     ton_balance: Mapped[float | None] = mapped_column(Numeric(20, 9, asdecimal=False), nullable=True)
 
+    # Admin-set warning for buyers (migration 0046); editable only by staff.
+    buyer_warning: Mapped[str | None] = mapped_column(Text, nullable=True)
+
     # Relationships
     seller = relationship("User", back_populates="channels", foreign_keys=[seller_id])
     stats = relationship("ChannelStats", back_populates="channel", cascade="all, delete-orphan", passive_deletes=True)

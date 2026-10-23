@@ -1,4 +1,5 @@
 """TgSell Telegram Bot — deal rooms, notifications, inline controls."""
+import html
 import asyncio
 import logging
 import os
@@ -816,6 +817,36 @@ async def notify_bundle_rejected(bot: Bot, bundle, seller: User):
         await bot.send_message(seller.telegram_id, text, parse_mode=ParseMode.HTML)
     except Exception as e:
         logger.warning(f"[NOTIFY] Cannot notify seller {seller.telegram_id} about bundle rejection: {e}")
+
+
+async def notify_channel_unpublished(bot: Bot, channel, seller: User, reason: str):
+    """Notify seller that an admin took their lot off the public catalog (with reason)."""
+    if not seller or not seller.telegram_id:
+        return
+    text = (
+        f"⛔️ <b>Ваш лот знято з публікації</b>\n\n"
+        f"📡 «{html.escape(channel.channel_name or '')}» (#{channel.id})\n"
+        f"Причина: {html.escape(reason or 'Не вказано')}\n\n"
+        f"Лот не видалено. Якщо ви усунете причину — зверніться до підтримки."
+    )
+    try:
+        await bot.send_message(seller.telegram_id, text, parse_mode=ParseMode.HTML)
+    except Exception as e:
+        logger.warning(f"[NOTIFY] Cannot notify seller {seller.telegram_id} about channel unpublish: {e}")
+
+
+async def notify_channel_republished(bot: Bot, channel, seller: User):
+    """Notify seller that their lot is back in the public catalog."""
+    if not seller or not seller.telegram_id:
+        return
+    text = (
+        f"✅ <b>Ваш лот знову опубліковано</b>\n\n"
+        f"📡 «{html.escape(channel.channel_name or '')}» (#{channel.id})"
+    )
+    try:
+        await bot.send_message(seller.telegram_id, text, parse_mode=ParseMode.HTML)
+    except Exception as e:
+        logger.warning(f"[NOTIFY] Cannot notify seller {seller.telegram_id} about channel republish: {e}")
 
 
 async def notify_new_bundle_deal(bot: Bot, deal, bundle, buyer: User, seller: User):

@@ -228,7 +228,10 @@ h1{font-size:4rem;margin:0;color:#334155}h2{margin:.5rem 0;font-size:1.5rem}p{co
                     _select(Channel).where(Channel.id == channel_id)
                     .where(not_blocked_seller(Channel.seller_id))
                 )).scalar_one_or_none()
-                return channel_meta(ch)
+                meta = channel_meta(ch)
+                if ch is None or meta.get("noindex"):
+                    meta["not_found"] = True  # missing / unpublished / blocked seller → HTTP 404
+                return meta
         except Exception as e:  # DB hiccup: serve generic page, not a 500
             logger.warning("channel meta lookup failed for %s: %s", channel_id, type(e).__name__)
             return channel_meta(None) | {"noindex": False, "title": "Telegram-канал на продаж — TgSell",
@@ -276,8 +279,10 @@ h1{font-size:4rem;margin:0;color:#334155}h2{margin:.5rem 0;font-size:1.5rem}p{co
                 b_id = bundle_id_from_path(full_path)
                 if b_id is not None:
                     override = await _bundle_page_meta(b_id)
+            from app.utils.spa_meta import spa_status
+            status, override = spa_status(full_path, override)
             return HTMLResponse(render_index(STATIC_DIR / "index.html", full_path, override),
-                                headers={"Cache-Control": "no-cache"})
+                                status_code=status, headers={"Cache-Control": "no-cache"})
         not_found = STATIC_DIR / "404.html"
         if not_found.is_file():
             return FileResponse(not_found, status_code=404)

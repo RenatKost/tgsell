@@ -131,6 +131,11 @@ const CatalogCard = ({ channel }) => {
 					)}
 					<QualityBadge channel={channel} />
 					<PriceVerdictBadge channel={channel} />
+					{channel.buyer_warning && (
+						<span title={channel.buyer_warning} className='bg-amber-50 dark:bg-amber-900/20 text-amber-700 dark:text-amber-400 text-[11px] font-semibold px-2.5 py-1 rounded-lg border border-amber-300 dark:border-amber-800/60'>
+							⚠️ Є попередження
+						</span>
+					)}
 					<BalanceBadges stars={channel.stars_balance} ton={channel.ton_balance} size='xs' />
 					{channel.bundle_id ? (
 						<span className='bg-accent/15 text-accent text-[11px] font-bold px-2.5 py-1 rounded-lg border border-accent/30'>

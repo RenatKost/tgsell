@@ -104,6 +104,7 @@ const STATUS_LABELS = {
 	approved: 'Опубліковано',
 	rejected: 'Відхилено',
 	sold: 'Продано',
+	removed: 'Знято з біржі',
 };
 
 const STATUS_COLORS = {
@@ -111,6 +112,7 @@ const STATUS_COLORS = {
 	approved: 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400',
 	rejected: 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400',
 	sold: 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400',
+	removed: 'bg-gray-200 text-gray-700 dark:bg-gray-700 dark:text-gray-300',
 };
 
 const AUCTION_STATUS_LABELS = {
@@ -204,6 +206,11 @@ const ModerCabinet = () => {
 	const [rejectId, setRejectId] = useState(null);
 	const [rejectReason, setRejectReason] = useState('');
 	const [editId, setEditId] = useState(null);
+	const [unpublishId, setUnpublishId] = useState(null);
+	const [unpublishReason, setUnpublishReason] = useState('');
+	const [warnId, setWarnId] = useState(null);
+	const [warnText, setWarnText] = useState('');
+	const [chanBusy, setChanBusy] = useState(false);
 	const [editData, setEditData] = useState({});
 	const [refreshingStats, setRefreshingStats] = useState({});
 	const [refreshResult, setRefreshResult] = useState({});
@@ -326,8 +333,41 @@ const ModerCabinet = () => {
 		} catch (err) { alert(err.response?.data?.detail || 'Помилка'); }
 	};
 
+	const patchChannel = (id, patch) => setAllChannels(prev => prev.map(c => (c.id === id ? { ...c, ...patch } : c)));
+
+	const handleUnpublishChannel = async (id) => {
+		const reason = unpublishReason.trim();
+		if (reason.length < 3) { alert('Вкажіть причину зняття з публікації'); return; }
+		setChanBusy(true);
+		try {
+			const { data } = await adminAPI.unpublishChannel(id, reason);
+			patchChannel(id, { status: data.status, rejection_reason: data.reason });
+			setUnpublishId(null);
+			setUnpublishReason('');
+		} catch (err) { alert(err.response?.data?.detail || 'Помилка зняття з публікації'); }
+		finally { setChanBusy(false); }
+	};
+
+	const handleRepublishChannel = async (id) => {
+		if (!confirm('Повернути лот у публічний каталог?')) return;
+		try {
+			const { data } = await adminAPI.republishChannel(id);
+			patchChannel(id, { status: data.status, rejection_reason: null });
+		} catch (err) { alert(err.response?.data?.detail || 'Помилка відновлення'); }
+	};
+
+	const handleSaveBuyerWarning = async (id) => {
+		setChanBusy(true);
+		try {
+			const { data } = await adminAPI.setBuyerWarning(id, warnText.trim());
+			patchChannel(id, { buyer_warning: data.buyer_warning });
+			setWarnId(null);
+		} catch (err) { alert(err.response?.data?.detail || 'Помилка збереження'); }
+		finally { setChanBusy(false); }
+	};
+
 	const handleDeleteChannel = async (id) => {
-		if (!confirm('Видалити канал?')) return;
+		if (!confirm('УВАГА: це НЕЗВОРОТНЕ видалення лота з бази (разом зі статистикою). Для безпечного зняття використовуйте «Зняти з публікації». Видалити назавжди?')) return;
 		try {
 			await adminAPI.deleteChannel(id);
 			setAllChannels(prev => prev.filter(c => c.id !== id));
@@ -1029,11 +1069,56 @@ const ModerCabinet = () => {
 												<button onClick={() => editId === channel.id ? setEditId(null) : startEdit(channel)} className='text-gray-400 hover:text-blue-500 p-2 rounded-lg hover:bg-blue-50 dark:hover:bg-blue-900/20 duration-300'>
 													<FontAwesomeIcon icon={faPen} />
 												</button>
-												<button onClick={() => handleDeleteChannel(channel.id)} className='text-gray-400 hover:text-red-500 p-2 rounded-lg hover:bg-red-50 dark:hover:bg-red-900/20 duration-300'>
+												{['approved', 'pending'].includes(channel.status) && (
+													<button onClick={() => { setUnpublishId(unpublishId === channel.id ? null : channel.id); setUnpublishReason(''); }} className='text-xs px-3 py-1.5 rounded-lg bg-orange-100 text-orange-700 hover:bg-orange-200 dark:bg-orange-900/30 dark:text-orange-300 font-semibold duration-300' title='Зняти з публікації / відхилити з причиною'>
+														Зняти з публікації
+													</button>
+												)}
+												{['rejected', 'removed'].includes(channel.status) && (
+													<button onClick={() => handleRepublishChannel(channel.id)} className='text-xs px-3 py-1.5 rounded-lg bg-green-100 text-green-700 hover:bg-green-200 dark:bg-green-900/30 dark:text-green-300 font-semibold duration-300' title='Повернути в каталог'>
+														Відновити публікацію
+													</button>
+												)}
+												<button onClick={() => { setWarnId(warnId === channel.id ? null : channel.id); setWarnText(channel.buyer_warning || ''); }} className={`p-2 rounded-lg duration-300 ${channel.buyer_warning ? 'text-amber-500' : 'text-gray-400'} hover:text-amber-600 hover:bg-amber-50 dark:hover:bg-amber-900/20`} title='Попередження для покупця'>
+													⚠️
+												</button>
+												<button onClick={() => handleDeleteChannel(channel.id)} className='text-gray-400 hover:text-red-500 p-2 rounded-lg hover:bg-red-50 dark:hover:bg-red-900/20 duration-300' title='Видалити назавжди (незворотно)'>
 													<FontAwesomeIcon icon={faTrash} />
 												</button>
 											</div>
 										</div>
+										{channel.status === 'rejected' && channel.rejection_reason && (
+											<p className='mb-3 text-sm bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-300 p-2.5 rounded-xl'>
+												<span className='font-semibold'>Причина зняття:</span> {channel.rejection_reason}
+											</p>
+										)}
+										{channel.buyer_warning && warnId !== channel.id && (
+											<p className='mb-3 text-sm bg-amber-50 dark:bg-amber-900/20 text-amber-800 dark:text-amber-300 p-2.5 rounded-xl'>
+												<span className='font-semibold'>⚠️ Попередження для покупця:</span> {channel.buyer_warning}
+											</p>
+										)}
+										{unpublishId === channel.id && (
+											<div className='mb-3 bg-orange-50 dark:bg-orange-900/20 p-4 rounded-xl border border-orange-200 dark:border-orange-800'>
+												<p className='text-sm font-semibold text-gray-800 dark:text-gray-200 mb-2'>Зняти з публікації / відхилити з причиною</p>
+												<p className='text-xs text-gray-500 dark:text-gray-400 mb-2'>Лот зникне з публічного каталогу (не видаляється). Причину буде надіслано продавцю в Telegram. Дію можна скасувати кнопкою «Відновити публікацію».</p>
+												<textarea value={unpublishReason} onChange={e => setUnpublishReason(e.target.value)} rows={3} maxLength={1000} placeholder='Причина (обовʼязково)' className='w-full border border-gray-200 dark:border-slate-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-slate-700 text-gray-800 dark:text-gray-200' />
+												<div className='flex gap-2 mt-2'>
+													<button disabled={chanBusy} onClick={() => handleUnpublishChannel(channel.id)} className='bg-orange-500 text-white px-4 py-2 rounded-lg text-sm font-semibold hover:bg-orange-600 disabled:opacity-50'>Зняти з публікації</button>
+													<button onClick={() => setUnpublishId(null)} className='px-4 py-2 rounded-lg text-sm text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-slate-700'>Скасувати</button>
+												</div>
+											</div>
+										)}
+										{warnId === channel.id && (
+											<div className='mb-3 bg-amber-50 dark:bg-amber-900/20 p-4 rounded-xl border border-amber-200 dark:border-amber-800'>
+												<p className='text-sm font-semibold text-gray-800 dark:text-gray-200 mb-2'>⚠️ Попередження для покупця</p>
+												<p className='text-xs text-gray-500 dark:text-gray-400 mb-2'>Показується на сторінці каналу та в картці каталогу. Порожнє поле — прибрати попередження.</p>
+												<textarea value={warnText} onChange={e => setWarnText(e.target.value)} rows={3} maxLength={2000} className='w-full border border-gray-200 dark:border-slate-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-slate-700 text-gray-800 dark:text-gray-200' />
+												<div className='flex gap-2 mt-2'>
+													<button disabled={chanBusy} onClick={() => handleSaveBuyerWarning(channel.id)} className='bg-amber-500 text-white px-4 py-2 rounded-lg text-sm font-semibold hover:bg-amber-600 disabled:opacity-50'>Зберегти</button>
+													<button onClick={() => setWarnId(null)} className='px-4 py-2 rounded-lg text-sm text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-slate-700'>Скасувати</button>
+												</div>
+											</div>
+										)}
 										<div className='grid grid-cols-2 md:grid-cols-5 gap-2 text-sm'>
 											<div className='bg-gray-50 dark:bg-slate-700/60 p-2.5 rounded-xl'>
 												<FontAwesomeIcon icon={faUsers} className='text-gray-400 mr-1' />
