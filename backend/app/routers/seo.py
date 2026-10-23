@@ -11,6 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
 from app.models.channel import Channel, ChannelStatus
+from app.services.moderation import not_blocked_seller
 
 logger = logging.getLogger(__name__)
 router = APIRouter(tags=["seo"])
@@ -74,6 +75,7 @@ async def sitemap_xml(db: AsyncSession = Depends(get_db)):
         rows = await db.execute(
             select(Channel.id, Channel.created_at)
             .where(Channel.status == ChannelStatus.approved)
+            .where(not_blocked_seller(Channel.seller_id))  # blocked seller's lot → 404, keep out of sitemap
             .order_by(Channel.id.desc())
             .limit(MAX_CHANNEL_URLS)
         )

@@ -92,6 +92,23 @@ def channel_id_from_path(full_path: str) -> int | None:
     return int(m.group(1)) if m else None
 
 
+NOT_FOUND_META = {"title": "Сторінку не знайдено — TgSell",
+                  "description": "Такої адреси на TgSell немає.", "noindex": True}
+
+
+def spa_status(full_path: str, override: dict | None) -> tuple[int, dict | None]:
+    """HTTP status for an SPA route: 404 for a missing/unpublished channel or a malformed /channel/ path.
+
+    The SPA HTML is still served (React shows NotFoundPage; owner/staff can still view a pending lot).
+    """
+    if override and override.pop("not_found", False):
+        return 404, override
+    path = normalize_path(full_path)
+    if path.startswith("/channel/") and channel_id_from_path(full_path) is None:
+        return 404, dict(NOT_FOUND_META)
+    return 200, override
+
+
 def _fmt_int(n) -> str:
     return f"{int(n or 0):,}".replace(",", "\u00a0")
 
