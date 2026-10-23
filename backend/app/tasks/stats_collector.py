@@ -8,10 +8,88 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import async_session
 from app.models.channel import Channel, ChannelPost, ChannelStats, ChannelStatus
-from app.services.channel_stats import collect_channel_stats, parse_telegram_link, reset_telethon_retries
+from app.services.channel_stats import (
+    collect_channel_stats, collect_invite_subscribers, parse_telegram_link, reset_telethon_retries,
+)
 from app.utils.timeutil import utcnow_naive
 
 logger = logging.getLogger(__name__)
+
+
+async def _refresh_open_channel(channel_id: int) -> tuple[str, bool]:
+    """Collect + store stats of one open channel. Returns (outcome, telethon_ok)."""
+    async with async_session() as db:
+        channel = await db.get(Channel, channel_id)
+        if channel is None:
+            logger.info(f"Channel #{channel_id} was deleted before stats collection, skipping")
+            return "skip", True
+
+        stats = await collect_channel_stats(channel.telegram_link)
+        telethon_ok = bool(stats.get("daily_stats"))
+        check = stats.get("check")
+        if check is not None:
+            from app.services.channel_availability import record_check
+
+            was_inactive = channel.inactive_since is not None
+            await record_check(db, channel, check)
+            if not check.get("ok"):
+                if channel.inactive_since is not None and not was_inactive:
+                    logger.warning(f"[STATS] Channel #{channel.id} ({channel.telegram_link}) INACTIVE: {channel.check_error}")
+                await db.commit()
+                return "failed", telethon_ok  # nothing to store from a failed check (no zero snapshots)
+
+        # Update channel with latest data
+        if stats.get("subscribers_count"):
+            channel.subscribers_count = stats["subscribers_count"]
+        if stats.get("avg_views"):
+            channel.avg_views = stats["avg_views"]
+        if stats.get("views_hidden") is not None:
+            channel.views_hidden = stats["views_hidden"]
+        if stats.get("er"):
+            channel.er = stats["er"]
+        if stats.get("avatar_url"):
+            channel.avatar_url = stats["avatar_url"]
+        if stats.get("channel_name"):
+            channel.channel_name = stats["channel_name"]
+        if stats.get("adv_reach_12h"):
+            channel.adv_reach_12h = stats["adv_reach_12h"]
+        if stats.get("adv_reach_24h"):
+            channel.adv_reach_24h = stats["adv_reach_24h"]
+        if stats.get("adv_reach_48h"):
+            channel.adv_reach_48h = stats["adv_reach_48h"]
+
+        # Extended stats
+        if stats.get("total_posts"):
+            channel.total_posts = stats["total_posts"]
+        if stats.get("post_frequency") is not None:
+            channel.post_frequency = stats["post_frequency"]
+        if stats.get("last_post_date"):
+            try:
+                channel.last_post_date = datetime.fromisoformat(stats["last_post_date"]).replace(tzinfo=None)
+            except (ValueError, TypeError):
+                pass
+        if stats.get("avg_forwards"):
+            channel.avg_forwards = stats["avg_forwards"]
+        if stats.get("avg_reactions"):
+            channel.avg_reactions = stats["avg_reactions"]
+        if stats.get("channel_age_months"):
+            channel.age = f"{stats['channel_age_months']}"
+
+        # Honest time series (Task 20): retro points carry post metrics
+        # only; today's row is a real snapshot; last 3 days are refreshed.
+        from app.services.stats_history import record_stats
+
+        await record_stats(db, channel_id, stats)
+
+        # Save individual posts with deduplication + view tracking
+        posts_data = stats.get("posts", [])
+        if posts_data:
+            await _upsert_channel_posts(db, channel.id, posts_data)
+
+        await db.commit()
+
+        logger.info(f"Stats collected for channel #{channel.id} ({channel.channel_name})")
+        return "ok", telethon_ok
 
 
 async def collect_stats_once():
@@ -38,87 +116,24 @@ async def collect_stats_once():
     # of the batch with a broken transaction.
     for channel_id in channel_ids:
         try:
-            async with async_session() as db:
-                channel = await db.get(Channel, channel_id)
-                if channel is None:
-                    logger.info(f"Channel #{channel_id} was deleted before stats collection, skipping")
-                    continue
-
-                stats = await collect_channel_stats(channel.telegram_link)
-                if not stats.get("daily_stats"):
-                    telethon_ok = False
-                check = stats.get("check")
-                if check is not None:
-                    from app.services.channel_availability import record_check
-
-                    was_inactive = channel.inactive_since is not None
-                    await record_check(db, channel, check)
-                    if not check.get("ok"):
-                        if channel.inactive_since is not None and not was_inactive:
-                            logger.warning(f"[STATS] Channel #{channel.id} ({channel.telegram_link}) INACTIVE: {channel.check_error}")
-                        await db.commit()
-                        failed += 1
-                        continue  # nothing to store from a failed check (no zero snapshots)
-
-                # Update channel with latest data
-                if stats.get("subscribers_count"):
-                    channel.subscribers_count = stats["subscribers_count"]
-                if stats.get("avg_views"):
-                    channel.avg_views = stats["avg_views"]
-                if stats.get("views_hidden") is not None:
-                    channel.views_hidden = stats["views_hidden"]
-                if stats.get("er"):
-                    channel.er = stats["er"]
-                if stats.get("avatar_url"):
-                    channel.avatar_url = stats["avatar_url"]
-                if stats.get("channel_name"):
-                    channel.channel_name = stats["channel_name"]
-                if stats.get("adv_reach_12h"):
-                    channel.adv_reach_12h = stats["adv_reach_12h"]
-                if stats.get("adv_reach_24h"):
-                    channel.adv_reach_24h = stats["adv_reach_24h"]
-                if stats.get("adv_reach_48h"):
-                    channel.adv_reach_48h = stats["adv_reach_48h"]
-
-                # Extended stats
-                if stats.get("total_posts"):
-                    channel.total_posts = stats["total_posts"]
-                if stats.get("post_frequency") is not None:
-                    channel.post_frequency = stats["post_frequency"]
-                if stats.get("last_post_date"):
-                    try:
-                        channel.last_post_date = datetime.fromisoformat(stats["last_post_date"]).replace(tzinfo=None)
-                    except (ValueError, TypeError):
-                        pass
-                if stats.get("avg_forwards"):
-                    channel.avg_forwards = stats["avg_forwards"]
-                if stats.get("avg_reactions"):
-                    channel.avg_reactions = stats["avg_reactions"]
-                if stats.get("channel_age_months"):
-                    channel.age = f"{stats['channel_age_months']}"
-
-                # Honest time series (Task 20): retro points carry post metrics
-                # only; today's row is a real snapshot; last 3 days are refreshed.
-                from app.services.stats_history import record_stats
-
-                await record_stats(db, channel_id, stats)
-
-                # Save individual posts with deduplication + view tracking
-                posts_data = stats.get("posts", [])
-                if posts_data:
-                    await _upsert_channel_posts(db, channel.id, posts_data)
-
-                await db.commit()
-
-                logger.info(f"Stats collected for channel #{channel.id} ({channel.channel_name})")
+            outcome, t_ok = await _refresh_open_channel(channel_id)
+            if not t_ok:
+                telethon_ok = False
+            if outcome == "ok":
                 success += 1
-
                 # Rate limit: wait between channels
                 await asyncio.sleep(3)
-
+            elif outcome == "failed":
+                failed += 1
         except Exception as e:
             failed += 1
             logger.error(f"Stats collection failed for channel #{channel_id}: {e}")
+
+    # Closed (invite-link) channels: subscriber count only, never joining.
+    try:
+        await collect_closed_channels_once()
+    except Exception as e:
+        logger.error(f"Closed-channel stats pass failed: {e}")
 
     # Send summary alert if there were problems
     if total > 0:
@@ -328,3 +343,77 @@ async def run_view_tracker(interval_hours: int = 6):
         except Exception as e:
             logger.error(f"View tracker error: {e}")
         await asyncio.sleep(interval_seconds)
+
+
+# ── Closed channels + on-demand refresh (create / approve bundle) ─────────
+
+async def _refresh_closed_channel(channel_id: int) -> bool:
+    """Subscriber count of a closed invite-link channel (CheckChatInvite / t.me preview)."""
+    async with async_session() as db:
+        channel = await db.get(Channel, channel_id)
+        if channel is None:
+            return False
+        count = await collect_invite_subscribers(channel.telegram_link)
+        if not count:
+            return False
+        channel.subscribers_count = count
+        from app.services.stats_history import record_stats
+
+        await record_stats(db, channel_id, {"subscribers_count": count})
+        await db.commit()
+        logger.info(f"[STATS] closed channel #{channel_id}: {count} subscribers")
+        return True
+
+
+def _is_invite(link: str | None) -> bool:
+    return bool(link) and parse_telegram_link(link)[1] == "invite"
+
+
+async def collect_closed_channels_once() -> int:
+    async with async_session() as db:
+        rows = (await db.execute(
+            select(Channel.id, Channel.telegram_link).where(
+                Channel.status.in_([ChannelStatus.approved, ChannelStatus.pending]),
+            )
+        )).all()
+    ids = [cid for cid, link in rows if _is_invite(link)]
+    done = 0
+    for cid in ids:
+        try:
+            if await _refresh_closed_channel(cid):
+                done += 1
+        except Exception as e:
+            logger.warning(f"[STATS] closed channel #{cid} failed: {e}")
+        await asyncio.sleep(3)
+    return done
+
+
+async def refresh_channels_stats(channel_ids: list[int]) -> None:
+    """Refresh stats now for the given channels (open: full stats; closed: subscribers)."""
+    for cid in channel_ids:
+        try:
+            async with async_session() as db:
+                ch = await db.get(Channel, cid)
+                link, closed = (ch.telegram_link, bool(ch.is_closed)) if ch else (None, False)
+            if link is None:
+                continue
+            if _is_invite(link):
+                await _refresh_closed_channel(cid)
+            elif not closed:
+                await _refresh_open_channel(cid)
+        except Exception as e:
+            logger.warning(f"[STATS] refresh of channel #{cid} failed: {e}")
+        await asyncio.sleep(2)
+
+
+_bg_tasks: set = set()
+
+
+def schedule_stats_refresh(channel_ids: list[int]) -> None:
+    """Fire-and-forget refresh (keeps a strong ref so the task isn't GC'd)."""
+    ids = [int(i) for i in channel_ids if i]
+    if not ids:
+        return
+    task = asyncio.create_task(refresh_channels_stats(ids))
+    _bg_tasks.add(task)
+    task.add_done_callback(_bg_tasks.discard)

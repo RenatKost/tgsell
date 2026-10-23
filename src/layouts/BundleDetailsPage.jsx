@@ -48,6 +48,7 @@ export default function BundleDetailsPage() {
   const [aiAnalysis, setAiAnalysis] = useState(null);
   const [aiLoading, setAiLoading] = useState(false);
   const [aiError, setAiError] = useState('');
+  const [aiPreparing, setAiPreparing] = useState(false);
   const [descExpanded, setDescExpanded] = useState(false);
 
   useEffect(() => {
@@ -70,9 +71,13 @@ export default function BundleDetailsPage() {
   const handleAiAnalysis = async () => {
     setAiLoading(true);
     setAiError('');
+    setAiPreparing(false);
     try {
       const res = await bundlesAPI.getAiAnalysis(id);
-      if (res.data?.status === 'unavailable' || res.data?.error) {
+      if (res.data?.status === 'preparing') {
+        setAiAnalysis(null);
+        setAiPreparing(true);
+      } else if (res.data?.status === 'unavailable' || res.data?.error) {
         setAiError('Аналіз тимчасово недоступний. Спробуйте трохи пізніше.');
       } else {
         setAiAnalysis(res.data);
@@ -232,11 +237,12 @@ export default function BundleDetailsPage() {
               </div>
               <h1 className="text-3xl lg:text-4xl font-black text-white mb-3 leading-tight">{bundle.name}</h1>
               {bundle.description && (
-                <div>
-                  <p className={`text-gray-400 text-sm leading-relaxed ${!descExpanded ? 'line-clamp-3' : ''}`}>
+                <div className="mt-1 bg-card-inner border border-card-border rounded-xl p-3">
+                  <div className="text-[11px] font-semibold uppercase tracking-wide text-gray-500 mb-1">💬 Коментар власника</div>
+                  <p className={`text-gray-200 text-sm leading-relaxed whitespace-pre-line ${!descExpanded ? 'line-clamp-4' : ''}`}>
                     {bundle.description}
                   </p>
-                  {bundle.description.length > 180 && (
+                  {bundle.description.length > 240 && (
                     <button onClick={() => setDescExpanded(v => !v)}
                       className="text-accent text-xs mt-1 hover:underline">
                       {descExpanded ? 'Згорнути' : 'Читати далі'}
@@ -396,7 +402,11 @@ export default function BundleDetailsPage() {
                           <div className="flex-1 h-1 bg-card rounded-full overflow-hidden">
                             <div className="h-full bg-accent/60 rounded-full" style={{ width: `${barPct}%` }} />
                           </div>
-                          <span className="text-xs text-gray-500 flex-shrink-0">{fmt(ch.subscribers_count)} підп.</span>
+                          <span className="text-xs text-gray-500 flex-shrink-0">
+                            {ch.is_closed
+                              ? (ch.subscribers_count > 0 ? `🔒 Закритий · ${fmt(ch.subscribers_count)} підп.` : '🔒 Закритий')
+                              : `${fmt(ch.subscribers_count)} підп.`}
+                          </span>
                         </div>
                         <BalanceBadges stars={ch.stars_balance} ton={ch.ton_balance} size="xs" className="mt-1" />
                       </div>
@@ -490,6 +500,16 @@ export default function BundleDetailsPage() {
               <div className="text-[10px] text-gray-600 mt-0.5">Автоматичний аналіз · оновлюється раз на 7 днів</div>
             </div>
           </div>
+
+          {aiPreparing && !aiLoading && (
+            <div className="flex items-start gap-3 bg-card-inner border border-card-border rounded-xl p-4 mb-4">
+              <div className="text-xl leading-none">⏳</div>
+              <div className="flex-1">
+                <div className="text-white text-sm font-semibold">Аналіз готується</div>
+                <div className="text-gray-400 text-xs mt-1">Збираємо актуальну статистику всіх каналів сітки. Аудит з’явиться автоматично, щойно дані будуть готові.</div>
+              </div>
+            </div>
+          )}
 
           {aiError && (
             <div className="flex items-start gap-3 bg-red-950/40 border border-red-900/50 rounded-xl p-4 mb-4">

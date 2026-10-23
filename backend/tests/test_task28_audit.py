@@ -122,6 +122,12 @@ async def _seed_channel(pg_orm, **kw):
                      category="news", subscribers_count=kw.get("subs", 1000), er=kw.get("er", 5.0),
                      price=100, status=kw.get("status", ChannelStatus.approved))
         db.add(ch)
+        await db.flush()
+        if ch.subscribers_count:  # real dated snapshot → AI audit is allowed (stats readiness)
+            from datetime import datetime
+            from app.models.channel import ChannelStats
+            db.add(ChannelStats(channel_id=ch.id, date=datetime(2026, 10, 22), subscribers=ch.subscribers_count,
+                                avg_views=0, avg_reach=0))
         await db.commit()
         return ch.id
 
@@ -154,6 +160,9 @@ async def test_bundle_endpoint_returns_200_unavailable_and_does_not_cache(pg_orm
         from app.models.bundle import BundleStatus
         b = ChannelBundle(seller_id=ch.seller_id, name="B28", price=100, status=BundleStatus.approved)
         db.add(b)
+        await db.flush()
+        from app.models.bundle import BundleChannel
+        db.add(BundleChannel(bundle_id=b.id, channel_id=cid, display_order=0))
         await db.commit()
         bid = b.id
 

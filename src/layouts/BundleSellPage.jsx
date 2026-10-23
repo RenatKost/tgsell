@@ -56,6 +56,8 @@ export default function BundleSellPage() {
     setBalances(prev => prev.map((b, idx) => (idx === i ? { ...b, [key]: val } : b)));
   };
 
+  const isInviteLink = (l) => /(^|\/)\+|joinchat\//.test(String(l || '').trim());
+
   const handleFormChange = (e) => {
     setForm(prev => ({ ...prev, [e.target.name]: e.target.value }));
   };
@@ -122,6 +124,13 @@ export default function BundleSellPage() {
         monthly_income: form.monthly_income ? Number(form.monthly_income) : undefined,
         resources: form.resources.trim() || undefined,
         channel_links: links.filter(l => l.trim()),
+        channel_subscribers: links
+          .map((l, i) => ({ l, b: balances[i] || {} }))
+          .filter(({ l }) => l.trim())
+          .map(({ l, b }) => {
+            const n = String(b.subs ?? '').replace(/\D/g, '');
+            return isInviteLink(l) && n ? parseInt(n, 10) : null;
+          }),
         channel_balances: links
           .map((l, i) => ({ l, b: balances[i] || { stars: '', ton: '' } }))
           .filter(({ l }) => l.trim())
@@ -244,6 +253,11 @@ export default function BundleSellPage() {
                     inputMode="decimal" placeholder="💎 TON (необовʼязково)"
                     className="flex-1 min-w-0 bg-card-inner border border-card-border rounded-lg px-3 py-1.5 text-white placeholder-gray-600 focus:outline-none focus:border-accent/50 text-xs" />
                 </div>
+                {isInviteLink(link) && (
+                  <input value={balances[i]?.subs ?? ''} onChange={e => updateBalance(i, 'subs', e.target.value)}
+                    inputMode="numeric" placeholder="🔒 Закритий канал: кількість підписників (необовʼязково)"
+                    className="w-full bg-card-inner border border-card-border rounded-lg px-3 py-1.5 text-white placeholder-gray-600 focus:outline-none focus:border-accent/50 text-xs" />
+                )}
               </div>
             ))}
             <p className="text-xs text-gray-500">Баланс каналу в Stars/TON показується як «зі слів продавця» і не впливає на ціну.</p>

@@ -1899,8 +1899,18 @@ async def approve_bundle(
         ch.moderator_id = admin.id
         ch.moderated_at = bundle.moderated_at
         audit(db, admin, "channel.approve", "channel", ch.id, via_bundle=bundle.id)
+    member_ids = list((await db.execute(
+        select(BundleChannel.channel_id).where(BundleChannel.bundle_id == bundle.id)
+    )).scalars().all())
     await db.commit()
     await db.refresh(bundle)
+
+    # Fresh stats for the bundle's channels right away (background, never blocks)
+    try:
+        from app.tasks.stats_collector import schedule_stats_refresh
+        schedule_stats_refresh(member_ids)
+    except Exception as e:
+        logger.warning(f"[ADMIN] Bundle #{bundle_id}: stats refresh not scheduled: {e}")
 
     # Notify seller
     try:

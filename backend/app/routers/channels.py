@@ -427,12 +427,19 @@ async def get_ai_analysis(channel_id: int, db: AsyncSession = Depends(get_db),
 
     channel = await visible_channel_or_404(db, channel_id, viewer)
 
-    # Return cached result if fresher than 7 days
+    # Never analyse empty / unverified stats (no «0 підписників» audits).
+    from app.services import stats_readiness as sr
+    if not await sr.channels_ready(db, [channel]):
+        return sr.preparing_result()
+    fp = sr.stats_fingerprint([channel])
+
+    # Cached result: fresher than 7 days AND built from exactly these stats
     if channel.ai_cache and channel.ai_cache_updated_at:
         # ai_cache_updated_at is naive TIMESTAMP (UTC)
         age = utcnow_naive() - to_naive_utc(channel.ai_cache_updated_at)
-        if age < timedelta(days=7):
-            return json.loads(channel.ai_cache)
+        cached = sr.load_cache(channel.ai_cache, fp)
+        if cached is not None and age < timedelta(days=7):
+            return cached
 
     # Prepare channel data dict
     channel_data = {
@@ -497,7 +504,7 @@ async def get_ai_analysis(channel_id: int, db: AsyncSession = Depends(get_db),
 
     # Save to cache (non-blocking — don't fail the request if cache write fails)
     try:
-        channel.ai_cache = json.dumps(analysis, ensure_ascii=False)
+        channel.ai_cache = sr.dump_cache(analysis, fp)
         channel.ai_cache_updated_at = utcnow_naive()  # naive TIMESTAMP (UTC); asyncpg rejects aware
         await db.commit()
     except Exception as cache_err:

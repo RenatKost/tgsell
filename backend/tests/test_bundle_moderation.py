@@ -21,6 +21,8 @@ def no_bot(monkeypatch):
     stub.notify_bundle_approved = _noop
     stub.notify_bundle_rejected = _noop
     monkeypatch.setitem(sys.modules, "bot.main", stub)
+    sc = importlib.import_module("app.tasks.stats_collector")
+    monkeypatch.setattr(sc, "schedule_stats_refresh", lambda ids: None)
 
 
 async def _seed(orm):

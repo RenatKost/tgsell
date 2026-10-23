@@ -227,10 +227,16 @@ async def _seed_channel(orm, **overrides):
         fields = dict(
             seller_id=user.id, telegram_link="https://t.me/test_channel", channel_name="Test",
             category="news", price=10.0, status=ChannelStatus.approved, is_closed=False,
+            subscribers_count=100,
         )
         fields.update(overrides)
         channel = Channel(**fields)
         db.add(channel)
+        await db.flush()
+        # real dated snapshot → AI audit is allowed (stats readiness)
+        from app.models.channel import ChannelStats
+        db.add(ChannelStats(channel_id=channel.id, date=datetime(2026, 10, 22),
+                            subscribers=channel.subscribers_count, avg_views=0, avg_reach=0))
         await db.commit()
         return user.id, channel.id
 
@@ -280,7 +286,8 @@ async def test_channel_ai_analysis_stale_cache_is_refreshed(orm, monkeypatch):
 
     async with orm.session() as db:
         channel = (await db.execute(select(Channel).where(Channel.id == channel_id))).scalar_one()
-    assert json.loads(channel.ai_cache) == fresh
+    cached = json.loads(channel.ai_cache)
+    assert cached.pop("_stats_fp") and cached == fresh
     _assert_naive_recent(channel.ai_cache_updated_at)
 
 
