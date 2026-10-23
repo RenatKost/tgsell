@@ -25,6 +25,19 @@ class DealStatus(str, enum.Enum):
     cancelled = "cancelled"
 
 
+# All non-terminal deal statuses: a lot (channel/bundle) with a deal in any of
+# these is reserved and must not get a second deal.
+ACTIVE_DEAL_STATUSES = (
+    DealStatus.created,
+    DealStatus.payment_pending,
+    DealStatus.paid,
+    DealStatus.channel_transferring,
+    DealStatus.disputed,
+    DealStatus.awaiting_payout,
+    DealStatus.payout_in_progress,
+)
+
+
 class TransactionType(str, enum.Enum):
     deposit = "deposit"
     release = "release"

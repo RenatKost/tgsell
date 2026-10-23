@@ -182,6 +182,22 @@ async def _lock_deal(db, deal_id: int) -> Deal:
 
 # ── finalize ────────────────────────────────────────────────────────────
 
+async def _restore_bundle_after_refund(db, bundle_id: int) -> None:
+    """Refunded bundle deal: put the bundle and its channels back on sale (status only)."""
+    from app.models.bundle import BundleChannel, BundleStatus, ChannelBundle
+
+    bundle = await db.get(ChannelBundle, bundle_id)
+    if bundle is not None:
+        bundle.status = BundleStatus.approved
+    ch_ids = (await db.execute(
+        select(BundleChannel.channel_id).where(BundleChannel.bundle_id == bundle_id)
+    )).scalars().all()
+    for cid in ch_ids:
+        ch = await db.get(Channel, cid)
+        if ch is not None:
+            ch.status = ChannelStatus.approved
+
+
 async def _finalize_success(db, deal: Deal, tx: Transaction) -> None:
     tx.status = TransactionStatus.confirmed
     tx.receipt_status = "SUCCESS"
@@ -197,6 +213,8 @@ async def _finalize_success(db, deal: Deal, tx: Transaction) -> None:
         deal.status = DealStatus.cancelled
         if channel is not None:
             channel.status = ChannelStatus.approved
+        if deal.bundle_id:
+            await _restore_bundle_after_refund(db, deal.bundle_id)
     elif tx.type == TransactionType.overpay_refund:
         deal.overpay_status = "done"
         _add_deal_message(db, deal, f"Переплату {tx.amount} USDT повернено покупцю ✅\nTX: {tx.tx_hash}",
