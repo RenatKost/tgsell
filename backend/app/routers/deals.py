@@ -9,7 +9,7 @@ from app.utils.money_display import money2_str
 from app.config import settings
 from app.database import get_db
 from app.models.channel import Channel, ChannelStatus
-from app.models.deal import Deal, DealMessage, DealStatus, Transaction, TransactionStatus, TransactionType
+from app.models.deal import ACTIVE_DEAL_STATUSES, Deal, DealMessage, DealStatus, Transaction, TransactionStatus, TransactionType
 from app.models.user import User
 from app.schemas.deal import (
     ChecklistItemResponse, ChecklistSideResponse, ChecklistToggleRequest,
@@ -95,10 +95,12 @@ async def create_deal(
         from app.models.bundle import ChannelBundle, BundleStatus, BundleChannel
         from sqlalchemy.orm import selectinload as _si
 
+        # Row lock serializes concurrent purchases of the same bundle.
         res = await db.execute(
             select(ChannelBundle)
             .options(_si(ChannelBundle.bundle_channels).selectinload(BundleChannel.channel))
             .where(ChannelBundle.id == body.bundle_id)
+            .with_for_update(of=ChannelBundle)
         )
         bundle = res.scalar_one_or_none()
         if not bundle:
@@ -111,16 +113,33 @@ async def create_deal(
 
         # Check no active deal for this bundle
         existing = await db.execute(
-            select(Deal).where(
+            select(Deal.id).where(
                 Deal.bundle_id == body.bundle_id,
-                Deal.status.in_([
-                    DealStatus.created, DealStatus.payment_pending,
-                    DealStatus.paid, DealStatus.channel_transferring,
-                ]),
-            )
+                Deal.status.in_(ACTIVE_DEAL_STATUSES),
+            ).limit(1)
         )
         if existing.scalar_one_or_none():
             raise HTTPException(status_code=400, detail="Bundle already has an active deal")
+
+        # Every channel of the bundle must be purchasable and not reserved by
+        # its own single-channel deal. Lock channel rows to block a racing
+        # single-channel purchase.
+        ch_ids = [bc.channel_id for bc in bundle.bundle_channels]
+        if ch_ids:
+            await db.execute(
+                select(Channel.id).where(Channel.id.in_(ch_ids)).order_by(Channel.id).with_for_update()
+            )
+            for bc in bundle.bundle_channels:
+                if bc.channel is None or bc.channel.status != ChannelStatus.approved:
+                    raise HTTPException(status_code=400, detail="Bundle is not available for purchase")
+            busy = await db.execute(
+                select(Deal.id).where(
+                    Deal.channel_id.in_(ch_ids),
+                    Deal.status.in_(ACTIVE_DEAL_STATUSES),
+                ).limit(1)
+            )
+            if busy.scalar_one_or_none():
+                raise HTTPException(status_code=400, detail="A channel of this bundle already has an active deal")
 
         wallet_address, encrypted_private_key = generate_escrow_wallet()
         fee = bundle.price * (settings.service_fee_percent / 100)
@@ -153,7 +172,7 @@ async def create_deal(
         init_msg = (
             f"Угоду на сітку «{bundle.name}» створено! Каналів: {channel_count}\n"
             f"Вартість: {money2_str(deal.amount_usdt)} USDT\n"
-            f"Комісія сервісу: 3% ({money2_str(fee)} USDT)\n"
+            f"Комісія сервісу: {settings.service_fee_percent:g}% ({money2_str(fee)} USDT)\n"
             f"Продавець отримає: {money2_str(payout)} USDT\n\n"
             f"Підтвердіть готовність, щоб перейти до оплати."
         )
@@ -175,7 +194,8 @@ async def create_deal(
     if body.channel_id is None:
         raise HTTPException(status_code=422, detail="Either channel_id or bundle_id is required")
 
-    result = await db.execute(select(Channel).where(Channel.id == body.channel_id))
+    # Row lock serializes concurrent purchases of the same channel.
+    result = await db.execute(select(Channel).where(Channel.id == body.channel_id).with_for_update())
     channel = result.scalar_one_or_none()
     if not channel:
         raise HTTPException(status_code=404, detail="Channel not found")
@@ -187,16 +207,24 @@ async def create_deal(
 
     # Check no active deal for this channel
     existing = await db.execute(
-        select(Deal).where(
+        select(Deal.id).where(
             Deal.channel_id == body.channel_id,
-            Deal.status.in_([
-                DealStatus.created, DealStatus.payment_pending,
-                DealStatus.paid, DealStatus.channel_transferring,
-            ]),
-        )
+            Deal.status.in_(ACTIVE_DEAL_STATUSES),
+        ).limit(1)
     )
     if existing.scalar_one_or_none():
         raise HTTPException(status_code=400, detail="Channel already has an active deal")
+
+    # Channel reserved through a bundle that has an active deal.
+    from app.models.bundle import BundleChannel as _BC
+    bundle_busy = await db.execute(
+        select(Deal.id)
+        .join(_BC, _BC.bundle_id == Deal.bundle_id)
+        .where(_BC.channel_id == body.channel_id, Deal.status.in_(ACTIVE_DEAL_STATUSES))
+        .limit(1)
+    )
+    if bundle_busy.scalar_one_or_none():
+        raise HTTPException(status_code=400, detail="Channel is part of a bundle with an active deal")
 
     # Generate escrow wallet
     wallet_address, encrypted_private_key = generate_escrow_wallet()
@@ -234,7 +262,7 @@ async def create_deal(
     payout = deal.amount_usdt - fee
     init_msg = (
         f"Угоду створено! Вартість каналу: {money2_str(deal.amount_usdt)} USDT\n"
-        f"Комісія сервісу: 3% ({money2_str(fee)} USDT)\n"
+        f"Комісія сервісу: {settings.service_fee_percent:g}% ({money2_str(fee)} USDT)\n"
         f"Продавець отримає: {money2_str(payout)} USDT\n\n"
         f"Підтвердіть готовність, щоб перейти до оплати."
     )

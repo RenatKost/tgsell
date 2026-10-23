@@ -12,6 +12,7 @@ from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from typing import Iterable
 
+from app.config import settings
 from app.models.deal import Deal, DealChecklistItem, DealStatus
 
 logger = logging.getLogger(__name__)
@@ -529,7 +530,7 @@ def payout_request_message(deal: Deal) -> str:
         f"🎉 Канал успішно передано, чек-лист виконано!\n\n"
         f"Продавець, вкажіть свій USDT (TRC-20) гаманець для отримання коштів:\n"
         f"💰 Вартість каналу: {deal.amount_usdt} USDT\n"
-        f"📊 Комісія сервісу (3%): {deal.service_fee:.2f} USDT\n"
+        f"📊 Комісія сервісу ({settings.service_fee_percent:g}%): {deal.service_fee:.2f} USDT\n"
         f"💵 До виплати: {payout_amount:.2f} USDT"
     )
 
