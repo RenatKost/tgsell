@@ -52,6 +52,22 @@ async def initial_admin_setup(
     return {"ok": True, "user_id": user.id, "username": user.username, "role": user.role.value}
 
 
+def _bundle_member_exists():
+    """Correlated EXISTS: the channel is a member of some bundle (moderated via the bundle)."""
+    from app.models.bundle import BundleChannel
+    return select(BundleChannel.id).where(BundleChannel.channel_id == Channel.id).exists()
+
+
+async def _channel_bundle_id(db: AsyncSession, channel_id: int):
+    from app.models.bundle import BundleChannel
+    return (await db.execute(
+        select(BundleChannel.bundle_id).where(BundleChannel.channel_id == channel_id).limit(1)
+    )).scalar_one_or_none()
+
+
+BUNDLE_MEMBER_DETAIL = "Канал входить до сітки — модеруйте сітку цілком (вкладка «На модерації»)."
+
+
 @router.get("/channels/pending", response_model=list[ChannelResponse])
 async def get_pending_channels(
     admin: User = Depends(get_admin_user),
@@ -60,7 +76,7 @@ async def get_pending_channels(
     """Get all channels awaiting moderation."""
     result = await db.execute(
         select(Channel)
-        .where(Channel.status == ChannelStatus.pending)
+        .where(Channel.status == ChannelStatus.pending, ~_bundle_member_exists())
         .order_by(Channel.created_at.asc())
     )
     channels = result.scalars().all()
@@ -89,6 +105,8 @@ async def approve_channel(
         raise HTTPException(status_code=404, detail="Channel not found")
     if channel.status != ChannelStatus.pending:
         raise HTTPException(status_code=400, detail="Channel is not pending")
+    if await _channel_bundle_id(db, channel_id) is not None:
+        raise HTTPException(status_code=400, detail=BUNDLE_MEMBER_DETAIL)
 
     try:
         channel.status = ChannelStatus.approved
@@ -185,6 +203,8 @@ async def reject_channel(
         raise HTTPException(status_code=404, detail="Channel not found")
     if channel.status != ChannelStatus.pending:
         raise HTTPException(status_code=400, detail="Channel is not pending")
+    if await _channel_bundle_id(db, channel_id) is not None:
+        raise HTTPException(status_code=400, detail=BUNDLE_MEMBER_DETAIL)
 
     try:
         channel.status = ChannelStatus.rejected
@@ -1482,7 +1502,8 @@ async def admin_dashboard_stats(
     )).scalar() or 0
 
     pending_channels = (await db.execute(
-        select(func.count()).select_from(Channel).where(Channel.status == "pending")
+        select(func.count()).select_from(Channel).where(
+            Channel.status == "pending", ~_bundle_member_exists())
     )).scalar() or 0
 
     approved_channels = (await db.execute(
@@ -1796,20 +1817,33 @@ async def get_pending_bundles(
     for b in bundles:
         # Gather channel links for display
         channel_ids = [bc.channel_id for bc in b.bundle_channels]
+        order = {bc.channel_id: bc.display_order for bc in b.bundle_channels}
         channel_links: list[str] = []
+        channels_detail: list[dict] = []
         if channel_ids:
             ch_rows = (await db.execute(
-                select(Channel.telegram_link, Channel.channel_name, Channel.stars_balance, Channel.ton_balance)
-                .where(Channel.id.in_(channel_ids))
-            )).all()
+                select(Channel).where(Channel.id.in_(channel_ids))
+            )).scalars().all()
+            ch_rows = sorted(ch_rows, key=lambda c: order.get(c.id, 0))
             # Task 31: show the seller-stated balance to the moderator
             from app.services.deal_checklist import format_balance
-            channel_links = []
-            for r in ch_rows:
-                bal = format_balance(r[2], r[3])
+            for c in ch_rows:
+                bal = format_balance(c.stars_balance, c.ton_balance)
                 channel_links.append(
-                    f"{r[1]} ({r[0]})" + (f" · {bal} (зі слів продавця)" if bal else "")
+                    f"{c.channel_name} ({c.telegram_link})" + (f" · {bal} (зі слів продавця)" if bal else "")
                 )
+                link = c.telegram_link or ""
+                url = link if link.startswith("http") else f"https://t.me/{link.lstrip('@')}"
+                channels_detail.append({
+                    "id": c.id,
+                    "channel_name": c.channel_name,
+                    "telegram_link": c.telegram_link,
+                    "url": url,
+                    "status": getattr(c.status, "value", c.status),
+                    "is_closed": bool(c.is_closed),
+                    "subscribers_count": c.subscribers_count,
+                    "balance": bal or None,
+                })
 
         items.append({
             "id": b.id,
@@ -1823,9 +1857,20 @@ async def get_pending_bundles(
             "seller_name": b.seller.first_name if b.seller else None,
             "channel_count": len(b.bundle_channels),
             "channels": channel_links,
+            "channels_detail": channels_detail,
             "created_at": b.created_at.isoformat() if b.created_at else None,
         })
     return {"items": items, "total": len(items)}
+
+
+async def _pending_bundle_channels(db: AsyncSession, bundle_id: int) -> list:
+    """Pending member channels of a bundle; already-moderated ones are left untouched."""
+    from app.models.bundle import BundleChannel
+    return list((await db.execute(
+        select(Channel)
+        .join(BundleChannel, BundleChannel.channel_id == Channel.id)
+        .where(BundleChannel.bundle_id == bundle_id, Channel.status == ChannelStatus.pending)
+    )).scalars().all())
 
 
 @router.post("/bundles/{bundle_id}/approve")
@@ -1849,6 +1894,11 @@ async def approve_bundle(
     bundle.moderator_id = admin.id
     bundle.moderated_at = datetime.utcnow()
     audit(db, admin, "bundle.approve", "bundle", bundle.id)
+    for ch in await _pending_bundle_channels(db, bundle.id):
+        ch.status = ChannelStatus.approved
+        ch.moderator_id = admin.id
+        ch.moderated_at = bundle.moderated_at
+        audit(db, admin, "channel.approve", "channel", ch.id, via_bundle=bundle.id)
     await db.commit()
     await db.refresh(bundle)
 
@@ -1891,6 +1941,12 @@ async def reject_bundle(
     bundle.moderated_at = datetime.utcnow()
     bundle.rejection_reason = reason
     audit(db, admin, "bundle.reject", "bundle", bundle.id, reason=reason)
+    for ch in await _pending_bundle_channels(db, bundle.id):
+        ch.status = ChannelStatus.rejected
+        ch.moderator_id = admin.id
+        ch.moderated_at = bundle.moderated_at
+        ch.rejection_reason = reason
+        audit(db, admin, "channel.reject", "channel", ch.id, via_bundle=bundle.id, reason=reason)
     await db.commit()
 
     # Notify seller

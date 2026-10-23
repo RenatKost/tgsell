@@ -255,8 +255,12 @@ const ModerCabinet = () => {
 					setReauthStatus(rs);
 				} catch (_) {}
 			} else if (section === 'pending') {
-				const { data } = await adminAPI.getPendingChannels();
+				const [{ data }, { data: bd }] = await Promise.all([
+					adminAPI.getPendingChannels(),
+					adminAPI.getPendingBundles(),
+				]);
 				setPendingChannels(Array.isArray(data) ? data : data.items || []);
+				setPendingBundles(bd?.items || []);
 			} else if (section === 'bundles') {
 				const { data } = await adminAPI.getPendingBundles();
 				setPendingBundles(data.items || []);
@@ -547,9 +551,9 @@ const ModerCabinet = () => {
 						>
 							<FontAwesomeIcon icon={s.icon} className='w-5 text-center' />
 							{sidebarOpen && <span>{s.label}</span>}
-							{sidebarOpen && s.id === 'pending' && pendingChannels.length > 0 && (
+							{sidebarOpen && s.id === 'pending' && (pendingChannels.length + pendingBundles.length) > 0 && (
 								<span className='ml-auto bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-400 text-xs px-2 py-0.5 rounded-full'>
-									{pendingChannels.length}
+									{pendingChannels.length + pendingBundles.length}
 								</span>
 							)}
 							{sidebarOpen && s.id === 'disputes' && disputes.length > 0 && (
@@ -752,17 +756,21 @@ const ModerCabinet = () => {
 					<div>
 						<div className='flex items-center justify-between mb-6'>
 							<h1 className='text-2xl font-bold text-gray-800 dark:text-white'>На модерації</h1>
-							{pendingChannels.length > 0 && (
+							{(pendingChannels.length + pendingBundles.length) > 0 && (
 								<span className='inline-flex items-center gap-2 bg-yellow-50 dark:bg-yellow-900/20 text-yellow-700 dark:text-yellow-400 font-semibold py-2 px-4 rounded-xl border border-yellow-200 dark:border-yellow-800 text-sm'>
 									<span className='w-2 h-2 rounded-full bg-yellow-500 animate-pulse' />
-									{pendingChannels.length} очікують
+									{pendingChannels.length + pendingBundles.length} очікують
 								</span>
 							)}
 						</div>
-						{loading ? <Loader /> : pendingChannels.length === 0 ? (
-							<EmptyState icon='✅' title='Все перевірено!' subtitle='Немає каналів, що очікують модерації' />
+						{loading ? <Loader /> : (pendingChannels.length + pendingBundles.length) === 0 ? (
+							<EmptyState icon='✅' title='Все перевірено!' subtitle='Немає каналів чи сіток, що очікують модерації' />
 						) : (
 							<div className='grid gap-5'>
+								{pendingBundles.map(b => (
+									<PendingBundleCard key={`bundle-${b.id}`} bundle={b}
+										onDone={() => setPendingBundles(prev => prev.filter(x => x.id !== b.id))} />
+								))}
 								{pendingChannels.map(channel => (
 									<div key={channel.id} className='bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-gray-100 dark:border-slate-700 p-6 hover:shadow-md duration-300'>
 										<div className='flex flex-col md:flex-row md:items-center justify-between gap-4 mb-4'>
@@ -1515,5 +1523,78 @@ const ModerCabinet = () => {
 		</section>
 	);
 };
+
+function pluralChannels(n) {
+	const m10 = n % 10, m100 = n % 100;
+	if (m10 === 1 && m100 !== 11) return 'канал';
+	if (m10 >= 2 && m10 <= 4 && (m100 < 12 || m100 > 14)) return 'канали';
+	return 'каналів';
+}
+
+function PendingBundleCard({ bundle: b, onDone }) {
+	const [rejecting, setRejecting] = useState(false);
+	const [reason, setReason] = useState('');
+	const [busy, setBusy] = useState(false);
+	const list = b.channels_detail?.length ? b.channels_detail : (b.channels || []).map((t, i) => ({ id: i, channel_name: t }));
+	const n = b.channel_count ?? list.length;
+	const act = async (fn) => {
+		setBusy(true);
+		try { await fn(); onDone(); } catch (e) { alert(e?.response?.data?.detail || 'Помилка'); } finally { setBusy(false); }
+	};
+	return (
+		<div className='bg-white dark:bg-slate-800 rounded-2xl shadow-sm border-2 border-indigo-200 dark:border-indigo-800 p-6'>
+			<div className='flex flex-col md:flex-row md:items-start justify-between gap-4 mb-4'>
+				<div>
+					<span className='inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full bg-indigo-100 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-300 font-semibold'>
+						📡 Сітка з {n} {pluralChannels(n)} · продається лише разом
+					</span>
+					<h3 className='font-bold text-lg text-gray-800 dark:text-white mt-2'>{b.name}</h3>
+					<p className='text-sm text-gray-500 dark:text-gray-400'>
+						Продавець: {b.seller_name || `#${b.seller_id}`}{b.category ? ` · ${b.category}` : ''}
+					</p>
+				</div>
+				<div className='text-right'>
+					<div className='text-2xl font-bold text-green-600'>{Number(b.price || 0).toLocaleString('uk-UA')} USDT</div>
+					<p className='text-xs text-gray-400'>ціна за всю сітку</p>
+				</div>
+			</div>
+			{b.description && (
+				<p className='mb-4 text-gray-600 dark:text-gray-300 text-sm bg-blue-50 dark:bg-blue-900/20 p-3 rounded-xl'>{b.description}</p>
+			)}
+			<p className='text-xs text-gray-500 mb-1'>Канали сітки:</p>
+			<ul className='space-y-1 mb-4'>
+				{list.map(ch => (
+					<li key={ch.id} className='text-sm text-gray-700 dark:text-gray-200 flex flex-wrap items-center gap-2'>
+						<span className='font-medium'>{ch.channel_name}</span>
+						{ch.url && (
+							<a href={ch.url} target='_blank' rel='noopener noreferrer' className='text-blue-500 hover:underline'>
+								{ch.telegram_link} <FontAwesomeIcon icon={faExternalLinkAlt} size='xs' />
+							</a>
+						)}
+						{ch.is_closed && <span className='text-xs text-amber-600'>🔒 закритий</span>}
+						{ch.balance && <span className='text-xs text-gray-400'>{ch.balance} (зі слів продавця)</span>}
+					</li>
+				))}
+			</ul>
+			{rejecting ? (
+				<div className='flex gap-2'>
+					<input type='text' value={reason} onChange={e => setReason(e.target.value)} placeholder='Причина відхилення сітки...' className='flex-1 border border-gray-200 dark:border-slate-600 rounded-xl px-4 py-2.5 bg-white dark:bg-slate-700 text-gray-800 dark:text-gray-200' />
+					<button disabled={busy || !reason.trim()} onClick={() => act(() => adminAPI.rejectBundle(b.id, reason.trim()))} className='bg-red-500 text-white px-5 py-2.5 rounded-xl font-semibold hover:bg-red-600 disabled:opacity-50'>Підтвердити</button>
+					<button onClick={() => { setRejecting(false); setReason(''); }} className='px-4 py-2.5 rounded-xl border border-gray-200 dark:border-slate-600 text-gray-600 dark:text-gray-300'>Скасувати</button>
+				</div>
+			) : (
+				<div className='flex gap-3'>
+					<button disabled={busy} onClick={() => act(() => adminAPI.approveBundle(b.id))} className='bg-[#27ae60] text-white px-5 py-2.5 rounded-xl font-semibold hover:bg-[#219a52] flex items-center gap-2 disabled:opacity-50'>
+						<FontAwesomeIcon icon={faCheck} /> Схвалити сітку
+					</button>
+					<button disabled={busy} onClick={() => setRejecting(true)} className='bg-red-500 text-white px-5 py-2.5 rounded-xl font-semibold hover:bg-red-600 flex items-center gap-2 disabled:opacity-50'>
+						<FontAwesomeIcon icon={faTimes} /> Відхилити
+					</button>
+				</div>
+			)}
+			<p className='mt-3 text-xs text-gray-400'>Рішення застосовується до сітки та всіх її каналів.</p>
+		</div>
+	);
+}
 
 export default ModerCabinet;
