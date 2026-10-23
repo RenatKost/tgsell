@@ -154,3 +154,47 @@ async def test_bundle_refund_restores_bundle_and_channels(pg_orm):
         assert (await db.get(ChannelBundle, bun.id)).status == BundleStatus.approved
         for c in chs:
             assert (await db.get(Channel, c.id)).status == ChannelStatus.approved
+
+
+def _mig47():
+    import importlib.util
+    from pathlib import Path
+    p = Path(__file__).resolve().parents[1] / "alembic" / "versions" / "0047_active_deal_unique.py"
+    spec = importlib.util.spec_from_file_location("m0047", p)
+    m = importlib.util.module_from_spec(spec); spec.loader.exec_module(m)
+    return m, p.read_text(encoding="utf-8")
+
+
+def test_migration_0047_shape():
+    m, src = _mig47()
+    assert m.revision == "0047" and m.down_revision == "0046"
+    assert set(m.ACTIVE) == {s.value for s in ACTIVE_DEAL_STATUSES}
+    assert "DELETE" not in src.upper() and "UPDATE DEALS" not in src.upper()
+
+
+@pytest.mark.asyncio
+async def test_migration_0047_enforces_unique_on_postgres(pg_orm):
+    from sqlalchemy.exc import IntegrityError
+    from alembic.migration import MigrationContext
+    from alembic.operations import Operations
+    m, _ = _mig47()
+    async with pg_orm.session() as db:
+        s, b, chs, bun = await _seed(db)
+
+    def run(conn, fn):
+        with Operations.context(MigrationContext.configure(conn)):
+            fn()
+    async with pg_orm.engine.begin() as conn:
+        await conn.run_sync(run, m.upgrade)
+    try:
+        async with pg_orm.session() as db:
+            db.add(_deal(channel_id=chs[0].id, buyer_id=b.id, seller_id=s.id, status=DealStatus.disputed))
+            db.add(_deal(channel_id=chs[0].id, buyer_id=b.id, seller_id=s.id, status=DealStatus.cancelled))
+            await db.commit()
+            db.add(_deal(channel_id=chs[0].id, buyer_id=b.id, seller_id=s.id, status=DealStatus.created,
+                         escrow_wallet_address="T" + "q" * 33))
+            with pytest.raises(IntegrityError):
+                await db.commit()
+    finally:
+        async with pg_orm.engine.begin() as conn:
+            await conn.run_sync(run, m.downgrade)
