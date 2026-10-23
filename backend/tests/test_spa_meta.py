@@ -122,3 +122,17 @@ def test_render_index_reads_file(tmp_path):
     f.write_text(INDEX, encoding="utf-8")
     out = spa_meta.render_index(f, "prodaty-telegram-kanal")
     assert "https://tgsell.me/prodaty-telegram-kanal" in out
+
+
+def test_spa_status_real_404_for_channel():
+    from app.utils.spa_meta import spa_status, channel_meta
+    # missing / unpublished lot flagged by _channel_page_meta
+    st, ov = spa_status("channel/999999", channel_meta(None) | {"not_found": True})
+    assert st == 404 and ov["noindex"] and "not_found" not in ov
+    # malformed ids
+    for p in ("channel/abc", "channel/0x1", "channel/1/x"):
+        assert spa_status(p, None)[0] == 404
+    # published lot / other routes stay 200
+    assert spa_status("channel/5", {"title": "x"}) == (200, {"title": "x"})
+    assert spa_status("catalog", None) == (200, None)
+    assert spa_status("bundle/6", None)[0] == 200

@@ -18,6 +18,7 @@ import { PriceEstimate } from '../components/Pricing/PriceVerdict';
 import { QualityBlock } from '../components/Quality/QualityBadge';
 import BalanceBadges, { hasBalance } from '../components/Balance/BalanceBadges';
 import SimilarChannels from '../components/Similar/SimilarChannels';
+import NotFoundPage from './NotFoundPage';
 
 const ChannelDetailsPage = () => {
 	const { id } = useParams();
@@ -38,9 +39,11 @@ const ChannelDetailsPage = () => {
 	const [health, setHealth] = useState(null);
 	const [healthLoading, setHealthLoading] = useState(true);
 	const [loading, setLoading] = useState(true);
+	const [notFound, setNotFound] = useState(false);
 
 	useEffect(() => {
 		const fetchData = async () => {
+			setNotFound(false);
 			try {
 				const [channelRes, statsRes] = await Promise.all([
 					channelsAPI.getById(id),
@@ -50,7 +53,10 @@ const ChannelDetailsPage = () => {
 				setStats(Array.isArray(statsRes.data) ? statsRes.data : []);
 			} catch (err) {
 				console.error('Failed to load channel:', err);
-				navigate('/catalog');
+				// Missing / unpublished lot (or invalid id) → show the 404 page instead of redirecting
+				const st = err?.response?.status;
+				if (st === 404 || st === 422 || !(Number(id) > 0)) setNotFound(true);
+				else navigate('/catalog');
 			} finally {
 				setLoading(false);
 			}
@@ -98,6 +104,7 @@ const ChannelDetailsPage = () => {
 		);
 	}
 
+	if (notFound) return <NotFoundPage />;
 	if (!channel) return null;
 
 	const resources = channel.resources ? channel.resources.split(',').map(r => r.trim()).filter(Boolean) : [];
