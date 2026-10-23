@@ -226,6 +226,15 @@ export const adminAPI = {
 	updateChannel: (id, data) =>
 		api.put(`/admin/channels/${id}`, data),
 
+	unpublishChannel: (id, reason) =>
+		api.post(`/admin/channels/${id}/unpublish`, { reason }),
+
+	republishChannel: (id) =>
+		api.post(`/admin/channels/${id}/republish`),
+
+	setBuyerWarning: (id, buyer_warning) =>
+		api.put(`/admin/channels/${id}/buyer-warning`, { buyer_warning: buyer_warning || null }),
+
 	deleteChannel: (id) =>
 		api.delete(`/admin/channels/${id}`),
 

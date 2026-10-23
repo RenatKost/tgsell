@@ -111,6 +111,17 @@ const ChannelDetailsPage = () => {
 				<span className='text-gray-600 dark:text-gray-300 font-medium'>{channel.channel_name || 'Канал'}</span>
 			</div>
 
+			{/* Admin-set buyer warning (migration 0046) */}
+			{channel.buyer_warning && (
+				<div role='alert' className='mb-5 flex items-start gap-3 p-4 rounded-xl bg-amber-50 dark:bg-amber-900/20 border-2 border-amber-300 dark:border-amber-700'>
+					<span className='text-xl leading-none flex-shrink-0'>⚠️</span>
+					<div>
+						<p className='text-sm font-bold text-amber-800 dark:text-amber-300 mb-1'>Попередження для покупця</p>
+						<p className='text-sm text-amber-900 dark:text-amber-200 whitespace-pre-line break-words'>{channel.buyer_warning}</p>
+					</div>
+				</div>
+			)}
+
 			{/* Bundle banner */}
 			{channel.bundle_id && (
 				<div className='mb-5 flex items-center gap-3 p-3 rounded-xl bg-accent/10 border border-accent/30'>
