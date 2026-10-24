@@ -1,109 +1,118 @@
-import SocialLinks from '../components/SocialLinks';
-import { motion } from 'framer-motion';
+import { Send, Bot, Mail, Headphones, MessageCircle, Sparkles, ArrowUpRight } from 'lucide-react';
+import { SOCIAL_LINKS } from '../components/SocialLinks';
+import useReveal from '../hooks/useReveal';
+import './escrow.css';
+import './premium.css';
+import './contacts.css';
 
 const contacts = [
+  {
+    title: 'Підтримка 24/7',
+    label: '@tgsell_support_bot',
+    href: 'https://t.me/tgsell_support_bot',
+    hint: 'Питання користувачів, угоди, акаунт',
+    icon: Headphones,
+    color: '0, 255, 136',
+    main: true,
+  },
   {
     title: 'Канал біржі',
     label: '@tgsell_exchange',
     href: 'https://t.me/tgsell_exchange',
     hint: 'Новини та оголошення TgSell',
-    icon: 'tg',
+    icon: Send,
+    color: '34, 158, 217',
   },
   {
     title: 'Бот авторизації',
     label: '@tgsell_auth_bot',
     href: 'https://t.me/tgsell_auth_bot',
     hint: 'Вхід на платформу через Telegram',
-    icon: 'bot',
+    icon: Bot,
+    color: '139, 92, 246',
   },
   {
     title: 'Підтримка (email)',
     label: 'tgsell.support@gmail.com',
     href: 'mailto:tgsell.support@gmail.com',
     hint: 'Питання щодо угод і акаунту',
-    icon: 'email',
-  },
-  {
-    title: 'Підтримка 24/7',
-    label: '@tgsell_support_bot',
-    href: 'https://t.me/tgsell_support_bot',
-    hint: 'Питання користувачів, угоди, акаунт',
-    icon: 'admin',
+    icon: Mail,
+    color: '245, 158, 11',
   },
 ];
 
-const Icon = ({ type }) => {
-  const wrap = 'w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0';
-  if (type === 'email') {
-    return (
-      <span className={`${wrap} bg-gray-100 dark:bg-card-inner`}>
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-          <rect x="3" y="5" width="18" height="14" rx="2" stroke="#9ca3af" strokeWidth="1.5"/>
-          <path d="M3 7l9 6 9-6" stroke="#9ca3af" strokeWidth="1.5" strokeLinecap="round"/>
-        </svg>
-      </span>
-    );
-  }
-  if (type === 'ig') {
-    return (
-      <span className={`${wrap} bg-pink-500/10`}>
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-          <rect x="3" y="3" width="18" height="18" rx="5" stroke="#ec4899" strokeWidth="1.5"/>
-          <circle cx="12" cy="12" r="4" stroke="#ec4899" strokeWidth="1.5"/>
-          <circle cx="17.5" cy="6.5" r="1" fill="#ec4899"/>
-        </svg>
-      </span>
-    );
-  }
+const ext = (href) => (href.startsWith('mailto:') ? {} : { target: '_blank', rel: 'noopener noreferrer' });
+
+const ContactCard = ({ c, i }) => {
+  const Icon = c.icon;
   return (
-    <span className={`${wrap} bg-cyan-400/10`}>
-      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-        <path d="M21.8 3.4L2.7 11.2c-1.3.5-1.3 1.3-.2 1.6l4.8 1.5 11.1-7c.5-.3 1 0 .6.4L9.9 16.1v3.2c0 .9 1.1 1.2 1.6.6l2.3-2.2 4.5 3.3c.8.5 1.4.2 1.6-.7L22.7 4.6c.3-1.3-.4-1.8-1-1.2h.1z" fill="#22d3ee"/>
-      </svg>
-    </span>
+    <li className='esc-reveal' style={{ '--d': `${i * 80}ms` }}>
+      <a
+        href={c.href}
+        {...ext(c.href)}
+        className={`ctc-card esc-card esc-lift group flex h-full flex-col gap-4 p-5 sm:p-6 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60${c.main ? ' ctc-main prm-glow' : ''}`}
+        style={{ '--c': c.color }}
+      >
+        <div className='flex items-start gap-4'>
+          <span className='ctc-icon' aria-hidden='true'><Icon className='w-6 h-6' strokeWidth={1.9} /></span>
+          <div className='min-w-0 flex-1'>
+            <p className='flex flex-wrap items-center gap-2 text-xs font-bold uppercase tracking-widest text-gray-500 dark:text-gray-400'>
+              {c.title}
+              {c.main && <span className='ctc-pill'>24/7</span>}
+            </p>
+            <p className='mt-1 text-base sm:text-lg font-semibold text-gray-900 dark:text-white break-all'>{c.label}</p>
+            <p className='mt-1 text-sm text-gray-500 dark:text-gray-400'>{c.hint}</p>
+          </div>
+        </div>
+        <span className={`esc-btn-ghost mt-auto inline-flex items-center justify-center gap-2 self-start rounded-xl px-4 py-2.5 min-h-[44px] text-sm font-bold border ${c.main ? 'bg-accent text-black border-accent' : 'border-gray-300 dark:border-card-border text-gray-800 dark:text-gray-100 group-hover:border-accent/50'}`}>
+          <MessageCircle className='w-4 h-4' aria-hidden='true' />Написати<ArrowUpRight className='w-4 h-4 transition-transform group-hover:translate-x-0.5 group-hover:-translate-y-0.5' aria-hidden='true' />
+        </span>
+      </a>
+    </li>
   );
 };
 
-const ContactsPage = () => (
-  <motion.div
-    initial={{ opacity: 0, y: 20 }}
-    animate={{ opacity: 1, y: 0 }}
-    transition={{ duration: 0.4 }}
-    className="py-12 max-w-3xl mx-auto"
-  >
-    <div className="mb-10">
-      <span className="inline-block bg-cyan-400/10 border border-cyan-400/20 text-cyan-400 text-xs font-bold uppercase tracking-widest px-3 py-1 rounded-full mb-3">Звʼязок</span>
-      <h1 className="text-3xl font-black text-gray-900 dark:text-white mb-2">Контакти</h1>
-      <p className="text-sm text-gray-400">Офіційні канали звʼязку TgSell</p>
-    </div>
+const ContactsPage = () => {
+  useReveal();
+  return (
+    <main className='esc-page esc-bg-short relative overflow-x-clip'>
+      <div className='esc-bg' aria-hidden='true'><span className='esc-grid' /><span className='esc-blob esc-blob-1' /><span className='esc-blob esc-blob-2' /><span className='esc-blob esc-blob-3' /></div>
+      <div className='relative max-w-4xl mx-auto px-0 sm:px-4 pt-24 md:pt-32 pb-16 space-y-10 sm:space-y-12'>
+        <header className='text-center'>
+          <div className='esc-shield mx-auto mb-6' aria-hidden='true'>
+            <span className='esc-shield-ring' />
+            <MessageCircle className='relative w-10 h-10 sm:w-12 sm:h-12 text-accent' strokeWidth={1.75} />
+          </div>
+          <p data-qa='badge' className='inline-flex items-center gap-1.5 text-[11px] sm:text-xs uppercase tracking-[0.18em] text-accent/90 font-semibold mb-3'><Sparkles className='w-3.5 h-3.5' aria-hidden='true' />Звʼязок</p>
+          <h1 className='esc-title text-[2rem] leading-[1.1] sm:text-5xl font-extrabold tracking-tight'>Контакти</h1>
+          <p className='mt-4 text-[15px] sm:text-lg text-gray-600 dark:text-gray-400'>Офіційні канали звʼязку TgSell</p>
+        </header>
 
-    <div className="bg-white dark:bg-card rounded-2xl border border-gray-100 dark:border-card-border p-6 sm:p-8 shadow-sm dark:shadow-neon">
-      <ul className="space-y-3">
-        {contacts.map((c) => (
-          <li key={c.href}>
-            <a
-              href={c.href}
-              target={c.href.startsWith('mailto:') ? undefined : '_blank'}
-              rel={c.href.startsWith('mailto:') ? undefined : 'noopener noreferrer'}
-              className="flex items-center gap-4 p-4 rounded-xl border border-gray-100 dark:border-card-border hover:border-accent/40 hover:bg-accent/5 transition-all group"
-            >
-              <Icon type={c.icon} />
-              <div className="min-w-0 flex-1">
-                <p className="text-xs font-bold uppercase tracking-widest text-gray-400 mb-0.5">{c.title}</p>
-                <p className="text-sm font-semibold text-gray-900 dark:text-white group-hover:text-accent transition-colors truncate">{c.label}</p>
-                <p className="text-xs text-gray-500 mt-0.5">{c.hint}</p>
-              </div>
-              <span className="text-gray-300 group-hover:text-accent transition-colors text-lg flex-shrink-0">→</span>
-            </a>
-          </li>
-        ))}
-      </ul>
-    </div>
+        <ul className='grid gap-4 md:grid-cols-2'>
+          {contacts.map((c, i) => <ContactCard key={c.href} c={c} i={i} />)}
+        </ul>
 
-    <div className="mt-6 bg-white dark:bg-card rounded-2xl border border-gray-100 dark:border-card-border p-6 sm:p-8 shadow-sm dark:shadow-neon">
-      <SocialLinks title="Соцмережі та боти" />
-    </div>
-  </motion.div>
-);
+        <section className='esc-reveal' aria-labelledby='ctc-social'>
+          <div className='esc-card p-5 sm:p-6'>
+            <h2 id='ctc-social' className='text-xs font-black uppercase tracking-widest text-gray-500 dark:text-gray-400 mb-4'>Соцмережі та боти</h2>
+            <nav aria-label='Соцмережі TgSell' data-qa='social'>
+              <ul className='ctc-social grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2.5'>
+                {SOCIAL_LINKS.map((s) => (
+                  <li key={s.key}>
+                    <a href={s.href} target='_blank' rel='noopener noreferrer' aria-label={s.aria} title={s.aria}
+                      className={`ctc-tile group flex items-center justify-center gap-2 min-h-12 px-3 rounded-xl border focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60${s.main ? ' is-main' : ''}`}>
+                      <span className='flex-shrink-0'>{s.icon}</span>
+                      <span className='text-sm font-semibold whitespace-nowrap'>{s.label}</span>
+                    </a>
+                  </li>
+                ))}
+              </ul>
+            </nav>
+          </div>
+        </section>
+      </div>
+    </main>
+  );
+};
 
 export default ContactsPage;
