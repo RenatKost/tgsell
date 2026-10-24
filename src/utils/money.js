@@ -31,3 +31,14 @@ export const fmtUsdt = (v) => {
 // Shared price limit for all price inputs (mirrors backend MAX_PRICE_USDT).
 export const MAX_PRICE_USDT = 10_000_000;
 export const MAX_PRICE_HINT = `Максимальна ціна — ${groupInt(String(MAX_PRICE_USDT))} USDT`;
+
+// Приватна угода /escrow: власний ліміт бекенда (backend/app/services/external_escrow.py MAX_PRICE_USDT = 1 000 000).
+export const ESCROW_MAX_PRICE_USDT = 1_000_000;
+export const ESCROW_MAX_PRICE_HINT = `Максимальна ціна — ${groupInt(String(ESCROW_MAX_PRICE_USDT))} USDT`;
+
+// Сира сума для інструкцій оплати: 2 знаки, БЕЗ роздільників — безпечно копіювати у гаманець.
+export const rawUsdt = (v) => {
+	const n = Number(v);
+	if (v === null || v === undefined || Number.isNaN(n)) return '—';
+	return (Math.round((n + Number.EPSILON) * 100) / 100).toFixed(2);
+};

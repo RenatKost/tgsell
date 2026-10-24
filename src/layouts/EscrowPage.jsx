@@ -1,4 +1,4 @@
-import { fmtUsdt, MAX_PRICE_USDT, MAX_PRICE_HINT } from '../utils/money';
+import { fmtUsdt, ESCROW_MAX_PRICE_USDT, ESCROW_MAX_PRICE_HINT } from '../utils/money';
 import { useEffect, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { escrowAPI } from '../services/api';
@@ -114,7 +114,7 @@ const SellerForm = ({ meta, onCreated }) => {
 	const submit = async (e) => {
 		e.preventDefault();
 		if (price < meta.min_price_usdt) { setErr(`Мінімальна ціна — ${meta.min_price_usdt} USDT`); return; }
-		if (price > MAX_PRICE_USDT) { setErr(MAX_PRICE_HINT); return; }
+		if (price > ESCROW_MAX_PRICE_USDT) { setErr(ESCROW_MAX_PRICE_HINT); return; }
 		setBusy(true); setErr('');
 		try {
 			const r = await escrowAPI.create({ ...v, price_usdt: price });
@@ -138,7 +138,7 @@ const SellerForm = ({ meta, onCreated }) => {
 			<div className='grid grid-cols-1 sm:grid-cols-2 gap-3'>
 				<div><label htmlFor='esc-price' className='block text-xs text-gray-400 mb-1'>Ціна, USDT</label>
 					<div className='esc-field'><Coins className='esc-field-icon' aria-hidden='true' />
-					<input id='esc-price' type='number' min={meta.min_price_usdt} max={MAX_PRICE_USDT} title={MAX_PRICE_HINT} step='0.01' className={inputCls} value={v.price_usdt} onChange={set('price_usdt')} required /></div></div>
+					<input id='esc-price' type='number' min={meta.min_price_usdt} max={ESCROW_MAX_PRICE_USDT} title={ESCROW_MAX_PRICE_HINT} step='0.01' className={inputCls} value={v.price_usdt} onChange={set('price_usdt')} required /></div></div>
 				<div><label htmlFor='esc-buyer' className='block text-xs text-gray-400 mb-1'>@username покупця</label>
 					<div className='esc-field'><AtSign className='esc-field-icon' aria-hidden='true' />
 					<input id='esc-buyer' className={inputCls} placeholder='@buyer' value={v.buyer_username} onChange={set('buyer_username')} required /></div></div>

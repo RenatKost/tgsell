@@ -1,4 +1,4 @@
-import { fmtUsdt, fmtNum } from '../utils/money';
+import { fmtUsdt, fmtNum, rawUsdt } from '../utils/money';
 import DealChat from '../components/DealChat/DealChat';
 import { useEffect, useRef, useState } from 'react';
 import { useParams } from 'react-router-dom';
@@ -389,7 +389,7 @@ const DealPage = () => {
 				<div className='bg-white dark:bg-slate-800 rounded-2xl shadow-lg border border-gray-100 dark:border-slate-700 p-4 sm:p-6 mb-6'>
 					<h3 className='font-bold text-lg mb-2'>Оплата</h3>
 					<p className='text-gray-500 text-sm mb-5'>
-						Переведіть <strong className='text-gray-800 dark:text-white'>{fmtUsdt(deal.amount_usdt)} USDT</strong> через мережу <strong className='text-gray-800 dark:text-white'>TRC-20</strong>
+						Переведіть <strong className='text-gray-800 dark:text-white tabular-nums [overflow-wrap:anywhere]'>{rawUsdt(deal.amount_usdt)}</strong> <strong className='text-gray-800 dark:text-white'>USDT</strong> через мережу <strong className='text-gray-800 dark:text-white'>TRC-20</strong>
 					</p>
 					<div className='bg-blue-50 dark:bg-blue-900/20 border border-blue-200 rounded-xl p-4 mb-4'>
 						<div className='flex flex-col sm:flex-row sm:justify-between gap-0.5 text-sm mb-2 sm:mb-1'>
