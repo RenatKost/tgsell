@@ -212,7 +212,7 @@ const CabinetPage = () => {
 			</div>
 
 			{/* Tabs */}
-			<div className='flex gap-2 mb-6 border-b border-gray-200 dark:border-slate-700 overflow-x-auto'>
+			<div className='flex gap-2 mb-6 border-b border-gray-200 dark:border-slate-700 overflow-x-auto overflow-y-hidden no-scrollbar'>
 				{TABS.map(tab => (
 					<button
 						key={tab.value}

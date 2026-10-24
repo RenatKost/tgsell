@@ -38,8 +38,8 @@ const ChoiceCard = ({ imgSrc, imgAlt, title, desc, cta, onClick, color = 'teal' 
 	return (
 		<button
 			onClick={onClick}
-			className="group relative w-full rounded-2xl overflow-hidden flex flex-col text-left transition-all duration-300 bg-card"
-			style={{ aspectRatio: '1 / 1', border: c.border, boxShadow: c.boxShadow }}
+			className="group relative w-full rounded-2xl overflow-hidden flex flex-col text-left transition-all duration-300 bg-card sm:aspect-square"
+			style={{ border: c.border, boxShadow: c.boxShadow }}
 			onMouseEnter={e => { e.currentTarget.style.boxShadow = c.hoverShadow; }}
 			onMouseLeave={e => { e.currentTarget.style.boxShadow = c.boxShadow; }}
 		>
@@ -53,7 +53,7 @@ const ChoiceCard = ({ imgSrc, imgAlt, title, desc, cta, onClick, color = 'teal' 
 			/>
 
 			{/* Icon */}
-			<div className="absolute top-3 right-2 w-40 h-40">
+			<div className="absolute top-3 right-2 w-24 h-24 sm:w-40 sm:h-40">
 				<img
 					src={imgSrc}
 					alt={imgAlt}
@@ -63,7 +63,7 @@ const ChoiceCard = ({ imgSrc, imgAlt, title, desc, cta, onClick, color = 'teal' 
 			</div>
 
 			{/* Text + CTA anchored to bottom */}
-			<div className="relative z-10 mt-auto px-5 pb-5">
+			<div className="relative z-10 mt-auto px-5 pb-5 pt-24 sm:pt-0">
 				<h2 className="text-[1.15rem] font-black text-white mb-2 leading-snug">{title}</h2>
 				<p className="text-xs text-gray-400 leading-relaxed mb-5">{desc}</p>
 				<div
@@ -93,7 +93,7 @@ const SellPage = () => {
 	}
 
 	return (
-		<div className="min-h-screen text-white flex items-center">
+		<div className="md:min-h-screen text-white flex items-center">
 		<div className="w-full max-w-2xl mx-auto px-4" style={{ paddingTop: '7rem', paddingBottom: '5rem' }}>
 				{/* Heading */}
 				<div className="text-center mb-10">

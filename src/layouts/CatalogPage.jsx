@@ -524,10 +524,17 @@ const CatalogPage = () => {
 
 			{/* On mobile the channel grid comes first so cards are on the first screen; desktop order unchanged. */}
 			<div className='flex flex-col'>
-			<div className='order-2 md:order-1'>
+			{/* Mobile: bundles are rendered after the channel grid (cards first, by design) — give a visible shortcut. */}
+			{!bundlesLoading && bundles.length > 0 && (
+				<a href='#bundles' className='md:hidden order-1 mb-4 flex items-center justify-between rounded-xl border border-card-border bg-card px-4 py-3 text-sm font-semibold text-white'>
+					<span>📡 Сітки каналів · {bundles.length}</span>
+					<span className='text-accent'>Дивитись ↓</span>
+				</a>
+			)}
+			<div className='order-3 md:order-1'>
 			{/* Bundles section */}
 			{(bundlesLoading || bundles.length > 0) && (
-				<div className='mb-10'>
+				<div id='bundles' className='mb-10 scroll-mt-24'>
 					<div className='flex items-center gap-2 mb-4'>
 						<span className='text-accent text-xl'>📡</span>
 						<h2 className='font-black text-xl text-white uppercase tracking-tight'>Сітки каналів</h2>
@@ -548,7 +555,7 @@ const CatalogPage = () => {
 				</div>
 			)}
 			</div>
-			<div className='order-1 md:order-2 mb-10 md:mb-0'>
+			<div className='order-2 md:order-2 mb-10 md:mb-0'>
 			{/* Results count */}
 			{!loading && channels.length > 0 && (
 				<p className='text-gray-400 text-xs mb-4'>
