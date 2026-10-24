@@ -153,6 +153,7 @@ const SellerForm = ({ meta, onCreated }) => {
 					<span className='min-w-0 ml-auto text-right tabular-nums break-words'>{fmt(fee)}{'\u00A0'}USDT</span>
 				</div>
 			</div>
+			{price > ESCROW_MAX_PRICE_USDT && err !== ESCROW_MAX_PRICE_HINT && <p className='text-sm text-amber-500' role='alert'>{ESCROW_MAX_PRICE_HINT}</p>}
 			{err && <p className='text-sm text-red-500'>{err}</p>}
 			<button className={`${btn} w-full`} disabled={busy}><span className='relative z-[1]'>{busy ? 'Створюємо…' : 'Отримати посилання для покупця'}</span></button>
 		</form>

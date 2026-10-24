@@ -1,4 +1,5 @@
 import { Link } from 'react-router-dom';
+import { fmtNum } from '../../utils/money';
 import { formatEr, reliableEr } from '../../utils/er';
 
 function fmt(n) {
@@ -89,7 +90,7 @@ export default function BundleCard({ bundle }) {
       {/* Footer */}
       <div className="flex items-center justify-between pt-3 border-t border-card-border">
         <div>
-          <span className="text-xl font-black text-accent">{bundle.price}</span>
+          <span className="text-xl font-black text-accent">{fmtNum(bundle.price) || bundle.price}</span>
           <span className="text-sm text-gray-400 ml-1">USDT за всю сітку</span>
         </div>
         <span className="text-sm text-accent group-hover:underline">Переглянути →</span>
