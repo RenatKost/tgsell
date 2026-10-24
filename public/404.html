@@ -2,24 +2,97 @@
 <html lang="uk">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <meta name="theme-color" content="#060c0c" />
   <title>404 — TgSell</title>
   <style>
-    body { margin: 0; font-family: system-ui, -apple-system, sans-serif; background: #0f172a; color: #e2e8f0;
-      display: flex; min-height: 100vh; align-items: center; justify-content: center; text-align: center; padding: 1.5rem; }
-    h1 { font-size: 4rem; margin: 0; color: #334155; letter-spacing: -0.05em; }
-    h2 { margin: 0.5rem 0; font-size: 1.5rem; }
-    p { color: #94a3b8; margin: 0 0 1.5rem; }
-    a { color: #00FF88; text-decoration: none; font-weight: 600; }
-    a:hover { text-decoration: underline; }
+    /* Самодостатня сторінка: без бандла Vite і без зовнішніх шрифтів. Стиль — як NotFoundPage.jsx / escrow.css */
+    :root { --a: #00ff88; --a-rgb: 0, 255, 136; --t-rgb: 20, 184, 166; }
+    *, *::before, *::after { box-sizing: border-box; }
+    html, body { margin: 0; min-height: 100%; background: #060c0c; color: #e5e7eb; overflow-x: hidden; }
+    body {
+      font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+      min-height: 100vh; min-height: 100dvh; display: flex; align-items: center; justify-content: center;
+      padding: max(1.25rem, env(safe-area-inset-top)) max(1rem, env(safe-area-inset-right)) max(1.25rem, env(safe-area-inset-bottom)) max(1rem, env(safe-area-inset-left));
+      -webkit-font-smoothing: antialiased;
+    }
+    /* Фон на весь viewport */
+    .bg { position: fixed; inset: 0; height: 100vh; height: 100lvh; overflow: hidden; pointer-events: none; z-index: 0; }
+    .grid {
+      position: absolute; inset: -44px -1px -1px;
+      background-image: linear-gradient(rgba(var(--a-rgb), .07) 1px, transparent 1px), linear-gradient(90deg, rgba(var(--a-rgb), .07) 1px, transparent 1px);
+      background-size: 44px 44px;
+      -webkit-mask-image: radial-gradient(ellipse 85% 65% at 50% 35%, #000 30%, transparent 78%);
+      mask-image: radial-gradient(ellipse 85% 65% at 50% 35%, #000 30%, transparent 78%);
+      animation: pan 24s linear infinite;
+    }
+    .blob { position: absolute; border-radius: 9999px; filter: blur(70px); opacity: .38; will-change: transform; }
+    .b1 { width: 420px; height: 420px; top: 4%; left: 50%; margin-left: -380px; background: radial-gradient(circle, rgba(var(--a-rgb), .45), transparent 65%); animation: fa 18s ease-in-out infinite; }
+    .b2 { width: 360px; height: 360px; top: 30%; left: 50%; margin-left: 20px; background: radial-gradient(circle, rgba(var(--t-rgb), .45), transparent 65%); animation: fb 22s ease-in-out infinite; }
+    @keyframes pan { to { transform: translateY(44px); } }
+    @keyframes fa { 0%,100% { transform: translate3d(0,0,0) scale(1); } 50% { transform: translate3d(60px,40px,0) scale(1.08); } }
+    @keyframes fb { 0%,100% { transform: translate3d(0,0,0) scale(1); } 50% { transform: translate3d(-50px,30px,0) scale(.94); } }
+
+    /* Glass-картка */
+    .card {
+      position: relative; z-index: 1; width: 100%; max-width: 480px; text-align: center;
+      padding: 2rem 1.5rem 1.75rem; border-radius: 1.5rem;
+      background: linear-gradient(160deg, rgba(16, 30, 30, .78), rgba(8, 14, 14, .9));
+      border: 1px solid #1a3a2a;
+      box-shadow: 0 0 0 1px rgba(var(--a-rgb), .06), 0 24px 70px -24px rgba(var(--a-rgb), .35);
+      -webkit-backdrop-filter: blur(12px); backdrop-filter: blur(12px);
+      animation: in .5s ease both;
+    }
+    @keyframes in { from { opacity: 0; transform: translateY(14px); } to { opacity: 1; transform: none; } }
+    .logo { display: inline-flex; align-items: center; gap: .6rem; color: #fff; text-decoration: none; font-weight: 800; font-size: 1.125rem; letter-spacing: -.01em; margin-bottom: 1.25rem; }
+    .code {
+      margin: 0; font-size: clamp(5rem, 24vw, 7.5rem); line-height: 1; font-weight: 900; letter-spacing: -.06em;
+      background: linear-gradient(100deg, #ffffff 0%, #b8ffe0 35%, var(--a) 60%, #2dd4bf 100%);
+      -webkit-background-clip: text; background-clip: text; color: transparent;
+      filter: drop-shadow(0 0 28px rgba(var(--a-rgb), .25));
+    }
+    h1 { margin: .75rem 0 .5rem; font-size: 1.5rem; font-weight: 800; color: #fff; }
+    p { margin: 0 auto 1.75rem; max-width: 22rem; font-size: .9375rem; line-height: 1.55; color: #9ca3af; }
+    .actions { display: flex; flex-wrap: wrap; gap: .75rem; justify-content: center; }
+    .btn {
+      position: relative; overflow: hidden; display: inline-flex; align-items: center; justify-content: center;
+      min-height: 46px; padding: 0 1.4rem; border-radius: .85rem; font-weight: 700; font-size: .9375rem; text-decoration: none;
+      transition: transform .2s, box-shadow .25s, border-color .2s, color .2s;
+    }
+    .btn:focus-visible { outline: 2px solid var(--a); outline-offset: 2px; }
+    .primary { color: #001a0d; background: var(--a); box-shadow: 0 0 26px rgba(var(--a-rgb), .45); }
+    .primary:hover { transform: translateY(-1px); box-shadow: 0 0 38px rgba(var(--a-rgb), .65); }
+    .primary::after {
+      content: ""; position: absolute; top: 0; bottom: 0; left: 0; width: 40%;
+      background: linear-gradient(90deg, transparent, rgba(255,255,255,.55), transparent);
+      transform: translateX(-160%) skewX(-20deg); animation: shimmer 3.8s ease-in-out infinite;
+    }
+    @keyframes shimmer { 0%, 60% { transform: translateX(-160%) skewX(-20deg); } 100% { transform: translateX(300%) skewX(-20deg); } }
+    .ghost { color: #e5e7eb; border: 1px solid #1a3a2a; background: rgba(13, 23, 23, .6); }
+    .ghost:hover { color: var(--a); border-color: rgba(var(--a-rgb), .45); transform: translateY(-1px); box-shadow: 0 0 20px rgba(var(--a-rgb), .2); }
+    @media (min-width: 640px) { .card { padding: 2.5rem 2.5rem 2.25rem; } }
+    @media (max-width: 640px), (hover: none) { .blob { filter: blur(48px); } .card { -webkit-backdrop-filter: none; backdrop-filter: none; } }
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after { animation: none !important; transition: none !important; }
+      .primary::after { display: none; }
+    }
   </style>
 </head>
 <body>
-  <div>
-    <h1>404</h1>
-    <h2>Сторінку не знайдено</h2>
-    <p>Такої адреси на TgSell немає.</p>
-    <a href="/">На головну</a>
-  </div>
+  <div class="bg" aria-hidden="true"><span class="grid"></span><span class="blob b1"></span><span class="blob b2"></span></div>
+  <main class="card">
+    <a class="logo" href="/" aria-label="TgSell — на головну">
+      <svg width="32" height="32" viewBox="0 0 32 32" fill="none" aria-hidden="true"><rect width="32" height="32" rx="8" fill="#00FF88" fill-opacity=".12"/><path d="M8 22l6-12 4 8 3-5 3 9" stroke="#00FF88" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      TgSell
+    </a>
+    <p class="code" aria-hidden="true">404</p>
+    <h1>Сторінку не знайдено</h1>
+    <p>Такої адреси на TgSell немає. Перевірте URL або поверніться на головну.</p>
+    <nav class="actions" aria-label="Навігація">
+      <a class="btn primary" href="/">На головну</a>
+      <a class="btn ghost" href="/catalog">Каталог</a>
+      <a class="btn ghost" href="/contacts">Контакти</a>
+    </nav>
+  </main>
 </body>
 </html>
