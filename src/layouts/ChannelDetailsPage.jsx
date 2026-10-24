@@ -19,6 +19,9 @@ import { QualityBlock } from '../components/Quality/QualityBadge';
 import BalanceBadges, { hasBalance } from '../components/Balance/BalanceBadges';
 import SimilarChannels from '../components/Similar/SimilarChannels';
 import NotFoundPage from './NotFoundPage';
+import useReveal from '../hooks/useReveal';
+import './escrow.css';
+import './premium.css';
 
 const ChannelDetailsPage = () => {
 	const { id } = useParams();
@@ -33,6 +36,7 @@ const ChannelDetailsPage = () => {
 		}
 	}, [id, searchParams, setSearchParams]);
 	const navigate = useNavigate();
+	useReveal();
 	const { isAuthenticated } = useAuth();
 	const [channel, setChannel] = useState(null);
 	const [stats, setStats] = useState([]);
@@ -110,7 +114,8 @@ const ChannelDetailsPage = () => {
 	const resources = channel.resources ? channel.resources.split(',').map(r => r.trim()).filter(Boolean) : [];
 
 	return (
-		<section className='pt-28 pb-8'>
+		<section className='esc-page chd-page relative overflow-x-clip pt-28 pb-8'>
+			<div className='esc-bg esc-bg-short' aria-hidden='true'><span className='esc-grid' /><span className='esc-blob esc-blob-1' /><span className='esc-blob esc-blob-2' /></div>
 			{/* Breadcrumb */}
 			<div className='flex items-center gap-1.5 text-xs mb-5 px-0.5'>
 				<NavLink to='/catalog' className='text-gray-400 dark:text-gray-500 hover:text-accent transition-colors'>Каталог</NavLink>
@@ -147,7 +152,7 @@ const ChannelDetailsPage = () => {
 			<div className='grid grid-cols-1 lg:grid-cols-[380px_1fr] gap-4 items-start'>
 
 				{/* LEFT SIDEBAR: DetailsCard → Comment → Resources → ChannelHealth */}
-				<div className='flex flex-col gap-4'>
+				<div className='esc-reveal flex flex-col gap-4'>
 					<DetailsCard channel={channel} onBuy={handleBuy} onAuction={handleGoAuction} stats={stats} />
 					{hasBalance(channel) && (
 						<div className='bg-white dark:bg-card rounded-2xl border border-gray-100 dark:border-card-border p-4'>
@@ -191,7 +196,7 @@ const ChannelDetailsPage = () => {
 				</div>
 
 				{/* RIGHT CONTENT: charts + AI Analysis stacked */}
-				<div className='flex flex-col gap-4'>
+				<div className='esc-reveal flex flex-col gap-4' style={{ '--d': '80ms' }}>
 					{/* Charts row 1: Subscribers + Views */}
 					<div className='grid grid-cols-1 md:grid-cols-2 gap-4'>
 						<Subscribers stats={stats} current={channel.subscribers_count} />
@@ -216,7 +221,7 @@ const ChannelDetailsPage = () => {
 			</div>
 
 			{/* Posts full width */}
-			<div className='mt-4'>
+			<div className='esc-reveal mt-4'>
 				<PostsList channelId={channel.id} />
 			</div>
 
