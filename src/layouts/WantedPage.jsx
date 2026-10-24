@@ -1,3 +1,4 @@
+import { MAX_PRICE_USDT, MAX_PRICE_HINT } from '../utils/money';
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { wantedAPI } from '../services/api';
@@ -41,6 +42,7 @@ const WantedForm = ({ onDone, onCancel }) => {
 		e.preventDefault();
 		if (!v.category) { setErr('Оберіть тематику'); return; }
 		if (v.budget_max === '') { setErr('Вкажіть бюджет «до»'); return; }
+		if (Number(v.budget_max) > MAX_PRICE_USDT || Number(v.budget_min || 0) > MAX_PRICE_USDT) { setErr(MAX_PRICE_HINT); return; }
 		setBusy(true); setErr('');
 		try {
 			await wantedAPI.create({
@@ -69,8 +71,8 @@ const WantedForm = ({ onDone, onCancel }) => {
 			<div className='grid grid-cols-2 gap-3'>
 				<div><label className='block text-xs text-gray-400 mb-1'>Підписники від</label><input type='number' min='0' className={inputCls} value={v.subs_min} onChange={set('subs_min')} /></div>
 				<div><label className='block text-xs text-gray-400 mb-1'>Підписники до</label><input type='number' min='0' className={inputCls} value={v.subs_max} onChange={set('subs_max')} /></div>
-				<div><label className='block text-xs text-gray-400 mb-1'>Бюджет від, USDT</label><input type='number' min='0' step='any' className={inputCls} value={v.budget_min} onChange={set('budget_min')} /></div>
-				<div><label className='block text-xs text-gray-400 mb-1'>Бюджет до, USDT</label><input type='number' min='0' step='any' className={inputCls} value={v.budget_max} onChange={set('budget_max')} /></div>
+				<div><label className='block text-xs text-gray-400 mb-1'>Бюджет від, USDT</label><input type='number' min='0' step='any' className={inputCls} max={MAX_PRICE_USDT} title={MAX_PRICE_HINT} value={v.budget_min} onChange={set('budget_min')} /></div>
+				<div><label className='block text-xs text-gray-400 mb-1'>Бюджет до, USDT</label><input type='number' min='0' step='any' className={inputCls} max={MAX_PRICE_USDT} title={MAX_PRICE_HINT} value={v.budget_max} onChange={set('budget_max')} /></div>
 			</div>
 			<div>
 				<label className='block text-xs text-gray-400 mb-1'>Мова/гео аудиторії</label>

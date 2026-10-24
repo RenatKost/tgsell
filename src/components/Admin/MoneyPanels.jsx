@@ -1,9 +1,10 @@
+import { fmtNum } from '../../utils/money';
 import { useEffect, useState } from 'react';
 import { QRCodeSVG } from 'qrcode.react';
 import { adminAPI } from '../../services/api';
 
 const err = (e) => e?.response?.data?.detail || e?.message || 'Помилка';
-const fmt = (v, d = 2) => (v === null || v === undefined ? '—' : Number(v).toFixed(d));
+const fmt = (v, d = 2) => (v === null || v === undefined ? '—' : fmtNum(Number(v), { min: d, max: d, dec: '.' }));
 const when = (iso) => (iso ? new Date(iso).toLocaleString() : '—');
 const card = 'bg-white dark:bg-slate-800 rounded-2xl border border-gray-100 dark:border-slate-700 p-5 text-sm text-gray-700 dark:text-gray-300';
 const short = (h) => (h ? `${h.slice(0, 8)}…${h.slice(-6)}` : '—');

@@ -1,3 +1,4 @@
+import { fmtNum } from '../../utils/money';
 import { useEffect, useState } from 'react';
 import { channelsAPI } from '../../services/api';
 
@@ -13,7 +14,7 @@ const formatNum = (n) => {
 	if (n == null) return '—';
 	if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
 	if (n >= 1_000) return `${(n / 1_000).toFixed(1)}K`;
-	return n.toLocaleString('uk-UA');
+	return fmtNum(n);
 };
 
 const formatDate = (iso) => {

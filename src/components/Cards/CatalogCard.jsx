@@ -1,3 +1,4 @@
+import { fmtNum } from '../../utils/money';
 import { faHeart } from '@fortawesome/free-solid-svg-icons';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { useState } from 'react';
@@ -98,7 +99,7 @@ const CatalogCard = ({ channel }) => {
 							{channel.channel_name || 'Без назви'}
 						</h5>
 						<p className='text-gray-400 dark:text-gray-500 text-[11px] mt-0.5'>
-							{channel.subscribers_count?.toLocaleString('uk-UA') || '0'} підписників
+							{fmtNum(channel.subscribers_count) || '0'} підписників
 						</p>
 					</div>
 					<button
@@ -164,7 +165,7 @@ const CatalogCard = ({ channel }) => {
 						<p className='font-bold text-sm text-gray-800 dark:text-gray-100'>
 							{channel.views_hidden
 								? <span className='text-amber-500 text-xs font-medium'>🔒 Приховані</span>
-								: (channel.avg_views?.toLocaleString('uk-UA') || '—')}
+								: (fmtNum(channel.avg_views) || '—')}
 						</p>
 					</div>
 					<div className='border-l-2 border-emerald-400 bg-gray-50 dark:bg-card-inner rounded-r-lg pl-3 pr-2 py-2'>
@@ -180,7 +181,7 @@ const CatalogCard = ({ channel }) => {
 					<div className='border-l-2 border-violet-400 bg-gray-50 dark:bg-card-inner rounded-r-lg pl-3 pr-2 py-2'>
 						<p className='text-gray-400 text-[10px]'>Прибуток / міс.</p>
 						<p className='font-bold text-sm text-gray-800 dark:text-gray-100'>
-							{channel.monthly_income ? `${channel.monthly_income.toLocaleString('uk-UA')} USDT` : '—'}
+							{channel.monthly_income ? `${fmtNum(channel.monthly_income)} USDT` : '—'}
 						</p>
 					</div>
 				</div>
@@ -202,7 +203,7 @@ const CatalogCard = ({ channel }) => {
 											<path strokeLinecap='round' strokeLinejoin='round' d='M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z' />
 										</svg>
 									</div>
-									<span className='text-[11px] font-semibold text-blue-700 dark:text-blue-300'>{channel.total_posts.toLocaleString('uk-UA')}</span>
+									<span className='text-[11px] font-semibold text-blue-700 dark:text-blue-300'>{fmtNum(channel.total_posts)}</span>
 								</div>
 							</Tooltip>
 						)}
@@ -238,7 +239,7 @@ const CatalogCard = ({ channel }) => {
 											<path strokeLinecap='round' strokeLinejoin='round' d='M13 7l5 5m0 0l-5 5m5-5H6' />
 										</svg>
 									</div>
-									<span className='text-[11px] font-semibold text-teal-700 dark:text-teal-300'>{channel.avg_forwards.toLocaleString('uk-UA')}</span>
+									<span className='text-[11px] font-semibold text-teal-700 dark:text-teal-300'>{fmtNum(channel.avg_forwards)}</span>
 								</div>
 							</Tooltip>
 						)}
@@ -250,7 +251,7 @@ const CatalogCard = ({ channel }) => {
 											<path strokeLinecap='round' strokeLinejoin='round' d='M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z' />
 										</svg>
 									</div>
-									<span className='text-[11px] font-semibold text-pink-700 dark:text-pink-300'>{channel.avg_reactions.toLocaleString('uk-UA')}</span>
+									<span className='text-[11px] font-semibold text-pink-700 dark:text-pink-300'>{fmtNum(channel.avg_reactions)}</span>
 								</div>
 							</Tooltip>
 						)}
@@ -286,8 +287,8 @@ const CatalogCard = ({ channel }) => {
 						<p className='text-gray-400 text-[10px]'>Ціна</p>
 						<p className='font-extrabold text-lg text-gray-900 dark:text-white leading-none'>
 							{channel.bundle_id
-								? <><span>{channel.price?.toLocaleString('uk-UA') || '—'}</span><span className='text-xs font-semibold text-gray-400 ml-1'>USDT за сітку</span></>
-								: <>{channel.price?.toLocaleString('uk-UA') || '—'}<span className='text-xs font-semibold text-gray-400 ml-1'>USDT</span></>
+								? <><span>{fmtNum(channel.price) || '—'}</span><span className='text-xs font-semibold text-gray-400 ml-1'>USDT за сітку</span></>
+								: <>{fmtNum(channel.price) || '—'}<span className='text-xs font-semibold text-gray-400 ml-1'>USDT</span></>
 							}
 						</p>
 					</div>

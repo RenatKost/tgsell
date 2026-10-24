@@ -1,3 +1,4 @@
+import { fmtNum } from '../utils/money';
 import { trackEvent } from '../utils/tracking';
 import { useEffect, useState, useRef, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -30,7 +31,7 @@ const PriceRangeSlider = ({ min = 0, max = 50000, value, onChange }) => {
 
 	return (
 		<div className='flex items-center gap-2 min-w-[160px]'>
-			<span className='text-[10px] text-gray-400 whitespace-nowrap'>{lo.toLocaleString()}</span>
+			<span className='text-[10px] text-gray-400 whitespace-nowrap'>{fmtNum(lo)}</span>
 			<div className='relative flex-1 h-4' ref={trackRef}>
 				<div className='absolute top-1/2 -translate-y-1/2 left-0 right-0 h-1.5 rounded-full bg-card-inner dark:bg-card-inner' />
 				<div
@@ -46,7 +47,7 @@ const PriceRangeSlider = ({ min = 0, max = 50000, value, onChange }) => {
 					className='absolute w-full top-1/2 -translate-y-1/2 appearance-none bg-transparent pointer-events-none [&::-webkit-slider-thumb]:pointer-events-auto [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-3.5 [&::-webkit-slider-thumb]:h-3.5 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-accent [&::-webkit-slider-thumb]:border-2 [&::-webkit-slider-thumb]:border-page [&::-webkit-slider-thumb]:cursor-pointer [&::-moz-range-thumb]:pointer-events-auto [&::-moz-range-thumb]:w-3.5 [&::-moz-range-thumb]:h-3.5 [&::-moz-range-thumb]:rounded-full [&::-moz-range-thumb]:bg-accent [&::-moz-range-thumb]:border-2 [&::-moz-range-thumb]:border-page [&::-moz-range-thumb]:cursor-pointer'
 				/>
 			</div>
-			<span className='text-[10px] text-gray-400 whitespace-nowrap'>{hi >= max ? '∞' : hi.toLocaleString()}</span>
+			<span className='text-[10px] text-gray-400 whitespace-nowrap'>{hi >= max ? '∞' : fmtNum(hi)}</span>
 		</div>
 	);
 };
@@ -514,7 +515,7 @@ const CatalogPage = () => {
 						{ppsBucket && <span className='text-xs bg-accent/10 text-accent px-2 py-0.5 rounded-full'>{PPS_BUCKETS.find(b => b.value === ppsBucket)?.label}</span>}
 						{(priceRange[0] > 0 || priceRange[1] < PRICE_MAX) && (
 							<span className='text-xs bg-accent/10 text-accent px-2 py-0.5 rounded-full'>
-								{priceRange[0].toLocaleString()}–{priceRange[1] >= PRICE_MAX ? '∞' : priceRange[1].toLocaleString()} USDT
+								{fmtNum(priceRange[0])}–{priceRange[1] >= PRICE_MAX ? '∞' : fmtNum(priceRange[1])} USDT
 							</span>
 						)}
 						<button

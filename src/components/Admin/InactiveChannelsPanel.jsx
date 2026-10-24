@@ -1,3 +1,4 @@
+import { fmtNum } from '../../utils/money';
 import { useEffect, useState } from 'react';
 import { adminAPI } from '../../services/api';
 
@@ -43,7 +44,7 @@ const InactiveChannelsPanel = () => {
 								<td className='p-3'>
 									<div className='font-semibold'>#{c.id} {c.channel_name}</div>
 									<a href={c.telegram_link} target='_blank' rel='noreferrer' className='text-xs text-[#3498db] break-all'>{c.telegram_link}</a>
-									<div className='text-xs text-gray-400'>{c.status} · {c.price} USDT</div>
+									<div className='text-xs text-gray-400'>{c.status} · {fmtNum(c.price)} USDT</div>
 								</td>
 								<td className='p-3 text-xs break-all max-w-xs'>{c.reason || '—'}</td>
 								<td className='p-3 whitespace-nowrap'>{fmt(c.inactive_since)}</td>

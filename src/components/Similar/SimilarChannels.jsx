@@ -1,9 +1,10 @@
+import { fmtNum } from '../../utils/money';
 // Task 24: «Схожі канали» block on the channel page.
 import { useEffect, useState } from 'react';
 import { NavLink } from 'react-router-dom';
 import { similarAPI } from '../../services/api';
 
-const fmt = (n) => (n == null ? '—' : Number(n).toLocaleString('uk-UA'));
+const fmt = (n) => (n == null ? '—' : fmtNum(Number(n)));
 
 const SimilarChannels = ({ channelId }) => {
 	const [items, setItems] = useState([]);

@@ -1,4 +1,4 @@
-import { fmtUsdt } from '../utils/money';
+import { fmtUsdt, fmtNum, rawUsdt } from '../utils/money';
 import DealChat from '../components/DealChat/DealChat';
 import { useEffect, useRef, useState } from 'react';
 import { useParams } from 'react-router-dom';
@@ -228,7 +228,7 @@ const DealPage = () => {
 			<div className='bg-gradient-to-br from-[#3498db] to-[#1a6fb5] rounded-2xl p-4 sm:p-6 mb-6 text-white shadow-lg overflow-hidden relative'>
 				<div className='absolute top-0 right-0 w-40 h-40 bg-white/5 rounded-full -mr-10 -mt-10' />
 				<div className='absolute bottom-0 left-0 w-24 h-24 bg-white/5 rounded-full -ml-6 -mb-6' />
-				<div className='relative flex items-center gap-3 sm:gap-5 min-w-0'>
+				<div className='relative flex flex-wrap items-center gap-3 sm:gap-5 min-w-0'>
 					{deal.channel_avatar_url ? (
 						<img
 							src={deal.channel_avatar_url}
@@ -242,7 +242,7 @@ const DealPage = () => {
 							</svg>
 						</div>
 					)}
-					<div className='flex-1 min-w-0'>
+					<div className='flex-1 min-w-0 basis-[11rem]'>
 						<p className='text-blue-200 text-xs font-medium uppercase tracking-wider mb-1'>
 							{isBuyer ? 'Ви купуєте' : 'Ви продаєте'}
 						</p>
@@ -253,8 +253,8 @@ const DealPage = () => {
 							{isBuyer ? deal.seller_name || 'Продавець' : deal.buyer_name || 'Покупець'} · {new Date(deal.created_at).toLocaleDateString('uk-UA')}
 						</p>
 					</div>
-					<div className='text-right flex-shrink-0'>
-						<p className='text-2xl sm:text-3xl md:text-4xl font-extrabold tracking-tight'>{fmtUsdt(deal.amount_usdt)}</p>
+					<div className='text-right min-w-0 max-w-full ml-auto'>
+						<p className='num-fluid font-extrabold tracking-tight tabular-nums break-words' style={{ '--num-min': '1.25rem', '--num-vw': '6vw', '--num-max': '2.25rem' }}>{fmtUsdt(deal.amount_usdt)}</p>
 						<p className='text-blue-200 text-xs font-semibold uppercase tracking-wider mt-0.5'>USDT</p>
 					</div>
 				</div>
@@ -349,7 +349,7 @@ const DealPage = () => {
 			{['created', 'payment_pending'].includes(deal.status) && deal.received_usdt > 0 && deal.received_usdt < deal.amount_usdt && (
 				<div className='bg-orange-50 dark:bg-orange-900/20 border border-orange-200 rounded-2xl p-5 mb-6'>
 					<p className='font-semibold text-orange-800 dark:text-orange-200'>
-						Отримано {deal.received_usdt} з {fmtUsdt(deal.amount_usdt)} USDT, доплатіть {(Math.round((deal.amount_usdt - deal.received_usdt) * 1e6) / 1e6)} USDT
+						Отримано {fmtNum(deal.received_usdt, { max: 6, dec: '.' })} з {fmtUsdt(deal.amount_usdt)} USDT, доплатіть {fmtNum(Math.round((deal.amount_usdt - deal.received_usdt) * 1e6) / 1e6, { max: 6, dec: '.' })} USDT
 					</p>
 					<p className='text-xs text-orange-700 dark:text-orange-300 mt-1'>
 						⚠️ Біржа або гаманець можуть утримати комісію за виведення — надсилайте так, щоб на escrow надійшла повна сума.
@@ -389,7 +389,7 @@ const DealPage = () => {
 				<div className='bg-white dark:bg-slate-800 rounded-2xl shadow-lg border border-gray-100 dark:border-slate-700 p-4 sm:p-6 mb-6'>
 					<h3 className='font-bold text-lg mb-2'>Оплата</h3>
 					<p className='text-gray-500 text-sm mb-5'>
-						Переведіть <strong className='text-gray-800 dark:text-white'>{fmtUsdt(deal.amount_usdt)} USDT</strong> через мережу <strong className='text-gray-800 dark:text-white'>TRC-20</strong>
+						Переведіть <strong className='text-gray-800 dark:text-white tabular-nums [overflow-wrap:anywhere]'>{rawUsdt(deal.amount_usdt)}</strong> <strong className='text-gray-800 dark:text-white'>USDT</strong> через мережу <strong className='text-gray-800 dark:text-white'>TRC-20</strong>
 					</p>
 					<div className='bg-blue-50 dark:bg-blue-900/20 border border-blue-200 rounded-xl p-4 mb-4'>
 						<div className='flex flex-col sm:flex-row sm:justify-between gap-0.5 text-sm mb-2 sm:mb-1'>

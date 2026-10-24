@@ -1,3 +1,4 @@
+import { fmtNum, MAX_PRICE_USDT, MAX_PRICE_HINT } from '../../utils/money';
 import { useState, useEffect } from 'react';
 import { auctionsAPI } from '../../services/api';
 import { useAuth } from '../../context/AppContext';
@@ -31,6 +32,7 @@ const BidModal = ({ auction, onClose, onSuccess }) => {
 			setError(`Мінімальна ставка: ${minBid} USDT`);
 			return;
 		}
+		if (val > MAX_PRICE_USDT) { setError(MAX_PRICE_HINT); return; }
 		setError('');
 		setLoading(true);
 		try {
@@ -38,7 +40,7 @@ const BidModal = ({ auction, onClose, onSuccess }) => {
 			setVisible(false);
 			setTimeout(onSuccess, 250);
 		} catch (err) {
-			setError(err.response?.data?.detail || 'Помилка ставки');
+			setError(typeof err.response?.data?.detail === 'string' ? err.response.data.detail : 'Помилка ставки');
 		} finally {
 			setLoading(false);
 		}
@@ -76,13 +78,13 @@ const BidModal = ({ auction, onClose, onSuccess }) => {
 						<div>
 							<div className='text-xs text-gray-500 dark:text-gray-400'>Поточна ціна</div>
 							<div className='text-xl font-bold text-gray-900 dark:text-white'>
-								{auction.current_price.toLocaleString()} USDT
+								{fmtNum(auction.current_price)} USDT
 							</div>
 						</div>
 						<div className='text-right'>
 							<div className='text-xs text-gray-500 dark:text-gray-400'>Мін. ставка</div>
 							<div className='text-xl font-bold text-orange-500'>
-								{minBid.toLocaleString()} USDT
+								{fmtNum(minBid)} USDT
 							</div>
 						</div>
 					</div>
@@ -114,6 +116,8 @@ const BidModal = ({ auction, onClose, onSuccess }) => {
 							className='w-full border border-gray-200 dark:border-slate-600 rounded-xl px-4 py-3.5 text-lg font-semibold bg-gray-50/50 dark:bg-slate-700/50 dark:text-white focus:border-orange-400 focus:ring-4 focus:ring-orange-50 dark:focus:ring-orange-900/30 transition-all'
 							placeholder={String(minBid)}
 							min={minBid}
+							max={MAX_PRICE_USDT}
+							title={MAX_PRICE_HINT}
 							step={auction.bid_step}
 						/>
 						<span className='absolute right-4 top-1/2 -translate-y-1/2 text-sm font-medium text-gray-400'>

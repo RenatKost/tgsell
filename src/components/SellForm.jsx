@@ -1,3 +1,4 @@
+import { MAX_PRICE_USDT, MAX_PRICE_HINT, fmtNum } from '../utils/money';
 import { useFormik } from 'formik';
 import { useState, useEffect } from 'react';
 import * as Yup from 'yup';
@@ -55,7 +56,7 @@ const SuccessModal = ({ onClose, onCabinet, listingType, channel }) => {
 									className='min-w-0 flex sm:flex-col items-center sm:items-stretch gap-3 sm:gap-1 p-3 rounded-xl border border-card-border bg-card hover:border-accent transition-colors text-left min-h-[44px]'>
 									<span className='text-xl'>{SERVICE_ICON[i.kind]}</span>
 									<span className='flex-1 min-w-0 text-sm font-semibold text-white leading-snug break-words [overflow-wrap:anywhere]'>{i.title}</span>
-									<span className='text-sm font-bold text-accent tabular-nums whitespace-nowrap'>{i.price_usdt} USDT</span>
+									<span className='text-sm font-bold text-accent tabular-nums whitespace-nowrap'>{fmtNum(i.price_usdt)} USDT</span>
 								</button>
 							))}
 						</div>
@@ -151,10 +152,12 @@ const SellForm = ({ onBack, wantedId = null }) => {
 			price: Yup.number()
 				.typeError('Введіть число')
 				.positive('Ціна повинна бути більше 0')
+				.max(MAX_PRICE_USDT, MAX_PRICE_HINT)
 				.required('Поле обов\'язкове для заповнення'),
 			auction_start_price: Yup.number()
 				.typeError('Введіть число')
 				.positive('Ціна повинна бути більше 0')
+				.max(MAX_PRICE_USDT, MAX_PRICE_HINT)
 				.when('listing_type', {
 					is: (val) => val === 'auction' || val === 'both',
 					then: (schema) => schema.required('Вкажіть стартову ціну'),
@@ -162,6 +165,7 @@ const SellForm = ({ onBack, wantedId = null }) => {
 			auction_bid_step: Yup.number()
 				.typeError('Введіть число')
 				.positive('Крок повинен бути більше 0')
+				.max(MAX_PRICE_USDT, MAX_PRICE_HINT)
 				.when('listing_type', {
 					is: (val) => val === 'auction' || val === 'both',
 					then: (schema) => schema.required('Вкажіть крок ставки'),
@@ -265,7 +269,7 @@ const SellForm = ({ onBack, wantedId = null }) => {
 					{wanted && (
 						<div className='mb-6 rounded-xl border border-accent/40 bg-accent/5 px-4 py-3 text-sm text-gray-300'>
 							Запит покупця: <b className='text-white'>{wanted.category}</b>
-							{wanted.budget_max ? <> · бюджет до {wanted.budget_max} USDT</> : null}. Після схвалення лоту покупець отримає сповіщення.
+							{wanted.budget_max ? <> · бюджет до {fmtNum(wanted.budget_max)} USDT</> : null}. Після схвалення лоту покупець отримає сповіщення.
 						</div>
 					)}
 

@@ -1,3 +1,4 @@
+import { fmtNum } from '../../utils/money';
 import ReactApexChart from 'react-apexcharts';
 import { useState } from 'react';
 import ChartModal from './ChartModal';
@@ -65,7 +66,7 @@ const Views = ({ stats = [], current, viewsHidden }) => {
 					yaxis: { min: yMin, max: yMax, labels: { show: false } },
 					grid: { show: true, borderColor: '#1A3A2A', strokeDashArray: 4, xaxis: { lines: { show: false } }, padding: { bottom: 0 } },
 					legend: { show: false },
-					tooltip: { x: { show: true }, y: { formatter: v => v?.toLocaleString('uk-UA') } },
+					tooltip: { x: { show: true }, y: { formatter: v => fmtNum(v) } },
 					colors: ['#EC4899'],
 					fill: { colors: ['#EC4899'], type: 'gradient', gradient: { opacityFrom: 0.45, opacityTo: 0.02, shadeIntensity: 1, stops: [0, 90, 100] } },
 				},
@@ -73,7 +74,7 @@ const Views = ({ stats = [], current, viewsHidden }) => {
 		  }
 		: null;
 
-	const formatted = (current || dataPoints[dataPoints.length - 1])?.toLocaleString('uk-UA') || '—';
+	const formatted = fmtNum(current || dataPoints[dataPoints.length - 1]) || '—';
 
 	return (
 		<div className='bg-white dark:bg-card rounded-xl border border-gray-100 dark:border-card-border shadow-sm dark:shadow-neon px-4 pt-4 pb-4 w-full'>

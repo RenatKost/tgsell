@@ -1,11 +1,12 @@
+import { fmtNum } from '../../utils/money';
 // Task 31: seller-stated Telegram Stars / TON balance. Display only —
 // no conversion to other currencies, never used for price / fair price / quality.
 
 export const hasBalance = (item) =>
 	Number(item?.stars_balance || 0) > 0 || Number(item?.ton_balance || 0) > 0;
 
-export const formatStars = (v) => Number(v).toLocaleString('uk-UA', { maximumFractionDigits: 0 });
-export const formatTon = (v) => Number(v).toLocaleString('uk-UA', { maximumFractionDigits: 9 });
+export const formatStars = (v) => fmtNum(Number(v), { max: 0 });
+export const formatTon = (v) => fmtNum(Number(v), { max: 9 });
 
 export const balanceText = (stars, ton) => {
 	const parts = [];

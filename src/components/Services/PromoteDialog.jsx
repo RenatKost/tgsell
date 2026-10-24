@@ -1,3 +1,4 @@
+import { fmtNum } from '../../utils/money';
 import { useEffect, useState } from 'react';
 import { servicesAPI } from '../../services/api';
 import { btnPrimary, btnSecondary } from '../Cabinet/ui';
@@ -70,7 +71,7 @@ const PromoteDialog = ({ channel, initialKind = null, onClose, onCabinet }) => {
 									<span className='block font-semibold text-gray-900 dark:text-white text-sm'>{i.title}</span>
 									<span className='block text-xs text-gray-500 dark:text-gray-400 line-clamp-2'>{i.terms}</span>
 								</span>
-								<span className='font-bold text-accent whitespace-nowrap tabular-nums'>{i.price_usdt} USDT</span>
+								<span className='font-bold text-accent whitespace-nowrap tabular-nums'>{fmtNum(i.price_usdt)} USDT</span>
 							</button>
 						))}
 						{items.length === 0 && <p className='text-sm text-gray-400'>Усі послуги для цього лота вже активні.</p>}

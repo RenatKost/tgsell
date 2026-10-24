@@ -12,7 +12,7 @@ import logging
 import secrets as _secrets
 
 from fastapi import APIRouter, Depends, HTTPException, status
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -25,6 +25,7 @@ from app.services import external_escrow as svc
 from app.services.escrow import generate_escrow_wallet
 from app.services.payment_deadlines import created_stage_deadline
 from app.utils.money_display import money2_str
+from app.utils.limits import check_max_price
 from app.utils.security import get_current_user
 from app.utils.timeutil import utcnow_naive
 
@@ -38,6 +39,11 @@ class OfferIn(BaseModel):
     channel_link: str = Field(..., max_length=255)
     price_usdt: float
     buyer_username: str = Field(..., max_length=64)
+
+    @field_validator("price_usdt")
+    @classmethod
+    def _max_price(cls, v):
+        return check_max_price(v)
 
 
 def _seller_view(o: ExternalEscrowOffer) -> dict:

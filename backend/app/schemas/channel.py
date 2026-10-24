@@ -1,6 +1,8 @@
 from datetime import datetime
 
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
+
+from app.utils.limits import check_max_price
 
 
 class ChannelCreate(BaseModel):
@@ -29,6 +31,11 @@ class ChannelCreate(BaseModel):
     # «Шукаю канал»: lot created via «У мене є такий канал»
     wanted_request_id: int | None = None
 
+    @field_validator("price", "auction_start_price", "auction_bid_step")
+    @classmethod
+    def _max_price(cls, v):
+        return check_max_price(v)
+
 
 class ChannelUpdate(BaseModel):
     channel_name: str | None = None
@@ -46,6 +53,11 @@ class ChannelUpdate(BaseModel):
     stars_balance: int | None = Field(default=None, ge=0, le=10**12)
     ton_balance: float | None = Field(default=None, ge=0, le=10**11)
 
+
+    @field_validator("price")
+    @classmethod
+    def _max_price(cls, v):
+        return check_max_price(v)
 
 class ChannelResponse(BaseModel):
     id: int

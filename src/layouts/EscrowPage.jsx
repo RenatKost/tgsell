@@ -1,3 +1,4 @@
+import { fmtUsdt, ESCROW_MAX_PRICE_USDT, ESCROW_MAX_PRICE_HINT } from '../utils/money';
 import { useEffect, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { escrowAPI } from '../services/api';
@@ -9,7 +10,7 @@ import useReveal from '../hooks/useReveal';
 const inputCls = 'esc-input w-full bg-white dark:bg-slate-900/70 border border-gray-200 dark:border-card-border rounded-xl px-3 py-2.5 text-sm text-gray-800 dark:text-gray-100 focus:outline-none focus:border-accent';
 const card = 'bg-white dark:bg-card rounded-2xl border border-gray-100 dark:border-card-border p-5';
 const btn = 'esc-btn bg-accent hover:opacity-90 text-black font-bold rounded-xl px-5 py-3 text-sm min-h-[44px] disabled:opacity-50';
-const fmt = (n) => Number(n || 0).toFixed(2).replace(/\.00$/, '');
+const fmt = (n) => fmtUsdt(Number(n || 0)).replace(/\.00$/, '');
 const errText = (ex, fb) => { const d = ex?.response?.data?.detail; return typeof d === 'string' ? d : fb; };
 
 const STATUS = { open: 'Очікує покупця', accepted: 'Угоду розпочато', cancelled: 'Скасовано' };
@@ -113,6 +114,7 @@ const SellerForm = ({ meta, onCreated }) => {
 	const submit = async (e) => {
 		e.preventDefault();
 		if (price < meta.min_price_usdt) { setErr(`Мінімальна ціна — ${meta.min_price_usdt} USDT`); return; }
+		if (price > ESCROW_MAX_PRICE_USDT) { setErr(ESCROW_MAX_PRICE_HINT); return; }
 		setBusy(true); setErr('');
 		try {
 			const r = await escrowAPI.create({ ...v, price_usdt: price });
@@ -136,19 +138,19 @@ const SellerForm = ({ meta, onCreated }) => {
 			<div className='grid grid-cols-1 sm:grid-cols-2 gap-3'>
 				<div><label htmlFor='esc-price' className='block text-xs text-gray-400 mb-1'>Ціна, USDT</label>
 					<div className='esc-field'><Coins className='esc-field-icon' aria-hidden='true' />
-					<input id='esc-price' type='number' min={meta.min_price_usdt} step='0.01' className={inputCls} value={v.price_usdt} onChange={set('price_usdt')} required /></div></div>
+					<input id='esc-price' type='number' min={meta.min_price_usdt} max={ESCROW_MAX_PRICE_USDT} title={ESCROW_MAX_PRICE_HINT} step='0.01' className={inputCls} value={v.price_usdt} onChange={set('price_usdt')} required /></div></div>
 				<div><label htmlFor='esc-buyer' className='block text-xs text-gray-400 mb-1'>@username покупця</label>
 					<div className='esc-field'><AtSign className='esc-field-icon' aria-hidden='true' />
 					<input id='esc-buyer' className={inputCls} placeholder='@buyer' value={v.buyer_username} onChange={set('buyer_username')} required /></div></div>
 			</div>
 			<div className={`esc-calc ${price > 0 ? 'is-active' : ''}`} aria-live='polite'>
-				<div className='flex items-baseline justify-between gap-3'>
-					<span className='text-sm text-gray-500 dark:text-gray-400 whitespace-nowrap'>Продавець отримає</span>
-					<b className='text-lg sm:text-xl text-gray-900 dark:text-white tabular-nums whitespace-nowrap'>{fmt(price - fee)} <span className='text-accent text-sm'>USDT</span></b>
+				<div className='flex flex-wrap items-baseline justify-between gap-x-3 gap-y-0.5 min-w-0'>
+					<span className='text-sm text-gray-500 dark:text-gray-400'>Продавець отримає</span>
+					<b className='num-fluid min-w-0 max-w-full ml-auto text-right text-gray-900 dark:text-white tabular-nums break-words' style={{ '--num-min': '1rem', '--num-vw': '5.2vw', '--num-max': '1.25rem' }}>{fmt(price - fee)}{'\u00A0'}<span className='text-accent text-sm'>USDT</span></b>
 				</div>
-				<div className='mt-1 flex items-baseline justify-between gap-3 text-xs text-gray-500 dark:text-gray-400'>
+				<div className='mt-1 flex flex-wrap items-baseline justify-between gap-x-3 gap-y-0.5 min-w-0 text-xs text-gray-500 dark:text-gray-400'>
 					<span>Комісія {meta.fee_percent}%</span>
-					<span className='tabular-nums'>{fmt(fee)} USDT</span>
+					<span className='min-w-0 ml-auto text-right tabular-nums break-words'>{fmt(fee)}{'\u00A0'}USDT</span>
 				</div>
 			</div>
 			{err && <p className='text-sm text-red-500'>{err}</p>}

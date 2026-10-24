@@ -1,3 +1,4 @@
+import { fmtNum } from '../utils/money';
 import { useEffect, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import Chart from 'react-apexcharts';
@@ -277,9 +278,9 @@ export default function BundleDetailsPage() {
                     Ціна продажу
                   </div>
                   {/* Price */}
-                  <div className="flex items-baseline gap-2 mb-1">
-                    <span className="text-6xl font-black text-accent tracking-tighter leading-none">
-                      {Number(bundle.price)?.toLocaleString('en') ?? bundle.price}
+                  <div className="flex items-baseline gap-2 mb-1 min-w-0" style={{ containerType: 'inline-size' }}>
+                    <span className="num-fluid min-w-0 font-black text-accent tracking-tighter leading-none" style={{ '--num-min': '1.5rem', '--num-vw': '13cqi', '--num-max': '3.75rem' }}>
+                      {fmtNum(bundle.price) || bundle.price}
                     </span>
                   </div>
                   <div className="text-gray-500 text-sm mb-6">USDT за всю сітку</div>

@@ -1,3 +1,4 @@
+import { fmtNum } from '../../utils/money';
 // Task 21: market price estimate badge + details block.
 const VERDICTS = {
 	cheaper: { label: 'Дешевше ринку', cls: 'bg-emerald-50 dark:bg-emerald-900/20 text-emerald-600 dark:text-emerald-400 border-emerald-200 dark:border-emerald-800/40' },
@@ -6,7 +7,7 @@ const VERDICTS = {
 	inflated: { label: 'Можлива накрутка', cls: 'bg-amber-50 dark:bg-amber-900/20 text-amber-600 dark:text-amber-400 border-amber-200 dark:border-amber-800/40' },
 };
 
-const fmt = (v) => (v == null ? '—' : Math.round(v).toLocaleString('uk-UA'));
+const fmt = (v) => (v == null ? '—' : fmtNum(Math.round(v)));
 const fmtUnit = (v) => {
 	if (v == null) return '—';
 	if (v >= 1) return v.toFixed(2);

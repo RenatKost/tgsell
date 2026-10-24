@@ -1,3 +1,4 @@
+import { fmtNum } from '../utils/money';
 import { useState, useEffect, useRef } from 'react';
 import { motion, MotionConfig } from 'framer-motion';
 import { NavLink } from 'react-router-dom';
@@ -263,7 +264,7 @@ const AuctionMockUI = () => {
       <div className="flex justify-between items-center mb-3">
         <span className="text-xs text-gray-400">Поточна ставка</span>
         <motion.span key={bid} initial={{ scale: 1.2, color: '#00FF88' }} animate={{ scale: 1, color: '#00FF88' }} className="text-lg font-black text-accent">
-          {bid.toLocaleString('uk-UA')} USDT
+          {fmtNum(bid)} USDT
         </motion.span>
       </div>
       <button
