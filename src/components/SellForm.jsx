@@ -5,9 +5,15 @@ import { channelsAPI, wantedAPI } from '../services/api';
 import { useAuth } from '../context/AppContext';
 import { options } from './Main/Calculator';
 import { useNavigate } from 'react-router-dom';
+import PromoteDialog, { useServicesCatalog, availableServices, SERVICE_ICON } from './Services/PromoteDialog';
+import AlertBotHint from './Services/AlertBotHint';
 
-const SuccessModal = ({ onClose, onCabinet, listingType }) => {
+const SuccessModal = ({ onClose, onCabinet, listingType, channel }) => {
 	const [visible, setVisible] = useState(false);
+	const [promoKind, setPromoKind] = useState(null);
+	const { user } = useAuth();
+	const cat = useServicesCatalog();
+	const services = availableServices(cat, channel);
 	useEffect(() => {
 		requestAnimationFrame(() => setVisible(true));
 	}, []);
@@ -17,66 +23,63 @@ const SuccessModal = ({ onClose, onCabinet, listingType }) => {
 		setTimeout(() => cb?.(), 250);
 	};
 
+	const auctionNote = (listingType === 'auction' || listingType === 'both') ? ' Також бот надсилатиме кожну нову ставку на ваш аукціон.' : '';
+
 	return (
 		<div
-			className={`fixed inset-0 z-50 flex items-center justify-center p-4 transition-all duration-300 ${visible ? 'bg-black/60 backdrop-blur-sm' : 'bg-black/0'}`}
+			className={`fixed inset-0 z-50 flex items-end sm:items-center justify-center sm:p-4 transition-all duration-300 ${visible ? 'bg-black/60 backdrop-blur-sm' : 'bg-black/0'}`}
 			onClick={() => handleClose(onClose)}
 		>
 			<div
-				className={`bg-card border border-card-border rounded-2xl shadow-2xl shadow-black/50 max-w-md w-full p-8 text-center transition-all duration-300 ${visible ? 'opacity-100 scale-100 translate-y-0' : 'opacity-0 scale-95 translate-y-4'}`}
+				className={`bg-card border border-card-border rounded-t-2xl sm:rounded-2xl shadow-2xl shadow-black/50 w-full sm:max-w-lg max-h-[94vh] overflow-y-auto p-5 sm:p-8 text-center transition-all duration-300 ${visible ? 'opacity-100 scale-100 translate-y-0' : 'opacity-0 scale-95 translate-y-4'}`}
 				onClick={e => e.stopPropagation()}
 			>
-				<div className='w-20 h-20 bg-accent/10 border-2 border-accent/30 rounded-full flex items-center justify-center mx-auto mb-6'>
-					<svg className='w-10 h-10 text-accent' fill='none' viewBox='0 0 24 24' stroke='currentColor' strokeWidth={2.5}>
+				<div className='w-16 h-16 sm:w-20 sm:h-20 bg-accent/10 border-2 border-accent/30 rounded-full flex items-center justify-center mx-auto mb-4 sm:mb-6'>
+					<svg className='w-8 h-8 sm:w-10 sm:h-10 text-accent' fill='none' viewBox='0 0 24 24' stroke='currentColor' strokeWidth={2.5}>
 						<path strokeLinecap='round' strokeLinejoin='round' d='M5 13l4 4L19 7' />
 					</svg>
 				</div>
 
-				<h3 className='text-2xl font-bold text-white mb-3'>Канал додано!</h3>
-				<p className='text-gray-400 mb-6 leading-relaxed'>
+				<h3 className='text-2xl font-bold text-white mb-2'>Канал додано!</h3>
+				<p className='text-gray-400 mb-5 leading-relaxed text-sm sm:text-base'>
 					Ваш канал з'явиться в каталозі після перевірки адміністратором.
 				</p>
 
-				<div className='bg-card-inner border border-card-border rounded-xl p-5 mb-6 text-left'>
-					<div className='flex items-start gap-3'>
-						<div className='w-10 h-10 bg-[#0088cc]/20 border border-[#0088cc]/30 rounded-lg flex items-center justify-center flex-shrink-0 mt-0.5'>
-							<svg className='w-5 h-5 text-[#0088cc]' fill='none' viewBox='0 0 24 24' stroke='currentColor' strokeWidth={2}>
-								<path strokeLinecap='round' strokeLinejoin='round' d='M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9' />
-							</svg>
-						</div>
-						<div>
-							<p className='font-semibold text-white text-sm'>Підключіть бота сповіщень</p>
-							<p className='text-gray-400 text-sm mt-1'>
-								Натисніть <b className='text-white'>/start</b> у боті, щоб активувати сповіщення. Бот повідомить, коли канал підтвердять і коли його захочуть купити.
-								{(listingType === 'auction' || listingType === 'both') && (
-									<> Також бот надсилатиме повідомлення про кожну нову ставку на ваш аукціон.</>
-								)}
-							</p>
+				{channel && services.length > 0 && (
+					<div className='bg-card-inner border border-accent/30 rounded-xl p-4 sm:p-5 mb-4 text-left'>
+						<p className='font-semibold text-white'>🚀 Просунути лот</p>
+						<p className='text-gray-400 text-sm mt-1 mb-3'>Більше переглядів — швидший продаж. Оплата в USDT (TRC-20).</p>
+						<div className='grid grid-cols-1 sm:grid-cols-3 gap-2'>
+							{services.map((i) => (
+								<button key={i.kind} type='button' onClick={() => setPromoKind(i.kind)}
+									className='min-w-0 flex sm:flex-col items-center sm:items-stretch gap-3 sm:gap-1 p-3 rounded-xl border border-card-border bg-card hover:border-accent transition-colors text-left min-h-[44px]'>
+									<span className='text-xl'>{SERVICE_ICON[i.kind]}</span>
+									<span className='flex-1 min-w-0 text-sm font-semibold text-white leading-snug break-words [overflow-wrap:anywhere]'>{i.title}</span>
+									<span className='text-sm font-bold text-accent tabular-nums whitespace-nowrap'>{i.price_usdt} USDT</span>
+								</button>
+							))}
 						</div>
 					</div>
-				</div>
+				)}
 
-				<div className='flex flex-col gap-3'>
-					<a
-						href='https://t.me/tgsell_alert_bot?start=subscribe'
-						target='_blank'
-						rel='noopener noreferrer'
-						className='flex items-center justify-center gap-2 bg-[#0088cc] hover:bg-[#0077b5] text-white font-semibold py-3.5 px-6 rounded-xl transition-all duration-200'
-					>
-						<svg className='w-5 h-5' viewBox='0 0 24 24' fill='currentColor'>
-							<path d='M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm4.64 6.8c-.15 1.58-.8 5.42-1.13 7.19-.14.75-.42 1-.68 1.03-.58.05-1.02-.38-1.58-.75-.88-.58-1.38-.94-2.23-1.5-.99-.65-.35-1.01.22-1.59.15-.15 2.71-2.48 2.76-2.69a.2.2 0 00-.05-.18c-.06-.05-.14-.03-.21-.02-.09.02-1.49.95-4.22 2.79-.4.27-.76.41-1.08.4-.36-.01-1.04-.2-1.55-.37-.63-.2-1.12-.31-1.08-.66.02-.18.27-.36.74-.55 2.92-1.27 4.86-2.11 5.83-2.51 2.78-1.16 3.35-1.36 3.73-1.36.08 0 .27.02.39.12.1.08.13.19.14.27-.01.06.01.24 0 .38z' />
-						</svg>
-						Підключити бота
-					</a>
-					<button
-						type='button'
-						onClick={() => handleClose(onCabinet)}
-						className='text-gray-400 hover:text-white font-medium py-2.5 px-6 rounded-xl transition-colors duration-200 hover:bg-card-inner'
-					>
-						Перейти до кабінету →
-					</button>
-				</div>
+				{!user?.alert_bot_started && (
+					<AlertBotHint className='mb-5'
+						text={<>Натисніть <b className='text-white'>Start</b> в <b className='text-accent'>@tgsell_alert_bot</b>, щоб отримувати сповіщення: коли канал підтвердять і коли його захочуть купити.{auctionNote}</>} />
+				)}
+
+				<button
+					type='button'
+					onClick={() => handleClose(onCabinet)}
+					className='w-full text-gray-400 hover:text-white font-medium py-2.5 px-6 rounded-xl transition-colors duration-200 hover:bg-card-inner'
+				>
+					Перейти до кабінету →
+				</button>
 			</div>
+			{promoKind && channel && (
+				<div onClick={e => e.stopPropagation()}>
+					<PromoteDialog channel={channel} initialKind={promoKind} onClose={() => setPromoKind(null)} onCabinet={() => handleClose(onCabinet)} />
+				</div>
+			)}
 		</div>
 	);
 };
@@ -105,6 +108,7 @@ const SellForm = ({ onBack, wantedId = null }) => {
 	const [submitError, setSubmitError] = useState('');
 	const [showModal, setShowModal] = useState(false);
 	const [submittedListingType, setSubmittedListingType] = useState('sale');
+	const [createdChannel, setCreatedChannel] = useState(null);
 
 	const {
 		handleSubmit,
@@ -209,7 +213,8 @@ const SellForm = ({ onBack, wantedId = null }) => {
 					if (vals.er) payload.er = parseFloat(vals.er);
 				}
 				if (wanted?.id) payload.wanted_request_id = wanted.id;
-				await channelsAPI.create(payload);
+				const created = await channelsAPI.create(payload);
+				setCreatedChannel(created?.data || null);
 				setSubmittedListingType(vals.listing_type);
 				resetForm();
 				setShowModal(true);
@@ -646,6 +651,7 @@ const SellForm = ({ onBack, wantedId = null }) => {
 					onClose={() => setShowModal(false)}
 					onCabinet={() => navigate('/cabinet')}
 					listingType={submittedListingType}
+					channel={createdChannel}
 				/>
 			)}
 		</>

@@ -33,6 +33,7 @@ class UserResponse(BaseModel):
     usdt_wallet: str | None
     created_at: datetime
     is_blocked: bool = False
+    alert_bot_started: bool = False
 
     @model_validator(mode="after")
     def _sanitize_avatar(self):
