@@ -32,7 +32,7 @@ export const SOCIAL_LINKS = [
 const SocialLinks = ({ title = 'Ми в соцмережах', className = '' }) => (
   <nav aria-label="Соцмережі TgSell" className={className}>
     {title && <p className="text-xs font-black uppercase tracking-widest text-gray-400 mb-3">{title}</p>}
-    <ul className="grid grid-cols-2 min-[400px]:grid-cols-3 lg:grid-cols-6 gap-2">
+    <ul className="grid grid-cols-[repeat(auto-fit,minmax(9.5rem,1fr))] gap-2.5">
       {SOCIAL_LINKS.map(s => (
         <li key={s.key}>
           <a
@@ -41,13 +41,13 @@ const SocialLinks = ({ title = 'Ми в соцмережах', className = '' })
             rel="noopener noreferrer"
             aria-label={s.aria}
             title={s.aria}
-            className={'group flex items-center gap-1.5 sm:gap-2 min-h-11 py-1.5 px-2.5 sm:px-3 rounded-xl border transition-all duration-200 hover:-translate-y-0.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60 '
+            className={'prm-social-tile group flex items-center justify-center gap-2 min-h-[48px] min-w-0 px-3 rounded-xl border focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60 '
               + (s.main
                 ? 'border-cyan-400/30 bg-cyan-400/10 text-cyan-500 dark:text-cyan-400 hover:bg-cyan-400/20 hover:border-cyan-400/60'
                 : 'border-gray-400/20 bg-gray-400/10 text-gray-500 dark:text-gray-300 hover:text-accent hover:border-accent/40 hover:bg-accent/10')}
           >
-            <span className="flex-shrink-0 transition-transform duration-200 group-hover:scale-110">{s.icon}</span>
-            <span className="text-[13px] sm:text-sm font-semibold leading-tight">{s.label}</span>
+            <span className="flex-shrink-0">{s.icon}</span>
+            <span className="text-sm font-semibold leading-tight whitespace-nowrap">{s.label}</span>
           </a>
         </li>
       ))}
