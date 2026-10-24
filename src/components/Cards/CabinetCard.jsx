@@ -1,29 +1,12 @@
-import {
-	faBarChart,
-	faChartLine,
-	faClock,
-	faEye,
-	faDollarSign,
-	faListAlt,
-	faUsers,
-	faWallet,
-	faTrash,
-	faArrowRight,
-} from '@fortawesome/free-solid-svg-icons';
+import { faChartLine, faListAlt, faUsers, faTrash, faArrowRight } from '@fortawesome/free-solid-svg-icons';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { useState } from 'react';
 import { NavLink } from 'react-router-dom';
-import { formatEr, reliableEr } from '../../utils/er';
-
-const statusLabels = {
-	pending: { text: 'На модерації', color: 'text-yellow-700 bg-yellow-50 border-yellow-200' },
-	approved: { text: 'Опубліковано', color: 'text-green-700 bg-green-50 border-green-200' },
-	rejected: { text: 'Відхилено', color: 'text-red-700 bg-red-50 border-red-200' },
-	sold: { text: 'Продано', color: 'text-gray-700 bg-gray-50 border-gray-200' },
-};
+import { formatEr } from '../../utils/er';
+import { Badge, LISTING_STATUS, surface, btnSecondary, btnDanger } from '../Cabinet/ui';
 
 const CabinetCard = ({ channel, onDelete }) => {
-	const status = statusLabels[channel.status] || statusLabels.pending;
+	const status = LISTING_STATUS[channel.status] || LISTING_STATUS.pending;
 	const [avatarError, setAvatarError] = useState(false);
 
 	const formatAge = (months) => {
@@ -35,50 +18,48 @@ const CabinetCard = ({ channel, onDelete }) => {
 		return y > 0 ? `${y} р. ${rem} міс.` : `${rem} міс.`;
 	};
 
+	const stats = [
+		['Перегляди', channel.views_hidden ? <span className='text-amber-500' title='Приховано'>🔒</span> : (channel.avg_views?.toLocaleString('uk-UA') || '—')],
+		['ER', formatEr(channel.er, channel.subscribers_count)],
+		['Вік', formatAge(channel.age)],
+		['Дохід/міс', channel.monthly_income ? `${channel.monthly_income.toLocaleString('uk-UA')} $` : '—'],
+	];
+
 	return (
-		<div className='bg-white dark:bg-slate-800 rounded-2xl border border-gray-100 dark:border-slate-700 shadow-sm hover:shadow-md duration-300 overflow-hidden'>
-			{/* Top: Avatar + Name + Status */}
-			<div className='p-5 pb-4'>
-				<div className='flex items-start gap-4'>
+		<article className={`${surface} overflow-hidden flex flex-col hover:border-accent/50 transition-colors`}>
+			<div className='p-4 sm:p-5'>
+				<div className='flex items-start gap-3 sm:gap-4'>
 					{channel.avatar_url && !avatarError ? (
-						<img className='w-14 h-14 rounded-xl object-cover flex-shrink-0' src={channel.avatar_url} alt={channel.channel_name} onError={() => setAvatarError(true)} />
+						<img className='w-12 h-12 sm:w-14 sm:h-14 rounded-xl object-cover flex-shrink-0' src={channel.avatar_url} alt='' onError={() => setAvatarError(true)} />
 					) : (
-						<div className='w-14 h-14 rounded-xl bg-gradient-to-br from-blue-400 to-blue-600 flex items-center justify-center text-xl font-bold text-white flex-shrink-0'>
+						<div className='w-12 h-12 sm:w-14 sm:h-14 rounded-xl bg-gradient-to-br from-emerald-400 to-teal-600 flex items-center justify-center text-xl font-bold text-white flex-shrink-0'>
 							{channel.channel_name?.[0] || '?'}
 						</div>
 					)}
 					<div className='flex-1 min-w-0'>
-						<div className='flex items-start justify-between gap-2'>
-							<NavLink to={`/channel/${channel.id}`} className='font-bold text-gray-800 dark:text-white hover:text-[#3498db] duration-300 truncate block'>
-								{channel.channel_name}
-							</NavLink>
-							<div className='flex items-center gap-1.5 flex-shrink-0'>
-								{channel.is_closed && (
-									<span className='text-xs px-2 py-0.5 rounded-full font-medium bg-amber-50 text-amber-600 border border-amber-200'>🔒</span>
-								)}
-								{(channel.listing_type === 'auction' || channel.listing_type === 'both') && (
-									<span className='text-xs px-2 py-0.5 rounded-full font-medium bg-orange-50 text-orange-600 border border-orange-200'>🔥</span>
-								)}
-								<span className={`text-xs px-2.5 py-1 rounded-full font-medium border whitespace-nowrap ${status.color}`}>
-									{status.text}
-								</span>
-							</div>
+						<NavLink to={`/channel/${channel.id}`} className='font-bold text-gray-900 dark:text-white hover:text-accent leading-snug line-clamp-2 break-words' title={channel.channel_name}>
+							{channel.channel_name}
+						</NavLink>
+						<div className='flex flex-wrap items-center gap-1.5 mt-2'>
+							<Badge tone={status.tone}>{status.text}</Badge>
+							{(channel.listing_type === 'auction' || channel.listing_type === 'both') && <Badge tone='orange' dot={false}>🔥 Аукціон</Badge>}
+							{channel.is_closed && <Badge tone='gray' dot={false}>🔒 Закритий</Badge>}
 						</div>
-						<div className='flex items-center gap-3 mt-1.5 text-sm text-gray-500'>
+						<div className='flex flex-wrap items-center gap-x-3 gap-y-1 mt-2 text-sm text-gray-500 dark:text-gray-400'>
 							<span className='flex items-center gap-1'>
 								<FontAwesomeIcon icon={faUsers} className='text-xs' />
 								{channel.subscribers_count?.toLocaleString('uk-UA') || '0'}
 							</span>
 							{channel.daily_growth != null && (
-								<span className={`flex items-center gap-1 ${channel.daily_growth >= 0 ? 'text-green-600' : 'text-red-500'}`}>
+								<span className={`flex items-center gap-1 ${channel.daily_growth >= 0 ? 'text-green-600 dark:text-green-400' : 'text-red-500'}`}>
 									<FontAwesomeIcon icon={faChartLine} className='text-xs' />
-									{channel.daily_growth >= 0 ? '+' : ''}{channel.daily_growth}
+									{channel.daily_growth >= 0 ? '+' : ''}{channel.daily_growth}/день
 								</span>
 							)}
 							{channel.category && (
-								<span className='flex items-center gap-1'>
+								<span className='flex items-center gap-1 min-w-0'>
 									<FontAwesomeIcon icon={faListAlt} className='text-xs' />
-									{channel.category}
+									<span className='truncate'>{channel.category}</span>
 								</span>
 							)}
 						</div>
@@ -86,65 +67,42 @@ const CabinetCard = ({ channel, onDelete }) => {
 				</div>
 			</div>
 
-			{/* Stats grid */}
-			<div className='grid grid-cols-2 sm:grid-cols-4 gap-px bg-gray-100 dark:bg-slate-700 border-t border-gray-100 dark:border-slate-700'>
-				<div className='bg-white dark:bg-slate-800 p-3 text-center'>
-					<p className='text-xs text-gray-400 dark:text-gray-500 mb-0.5'>Переглядів</p>
-					<p className='font-semibold text-gray-800 dark:text-gray-100 text-sm'>
-						{channel.views_hidden ? <span className='text-amber-500 text-xs'>🔒</span> : (channel.avg_views?.toLocaleString('uk-UA') || '—')}
-					</p>
-				</div>
-				<div className='bg-white dark:bg-slate-800 p-3 text-center'>
-					<p className='text-xs text-gray-400 dark:text-gray-500 mb-0.5'>ER</p>
-					<p className='font-semibold text-gray-800 dark:text-gray-100 text-sm'>{formatEr(channel.er, channel.subscribers_count)}</p>
-				</div>
-				<div className='bg-white dark:bg-slate-800 p-3 text-center'>
-					<p className='text-xs text-gray-400 dark:text-gray-500 mb-0.5'>Вік</p>
-					<p className='font-semibold text-gray-800 dark:text-gray-100 text-sm'>{formatAge(channel.age)}</p>
-				</div>
-				<div className='bg-white dark:bg-slate-800 p-3 text-center'>
-					<p className='text-xs text-gray-400 dark:text-gray-500 mb-0.5'>Дохід/міс</p>
-					<p className='font-semibold text-gray-800 dark:text-gray-100 text-sm'>
-						{channel.monthly_income ? `${channel.monthly_income.toLocaleString('uk-UA')}` : '—'}
-					</p>
-				</div>
-			</div>
-
-			{/* Bottom: Price + Actions */}
-			<div className='p-4 pt-3 border-t border-gray-100 dark:border-slate-700'>
-				{channel.rejection_reason && (
-					<div className='mb-3 px-3 py-2 bg-red-50 rounded-lg border border-red-100'>
-						<p className='text-xs text-red-600'>
-							<span className='font-semibold'>Причина:</span> {channel.rejection_reason}
-						</p>
+			<dl className='grid grid-cols-2 sm:grid-cols-4 gap-px bg-gray-100 dark:bg-card-border border-y border-gray-100 dark:border-card-border'>
+				{stats.map(([k, v]) => (
+					<div key={k} className='bg-white dark:bg-card px-3 py-2.5 text-center'>
+						<dt className='text-xs text-gray-500 dark:text-gray-400'>{k}</dt>
+						<dd className='font-semibold text-gray-900 dark:text-gray-100 text-sm mt-0.5 tabular-nums'>{v}</dd>
 					</div>
+				))}
+			</dl>
+
+			<div className='p-4 sm:p-5 mt-auto'>
+				{channel.rejection_reason && (
+					<p className='mb-3 px-3 py-2 text-sm text-red-700 dark:text-red-300 bg-red-50 dark:bg-red-900/20 rounded-xl border border-red-100 dark:border-red-900/40'>
+						<span className='font-semibold'>Причина відхилення:</span> {channel.rejection_reason}
+					</p>
 				)}
-				<div className='flex items-center justify-between'>
-					<div>
-						<p className='text-xs text-gray-400 dark:text-gray-500'>Ціна</p>
-						<p className='text-lg font-bold text-gray-800 dark:text-white'>{channel.price?.toLocaleString('uk-UA')} <span className='text-sm text-gray-500'>USDT</span></p>
+				<div className='flex items-center justify-between gap-3'>
+					<div className='min-w-0'>
+						<p className='text-xs text-gray-500 dark:text-gray-400'>Ціна</p>
+						<p className='text-lg font-bold text-gray-900 dark:text-white tabular-nums'>
+							{channel.price?.toLocaleString('uk-UA')} <span className='text-sm text-gray-500 dark:text-accent'>USDT</span>
+						</p>
 					</div>
 					<div className='flex items-center gap-2'>
 						{onDelete && channel.status !== 'sold' && (
-							<button
-								onClick={() => onDelete(channel.id)}
-								className='w-9 h-9 rounded-lg border border-gray-200 dark:border-slate-600 text-gray-400 hover:text-red-500 hover:border-red-200 hover:bg-red-50 dark:hover:bg-red-900/30 duration-300 flex items-center justify-center'
-								title='Видалити'
-							>
+							<button type='button' onClick={() => onDelete(channel.id)} className={btnDanger} title='Видалити оголошення' aria-label='Видалити оголошення'>
 								<FontAwesomeIcon icon={faTrash} size='sm' />
 							</button>
 						)}
-						<NavLink
-							to={`/channel/${channel.id}`}
-							className='flex items-center gap-1.5 px-4 py-2 bg-[#3498db] text-white text-sm font-semibold rounded-lg hover:bg-[#2980b9] duration-300'
-						>
+						<NavLink to={`/channel/${channel.id}`} className={btnSecondary}>
 							Деталі
 							<FontAwesomeIcon icon={faArrowRight} size='xs' />
 						</NavLink>
 					</div>
 				</div>
 			</div>
-		</div>
+		</article>
 	);
 };
 

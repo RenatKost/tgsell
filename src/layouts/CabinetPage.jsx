@@ -8,12 +8,15 @@ import CatalogCard from '../components/Cards/CatalogCard';
 import SavedSearches from '../components/Cabinet/SavedSearches';
 import BundleBalanceEditor from '../components/Balance/BundleBalanceEditor';
 import BalanceBadges from '../components/Balance/BalanceBadges';
+import {
+	Badge, LISTING_STATUS, DEAL_STATUS, AUCTION_STATUS, dealNextStep, Spinner, EmptyState, ErrorState,
+	LinkButton, FilterChips, surface, inner, btnPrimary, btnSecondary, btnDanger,
+} from '../components/Cabinet/ui';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import {
 	faList,
 	faHeart,
 	faPlus,
-	faFilter,
 	faHandshake,
 	faArrowRight,
 	faGavel,
@@ -32,28 +35,18 @@ const TABS = [
 ];
 
 const STATUS_FILTERS = [
-	{ text: 'Всі', value: null, dot: 'bg-gray-400' },
+	{ text: 'Усі', value: null, dot: 'bg-gray-400' },
 	{ text: 'Опубліковані', value: 'approved', dot: 'bg-green-500' },
 	{ text: 'На модерації', value: 'pending', dot: 'bg-yellow-500' },
 	{ text: 'Відхилені', value: 'rejected', dot: 'bg-red-500' },
 ];
-
-const DEAL_STATUS_LABELS = {
-	created: { text: 'Очікує оплати', color: 'bg-yellow-100 text-yellow-700' },
-	payment_pending: { text: 'Очікує оплати', color: 'bg-yellow-100 text-yellow-700' },
-	paid: { text: 'Оплачено', color: 'bg-blue-100 text-blue-700' },
-	channel_transferring: { text: 'Передача каналу', color: 'bg-indigo-100 text-indigo-700' },
-	completed: { text: 'Завершено', color: 'bg-green-100 text-green-700' },
-	disputed: { text: 'Спір', color: 'bg-red-100 text-red-700' },
-	cancelled: { text: 'Скасовано', color: 'bg-gray-100 text-gray-600' },
-};
 
 const DEAL_FILTERS = [
 	{ text: 'Активні', value: 'active', dot: 'bg-blue-500' },
 	{ text: 'Завершені', value: 'completed', dot: 'bg-green-500' },
 	{ text: 'Спірні', value: 'disputed', dot: 'bg-red-500' },
 	{ text: 'Скасовані', value: 'cancelled', dot: 'bg-gray-400' },
-	{ text: 'Всі', value: null, dot: 'bg-gray-400' },
+	{ text: 'Усі', value: null, dot: 'bg-gray-400' },
 ];
 
 const CabinetPage = () => {
@@ -70,6 +63,8 @@ const CabinetPage = () => {
 	const [myBundles, setMyBundles] = useState([]);
 	const [balanceBundle, setBalanceBundle] = useState(null); // Task 32
 	const [loading, setLoading] = useState(true);
+	const [loadError, setLoadError] = useState(false);
+	const [reloadKey, setReloadKey] = useState(0);
 
 	// Auction creation modal
 	const [showAuctionModal, setShowAuctionModal] = useState(false);
@@ -82,6 +77,7 @@ const CabinetPage = () => {
 	useEffect(() => {
 		const fetchData = async () => {
 			setLoading(true);
+			setLoadError(false);
 			try {
 				if (activeTab.value === 'my') {
 					const params = { seller_id: user?.id };
@@ -112,12 +108,13 @@ const CabinetPage = () => {
 				}
 			} catch (err) {
 				console.error('Failed to load:', err);
+				setLoadError(true);
 			} finally {
 				setLoading(false);
 			}
 		};
 		if (user?.id) fetchData();
-	}, [user?.id, activeTab, activeFilter]);
+	}, [user?.id, activeTab, activeFilter, reloadKey]);
 
 	const handleDelete = async (channelId) => {
 		if (!confirm('Видалити оголошення?')) return;
@@ -177,7 +174,7 @@ const CabinetPage = () => {
 		rejected: channels.filter(c => c.status === 'rejected').length,
 	};
 
-	const ACTIVE_STATUSES = ['created', 'payment_pending', 'paid', 'channel_transferring'];
+	const ACTIVE_STATUSES = ['created', 'payment_pending', 'paid', 'channel_transferring', 'awaiting_payout', 'payout_in_progress'];
 	const filteredDeals = dealFilter.value === null
 		? deals
 		: dealFilter.value === 'active'
@@ -192,187 +189,143 @@ const CabinetPage = () => {
 		all: deals.length,
 	};
 
+	const tabCount = (v) => (
+		v === 'auctions' ? myAuctions.length : v === 'deals' ? deals.length : v === 'favorites' ? favorites.length : 0
+	);
+
+	const renderBody = (empty, list) => (loading ? <Spinner /> : loadError ? <ErrorState onRetry={() => setReloadKey(k => k + 1)} /> : empty ? empty : list);
+
 	return (
-		<section className='pt-28 mb-16'>
+		<section className='pt-24 sm:pt-28 mb-16'>
 			{/* Header */}
-			<div className='flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-8'>
-				<div>
-					<h1 className='text-2xl md:text-3xl font-bold text-gray-800 dark:text-white'>
+			<div className='flex flex-col sm:flex-row sm:items-end justify-between gap-4 mb-6 sm:mb-8'>
+				<div className='min-w-0'>
+					<h1 className='text-2xl md:text-3xl font-bold text-gray-900 dark:text-white leading-tight break-words'>
 						{user?.first_name ? `Привіт, ${user.first_name} 👋` : 'Особистий кабінет'}
 					</h1>
-					<p className='text-gray-500 dark:text-gray-400 mt-1'>Керуйте каналами та обраним</p>
+					<p className='text-sm sm:text-base text-gray-500 dark:text-gray-400 mt-2 leading-relaxed'>
+						Ваші оголошення, угоди та збережені пошуки в одному місці
+					</p>
 				</div>
-				<NavLink
-					to='/sell'
-					className='inline-flex items-center gap-2 bg-[#27ae60] text-white font-semibold py-3 px-6 rounded-xl shadow-lg shadow-green-200 dark:shadow-green-900/30 hover:shadow-green-300 hover:bg-[#219a52] duration-300 whitespace-nowrap'
-				>
+				<NavLink to='/sell' className={`${btnPrimary} w-full sm:w-auto shadow-neon`}>
 					<FontAwesomeIcon icon={faPlus} />
-					Продати канал
+					Виставити канал
 				</NavLink>
 			</div>
 
-			{/* Tabs */}
-			<div className='flex gap-2 mb-6 border-b border-gray-200 dark:border-slate-700 overflow-x-auto overflow-y-hidden no-scrollbar'>
-				{TABS.map(tab => (
-					<button
-						key={tab.value}
-						onClick={() => setActiveTab(tab)}
-						className={`flex items-center gap-2 px-5 py-3 font-semibold text-sm duration-300 border-b-2 -mb-px flex-shrink-0 ${
-							activeTab.value === tab.value
-								? 'border-[#3498db] text-[#3498db]'
-							: 'border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300 hover:border-gray-300 dark:hover:border-slate-600'
-						}`}
-					>
-						<FontAwesomeIcon icon={tab.icon} />
-						{tab.text}
-						{tab.value === 'auctions' && myAuctions.length > 0 && (
-							<span className='bg-orange-100 text-orange-600 text-xs px-2 py-0.5 rounded-full'>{myAuctions.length}</span>
-						)}
-						{tab.value === 'deals' && deals.length > 0 && (
-							<span className='bg-blue-100 text-blue-600 text-xs px-2 py-0.5 rounded-full'>{deals.length}</span>
-						)}
-						{tab.value === 'favorites' && favorites.length > 0 && (
-							<span className='bg-red-100 text-red-600 text-xs px-2 py-0.5 rounded-full'>{favorites.length}</span>
-						)}
-					</button>
-				))}
+			{/* Tabs: 3×2 grid on phones (all visible, no hidden scroll), underline row from md */}
+			<div role='tablist' aria-label='Розділи кабінету'
+				className='grid grid-cols-3 gap-2 mb-6 md:flex md:gap-1 md:border-b md:border-gray-200 md:dark:border-card-border'>
+				{TABS.map(tab => {
+					const on = activeTab.value === tab.value;
+					const n = tabCount(tab.value);
+					return (
+						<button
+							key={tab.value}
+							type='button'
+							role='tab'
+							aria-selected={on}
+							onClick={() => setActiveTab(tab)}
+							className={`relative flex flex-col md:flex-row items-center justify-center gap-1 md:gap-2 min-h-[56px] md:min-h-[48px] px-2 md:px-4 rounded-xl md:rounded-none text-xs md:text-sm font-semibold text-center leading-tight transition-all border md:border-0 md:border-b-2 md:-mb-px ${
+								on
+									? 'bg-accent/10 border-accent text-gray-900 dark:text-accent md:bg-transparent'
+									: 'bg-white dark:bg-card border-gray-200 dark:border-card-border text-gray-500 dark:text-gray-400 hover:text-gray-800 dark:hover:text-white md:bg-transparent md:dark:bg-transparent md:border-transparent'
+							}`}
+						>
+							<FontAwesomeIcon icon={tab.icon} className='text-sm' />
+							<span>{tab.text}</span>
+							{n > 0 && (
+								<span className='absolute top-1 right-1 md:static min-w-[20px] h-5 px-1.5 inline-flex items-center justify-center rounded-full bg-gray-100 dark:bg-white/10 text-[11px] font-bold text-gray-700 dark:text-gray-200 tabular-nums'>
+									{n}
+								</span>
+							)}
+						</button>
+					);
+				})}
 			</div>
 
 			{/* Content */}
 			{activeTab.value === 'my' ? (
 				<>
-					{/* Status filter pills */}
-					<div className='flex flex-wrap gap-2 mb-6'>
-						{STATUS_FILTERS.map(f => (
-							<button
-								key={f.text}
-								onClick={() => setActiveFilter(f)}
-								className={`flex items-center gap-2 px-4 py-2 rounded-full text-sm font-medium duration-300 ${
-									f === activeFilter
-										? 'bg-[#3498db] text-white shadow-md shadow-blue-200 dark:shadow-blue-900/30'
-										: 'bg-white dark:bg-slate-800 text-gray-600 dark:text-gray-300 border border-gray-200 dark:border-slate-600 hover:border-[#3498db] hover:text-[#3498db]'
-								}`}
-							>
-								<span className={`w-2 h-2 rounded-full ${f === activeFilter ? 'bg-white' : f.dot}`} />
-								{f.text}
-								<span className={`text-xs ${f === activeFilter ? 'text-blue-100' : 'text-gray-400'}`}>
-									{f.value === null ? counts.all : counts[f.value] || 0}
-								</span>
-							</button>
-						))}
-					</div>
-
-					{loading ? (
-						<div className='flex justify-center py-20'>
-							<div className='animate-spin rounded-full h-10 w-10 border-b-2 border-blue-500' />
-						</div>
-					) : filteredChannels.length === 0 ? (
-						<div className='text-center py-16 bg-white dark:bg-slate-800 rounded-2xl border border-dashed border-gray-300 dark:border-slate-600'>
-							<div className='text-5xl mb-4'>📢</div>
-							<p className='text-lg font-semibold text-gray-700 dark:text-gray-200 mb-2'>
-								{activeFilter.value ? 'Немає каналів з таким статусом' : 'У вас ще немає оголошень'}
-							</p>
-							<p className='text-gray-500 dark:text-gray-400 mb-6'>Додайте свій перший канал для продажу</p>
-							<NavLink
-								className='inline-flex items-center gap-2 font-bold bg-[#27ae60] text-white py-3 px-8 rounded-xl shadow-lg shadow-green-200 hover:bg-[#219a52] duration-300'
-								to='/sell'
-							>
-								<FontAwesomeIcon icon={faPlus} />
-								ПРОДАТИ КАНАЛ
-							</NavLink>
-						</div>
-					) : (
-						<div className='grid grid-cols-1 md:grid-cols-2 2xl:grid-cols-3 gap-6'>
+					<FilterChips items={STATUS_FILTERS} active={activeFilter} onChange={setActiveFilter}
+						count={f => (f.value === null ? counts.all : counts[f.value] || 0)} />
+					{renderBody(
+						filteredChannels.length === 0 && (
+							<EmptyState
+								icon='📢'
+								title={activeFilter.value ? 'Немає оголошень з таким статусом' : 'У вас ще немає оголошень'}
+								text={activeFilter.value ? 'Оберіть інший фільтр або додайте новий канал.' : 'Додайте свій перший канал — після модерації він з’явиться в каталозі.'}
+								action={<LinkButton to='/sell'><FontAwesomeIcon icon={faPlus} />Виставити канал</LinkButton>}
+							/>
+						),
+						<div className='grid grid-cols-1 lg:grid-cols-2 2xl:grid-cols-3 gap-4 sm:gap-5'>
 							{filteredChannels.map(channel => (
 								<CabinetCard key={channel.id} channel={channel} onDelete={handleDelete} />
 							))}
-						</div>
+						</div>,
 					)}
 				</>
 			) : activeTab.value === 'bundles' ? (
 				<>
-					<div className='flex justify-end mb-6'>
-						<NavLink to='/sell-bundle'
-							className='inline-flex items-center gap-2 bg-accent text-black font-bold py-3 px-6 rounded-xl shadow-lg shadow-accent/30 hover:brightness-110 transition-all'>
-							<FontAwesomeIcon icon={faPlus} />
-							Продати сітку каналів
-						</NavLink>
+					<div className='flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-5'>
+						<p className='text-sm text-gray-500 dark:text-gray-400'>Об’єднайте кілька каналів в одну пропозицію.</p>
+						<LinkButton to='/sell-bundle' className='w-full sm:w-auto'><FontAwesomeIcon icon={faPlus} />Виставити сітку</LinkButton>
 					</div>
-					{loading ? (
-						<div className='flex justify-center py-20'>
-							<div className='animate-spin rounded-full h-10 w-10 border-b-2 border-accent' />
-						</div>
-					) : myBundles.length === 0 ? (
-						<div className='text-center py-16 bg-card rounded-2xl border border-dashed border-card-border'>
-							<div className='text-5xl mb-4'>📡</div>
-							<p className='text-gray-300 font-semibold text-lg mb-1'>У вас немає сеток</p>
-							<p className='text-gray-500 text-sm mb-6'>Об'єднайте кілька каналів в одну пропозицію</p>
-							<NavLink to='/sell-bundle'
-								className='inline-flex items-center gap-2 bg-accent text-black font-bold py-2.5 px-6 rounded-xl hover:brightness-110 transition-all'>
-								<FontAwesomeIcon icon={faPlus} /> Створити сітку
-							</NavLink>
-						</div>
-					) : (
-						<div className='grid grid-cols-1 md:grid-cols-2 gap-6'>
-							{myBundles.map(b => (
-								<div key={b.id} className='bg-card border border-card-border rounded-xl p-5 shadow-neon'>
-									<div className='flex items-start justify-between mb-2'>
-										<div className='flex items-center gap-2'>
-											<span className='text-accent font-bold'>📡</span>
-											<span className='font-semibold text-white'>{b.name}</span>
+					{renderBody(
+						myBundles.length === 0 && (
+							<EmptyState icon='📡' title='У вас ще немає сіток' text='Сітка — це кілька ваших каналів, які продаються разом за однією ціною.' />
+						),
+						<div className='grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-5'>
+							{myBundles.map(b => {
+								const st = b.status === 'sold' ? LISTING_STATUS.sold : (LISTING_STATUS[b.status] || LISTING_STATUS.pending);
+								return (
+									<article key={b.id} className={`${surface} p-4 sm:p-5 flex flex-col`}>
+										<div className='flex items-start justify-between gap-3 mb-2'>
+											<h3 className='font-semibold text-gray-900 dark:text-white leading-snug break-words line-clamp-2 min-w-0'>
+												<span aria-hidden='true' className='mr-1.5'>📡</span>{b.name}
+											</h3>
+											<Badge tone={st.tone} className='flex-shrink-0'>{st.text}</Badge>
 										</div>
-										<span className={`text-xs px-2 py-0.5 rounded-full font-semibold ${
-											b.status === 'approved' ? 'bg-green-900/40 text-green-400' :
-											b.status === 'rejected' ? 'bg-red-900/40 text-red-400' :
-											b.status === 'sold' ? 'bg-gray-700 text-gray-400' :
-											'bg-yellow-900/40 text-yellow-400'
-										}`}>
-											{b.status === 'approved' ? 'Схвалено' : b.status === 'rejected' ? 'Відхилено' : b.status === 'sold' ? 'Продано' : 'На модерації'}
-										</span>
-									</div>
-									<div className='text-sm text-gray-400 mb-3'>
-										{b.channel_count} каналів · <span className='text-accent font-semibold'>{b.price} USDT</span>
-									</div>
-									{(b.channels || []).some(c => Number(c.stars_balance || 0) > 0 || Number(c.ton_balance || 0) > 0) && (
-										<ul className='mb-3 space-y-1'>
-											{b.channels.map(c => (
-												<li key={c.id} className='text-xs text-gray-400 flex items-center gap-2 flex-wrap'>
-													<span className='truncate'>{c.channel_name}</span>
-													<BalanceBadges stars={c.stars_balance} ton={c.ton_balance} size='xs' caption={false} />
-												</li>
-											))}
-										</ul>
-									)}
-									{b.rejection_reason && (
-										<div className='text-xs text-red-400 mb-3 bg-red-900/20 rounded p-2'>
-											Причина: {b.rejection_reason}
+										<p className='text-sm text-gray-500 dark:text-gray-400 mb-3'>
+											{b.channel_count} канал(ів) · <span className='text-gray-900 dark:text-accent font-bold'>{fmtUsdt(b.price)} USDT</span>
+										</p>
+										{(b.channels || []).some(c => Number(c.stars_balance || 0) > 0 || Number(c.ton_balance || 0) > 0) && (
+											<ul className='mb-3 space-y-1.5'>
+												{b.channels.map(c => (
+													<li key={c.id} className='text-xs text-gray-500 dark:text-gray-400 flex items-center gap-2 flex-wrap'>
+														<span className='truncate max-w-full'>{c.channel_name}</span>
+														<BalanceBadges stars={c.stars_balance} ton={c.ton_balance} size='xs' caption={false} />
+													</li>
+												))}
+											</ul>
+										)}
+										{b.rejection_reason && (
+											<p className='text-sm text-red-700 dark:text-red-300 mb-3 bg-red-50 dark:bg-red-900/20 border border-red-100 dark:border-red-900/40 rounded-xl px-3 py-2'>
+												<span className='font-semibold'>Причина відхилення:</span> {b.rejection_reason}
+											</p>
+										)}
+										<div className='flex flex-wrap gap-2 mt-auto pt-1'>
+											<NavLink to={`/bundle/${b.id}`} className={`${btnSecondary} flex-1`}>Переглянути</NavLink>
+											{b.status !== 'sold' && (
+												<button type='button' onClick={() => setBalanceBundle(b)} className={btnSecondary}
+													title='Баланс Stars/TON каналів (можна змінити, поки по сітці немає активної угоди)'>
+													⭐ Баланс
+												</button>
+											)}
+											{b.status === 'pending' && (
+												<button type='button' onClick={async () => {
+													if (!confirm('Видалити сітку?')) return;
+													try { await bundlesAPI.delete(b.id); setMyBundles(prev => prev.filter(x => x.id !== b.id)); }
+													catch { alert('Помилка видалення'); }
+												}} className={btnDanger}>
+													Видалити
+												</button>
+											)}
 										</div>
-									)}
-									<div className='flex gap-2'>
-										<NavLink to={`/bundle/${b.id}`}
-											className='flex-1 text-center text-xs py-1.5 rounded-lg bg-card-inner text-gray-300 hover:text-accent border border-card-border transition-all'>
-											Переглянути
-										</NavLink>
-										{b.status !== 'sold' && (
-											<button onClick={() => setBalanceBundle(b)}
-												className='px-3 py-1.5 rounded-lg text-xs bg-card-inner text-yellow-400 hover:text-accent border border-card-border transition-all'
-												title='Баланс Stars/TON каналів (можна змінити, поки по сітці немає активної угоди)'>
-												⭐ Баланс
-											</button>
-										)}
-										{b.status === 'pending' && (
-											<button onClick={async () => {
-												if (!confirm('Видалити сітку?')) return;
-												try { await bundlesAPI.delete(b.id); setMyBundles(prev => prev.filter(x => x.id !== b.id)); }
-												catch { alert('Помилка видалення'); }
-											}} className='px-3 py-1.5 rounded-lg text-xs bg-red-900/30 text-red-400 hover:bg-red-900/50 border border-red-900 transition-all'>
-												Видалити
-											</button>
-										)}
-									</div>
-								</div>
-							))}
-						</div>
+									</article>
+								);
+							})}
+						</div>,
 					)}
 					{balanceBundle && (
 						<BundleBalanceEditor
@@ -389,236 +342,159 @@ const CabinetPage = () => {
 				</>
 			) : activeTab.value === 'auctions' ? (
 				<>
-					{/* Add auction button */}
-					<div className='flex justify-end mb-6'>
-						<button
-							onClick={handleOpenAuctionModal}
-							className='inline-flex items-center gap-2 bg-gradient-to-r from-orange-500 to-red-500 hover:from-orange-600 hover:to-red-600 text-white font-semibold py-3 px-6 rounded-xl shadow-lg shadow-orange-200 dark:shadow-orange-900/30 duration-300'
-						>
+					<div className='flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-5'>
+						<p className='text-sm text-gray-500 dark:text-gray-400'>Опубліковані канали можна виставити на аукціон.</p>
+						<button type='button' onClick={handleOpenAuctionModal} className={`${btnPrimary} w-full sm:w-auto`}>
 							<FontAwesomeIcon icon={faGavel} />
 							Виставити на аукціон
 						</button>
 					</div>
-
-					{loading ? (
-						<div className='flex justify-center py-20'>
-							<div className='animate-spin rounded-full h-10 w-10 border-b-2 border-blue-500' />
-						</div>
-					) : myAuctions.length === 0 ? (
-						<div className='text-center py-16 bg-white dark:bg-slate-800 rounded-2xl border border-dashed border-gray-300 dark:border-slate-600'>
-							<div className='text-5xl mb-4'>🔥</div>
-							<p className='text-lg font-semibold text-gray-700 dark:text-gray-200 mb-2'>У вас ще немає аукціонів</p>
-							<p className='text-gray-500 dark:text-gray-400 mb-6'>
-								{availableChannels.length > 0
-									? 'Виставте один зі своїх каналів на аукціон'
-									: 'Спершу додайте канал через форму, потім зможете виставити його на аукціон'}
-							</p>
-							<button
-								onClick={handleOpenAuctionModal}
-								className='inline-flex items-center gap-2 font-bold bg-orange-500 text-white py-3 px-8 rounded-xl shadow-lg shadow-orange-200 hover:bg-orange-600 duration-300'
-							>
-								<FontAwesomeIcon icon={faPlus} />
-								{availableChannels.length > 0 ? 'Обрати канал' : 'Додати канал'}
-							</button>
-						</div>
-					) : (
+					{renderBody(
+						myAuctions.length === 0 && (
+							<EmptyState
+								icon='🔥'
+								title='У вас ще немає аукціонів'
+								text={availableChannels.length > 0
+									? 'Виставте один зі своїх опублікованих каналів на аукціон.'
+									: 'Спершу додайте канал і дочекайтеся модерації — потім зможете виставити його на аукціон.'}
+							/>
+						),
 						<div className='grid gap-4'>
 							{myAuctions.map(auction => {
-								const isEnded = auction.status === 'ended';
 								const isActive = auction.status === 'active';
 								const endDate = auction.ends_at ? new Date(auction.ends_at) : null;
 								const timeRemaining = endDate ? Math.max(0, endDate - Date.now()) : 0;
 								const hoursLeft = Math.floor(timeRemaining / 3600000);
 								const minsLeft = Math.floor((timeRemaining % 3600000) / 60000);
-								const timeStr = timeRemaining > 0 ? `${hoursLeft}г ${minsLeft}хв` : 'Завершено';
-								const statusColors = {
-									active: 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400',
-									scheduled: 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400',
-									ended: 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400',
-									cancelled: 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400',
-								};
-								const statusTexts = { active: 'Активний', scheduled: 'Запланований', ended: 'Завершений', cancelled: 'Скасований' };
+								const timeStr = timeRemaining > 0 ? `${hoursLeft} год ${minsLeft} хв` : 'Завершено';
+								const st = AUCTION_STATUS[auction.status] || { text: auction.status, tone: 'gray' };
 								return (
-									<div key={auction.id} className='bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-gray-100 dark:border-slate-700 p-5 hover:shadow-md duration-300'>
-										<div className='flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-3'>
-											<div className='flex items-center gap-3'>
-												{auction.channel_avatar ? (
-													<img className='w-12 h-12 rounded-xl object-cover' src={auction.channel_avatar} alt='' />
-												) : (
-													<div className='w-12 h-12 rounded-xl bg-gradient-to-br from-orange-400 to-red-500 flex items-center justify-center text-lg font-bold text-white'>
-														{(auction.channel_name || '?')[0]}
-													</div>
-												)}
-												<div>
-													<NavLink to={`/channel/${auction.channel_id}`} className='font-bold text-gray-800 dark:text-white hover:text-orange-500 duration-300'>
-														{auction.channel_name || `Канал #${auction.channel_id}`}
-													</NavLink>
-													<p className='text-gray-500 dark:text-gray-400 text-sm'>
-														Аукціон #{auction.id}
-													</p>
+									<article key={auction.id} className={`${surface} p-4 sm:p-5`}>
+										<div className='flex items-start gap-3 mb-4'>
+											{auction.channel_avatar ? (
+												<img className='w-12 h-12 rounded-xl object-cover flex-shrink-0' src={auction.channel_avatar} alt='' />
+											) : (
+												<div className='w-12 h-12 rounded-xl bg-gradient-to-br from-orange-400 to-red-500 flex items-center justify-center text-lg font-bold text-white flex-shrink-0'>
+													{(auction.channel_name || '?')[0]}
+												</div>
+											)}
+											<div className='min-w-0 flex-1'>
+												<NavLink to={`/channel/${auction.channel_id}`} className='font-bold text-gray-900 dark:text-white hover:text-accent leading-snug line-clamp-2 break-words'>
+													{auction.channel_name || `Канал #${auction.channel_id}`}
+												</NavLink>
+												<div className='flex flex-wrap items-center gap-2 mt-1.5'>
+													<Badge tone={st.tone}>{st.text}</Badge>
+													{isActive && <Badge tone='gray' dot={false}>⏱ {timeStr}</Badge>}
+													<span className='text-xs text-gray-400'>Аукціон #{auction.id}</span>
 												</div>
 											</div>
-											<div className='flex items-center gap-3'>
-												<span className={`text-xs px-3 py-1 rounded-full font-semibold ${statusColors[auction.status] || statusColors.active}`}>
-													{statusTexts[auction.status] || auction.status}
-												</span>
-												{isActive && (
-													<span className='text-xs px-3 py-1 rounded-full font-medium bg-gray-100 dark:bg-slate-700 text-gray-700 dark:text-gray-300'>
-														⏱ {timeStr}
-													</span>
-												)}
-											</div>
 										</div>
-										<div className='grid grid-cols-2 sm:grid-cols-4 gap-3 text-sm'>
-											<div className='bg-orange-50 dark:bg-orange-900/20 p-3 rounded-xl'>
-												<span className='font-semibold text-orange-600'>{auction.current_price} USDT</span>
-												<p className='text-gray-400 dark:text-gray-500 text-xs mt-0.5'>поточна ціна</p>
-											</div>
-											<div className='bg-gray-50 dark:bg-slate-700/60 p-3 rounded-xl'>
-												<span className='font-semibold dark:text-gray-200'>{auction.start_price} USDT</span>
-												<p className='text-gray-400 dark:text-gray-500 text-xs mt-0.5'>стартова ціна</p>
-											</div>
-											<div className='bg-gray-50 dark:bg-slate-700/60 p-3 rounded-xl'>
-												<span className='font-semibold dark:text-gray-200'>{auction.bid_step} USDT</span>
-												<p className='text-gray-400 dark:text-gray-500 text-xs mt-0.5'>крок ставки</p>
-											</div>
-											<div className='bg-gray-50 dark:bg-slate-700/60 p-3 rounded-xl'>
-												<span className='font-semibold dark:text-gray-200'>{auction.bid_count}</span>
-												<p className='text-gray-400 dark:text-gray-500 text-xs mt-0.5'>ставок</p>
-											</div>
-										</div>
-									</div>
+										<dl className='grid grid-cols-2 sm:grid-cols-4 gap-2 sm:gap-3 text-sm'>
+											{[
+												['Поточна ціна', `${fmtUsdt(auction.current_price)} USDT`, true],
+												['Стартова ціна', `${fmtUsdt(auction.start_price)} USDT`],
+												['Крок ставки', `${fmtUsdt(auction.bid_step)} USDT`],
+												['Ставок', auction.bid_count ?? 0],
+											].map(([k, v, hl]) => (
+												<div key={k} className={`${inner} p-3`}>
+													<dt className='text-xs text-gray-500 dark:text-gray-400'>{k}</dt>
+													<dd className={`font-semibold mt-1 tabular-nums ${hl ? 'text-orange-600 dark:text-orange-400' : 'text-gray-900 dark:text-gray-100'}`}>{v}</dd>
+												</div>
+											))}
+										</dl>
+									</article>
 								);
 							})}
-						</div>
+						</div>,
 					)}
 				</>
 			) : activeTab.value === 'deals' ? (
 				<>
-					{/* Deal filter pills */}
-					<div className='flex flex-wrap gap-2 mb-6'>
-						{DEAL_FILTERS.map(f => (
-							<button
-								key={f.text}
-								onClick={() => setDealFilter(f)}
-								className={`flex items-center gap-2 px-4 py-2 rounded-full text-sm font-medium duration-300 ${
-									f === dealFilter
-									? 'bg-[#3498db] text-white shadow-md shadow-blue-200 dark:shadow-blue-900/30'
-									: 'bg-white dark:bg-slate-800 text-gray-600 dark:text-gray-300 border border-gray-200 dark:border-slate-600 hover:border-[#3498db] hover:text-[#3498db]'
-								}`}
-							>
-								<span className={`w-2 h-2 rounded-full ${f === dealFilter ? 'bg-white' : f.dot}`} />
-								{f.text}
-								<span className={`text-xs ${f === dealFilter ? 'text-blue-100' : 'text-gray-400'}`}>
-									{f.value === null ? dealCounts.all : dealCounts[f.value] || 0}
-								</span>
-							</button>
-						))}
-					</div>
-
-					{loading ? (
-						<div className='flex justify-center py-20'>
-							<div className='animate-spin rounded-full h-10 w-10 border-b-2 border-blue-500' />
-						</div>
-					) : filteredDeals.length === 0 ? (
-						<div className='text-center py-16 bg-white dark:bg-slate-800 rounded-2xl border border-dashed border-gray-300 dark:border-slate-600'>
-							<div className='text-5xl mb-4'>🤝</div>
-							<p className='text-lg font-semibold text-gray-700 dark:text-gray-200 mb-2'>
-								{dealFilter.value ? 'Немає угод з таким статусом' : 'У вас ще немає угод'}
-							</p>
-							<p className='text-gray-500 dark:text-gray-400 mb-6'>Перейдіть до каталогу, щоб купити канал</p>
-							<NavLink
-								to='/catalog'
-								className='inline-flex items-center gap-2 font-bold bg-[#3498db] text-white py-3 px-8 rounded-xl shadow-lg shadow-blue-200 hover:bg-[#2980b9] duration-300'
-							>
-								Перейти до каталогу
-							</NavLink>
-						</div>
-					) : (
+					<FilterChips items={DEAL_FILTERS} active={dealFilter} onChange={setDealFilter}
+						count={f => (f.value === null ? dealCounts.all : dealCounts[f.value] || 0)} />
+					{renderBody(
+						filteredDeals.length === 0 && (
+							<EmptyState
+								icon='🤝'
+								title={dealFilter.value ? 'Немає угод з таким статусом' : 'У вас ще немає угод'}
+								text='Оберіть канал у каталозі — оплата проходить через безпечну угоду TgSell.'
+								action={<LinkButton to='/catalog'>Перейти до каталогу</LinkButton>}
+							/>
+						),
 						<div className='grid gap-4'>
 							{filteredDeals.map(deal => {
-								const statusInfo = DEAL_STATUS_LABELS[deal.status] || DEAL_STATUS_LABELS.created;
+								const statusInfo = DEAL_STATUS[deal.status] || { text: deal.status, tone: 'gray' };
 								const isBuyer = user?.id === deal.buyer_id;
+								const next = dealNextStep(deal, isBuyer);
 								return (
-									<NavLink
-										key={deal.id}
-										to={`/deal/${deal.id}`}
-											className='bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-gray-100 dark:border-slate-700 p-5 hover:shadow-md duration-300 block group'
-										>
-											<div className='flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-3'>
-												<div>
-													<h3 className='font-bold text-gray-800 dark:text-white text-lg'>
-														{deal.channel_name || `Канал #${deal.channel_id}`}
-													</h3>
-													<p className='text-gray-500 dark:text-gray-400 text-sm'>
-													Угода #{deal.id} · {isBuyer ? 'Ви покупець' : 'Ви продавець'}
-													{unread[deal.id] > 0 && <span className='ml-2 inline-block bg-blue-500 text-white text-[11px] font-semibold px-2 py-0.5 rounded-full'>💬 {unread[deal.id]}</span>}
+									<article key={deal.id} className={`${surface} p-4 sm:p-5`}>
+										<div className='flex flex-col sm:flex-row sm:items-start justify-between gap-2 sm:gap-4 mb-4'>
+											<div className='min-w-0'>
+												<h3 className='font-bold text-gray-900 dark:text-white text-base sm:text-lg leading-snug line-clamp-2 break-words'>
+													{deal.channel_name || `Канал #${deal.channel_id}`}
+												</h3>
+												<p className='text-gray-500 dark:text-gray-400 text-sm mt-1'>
+													Угода #{deal.id} · {isBuyer ? 'ви покупець' : 'ви продавець'}
 												</p>
 											</div>
-											<div className='flex items-center gap-3'>
-												<span className={`text-xs px-3 py-1 rounded-full font-semibold ${statusInfo.color}`}>
-													{statusInfo.text}
-												</span>
-												<FontAwesomeIcon icon={faArrowRight} className='text-gray-300 group-hover:text-[#3498db] duration-300' />
+											<div className='flex flex-wrap items-center gap-2 sm:justify-end flex-shrink-0'>
+												<Badge tone={statusInfo.tone}>{statusInfo.text}</Badge>
+												{unread[deal.id] > 0 && <Badge tone='blue' dot={false}>💬 {unread[deal.id]} нових</Badge>}
 											</div>
 										</div>
-										<div className='grid grid-cols-2 sm:grid-cols-4 gap-3 text-sm'>
-											<div className='bg-gray-50 dark:bg-slate-700/60 p-3 rounded-xl'>
-												<span className='font-semibold text-green-600'>{fmtUsdt(deal.amount_usdt)} USDT</span>
-												<p className='text-gray-400 dark:text-gray-500 text-xs mt-0.5'>сума</p>
+										<dl className='grid grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-3 text-sm'>
+											<div className={`${inner} p-3`}>
+												<dt className='text-xs text-gray-500 dark:text-gray-400'>Сума</dt>
+												<dd className='font-bold mt-1 text-gray-900 dark:text-accent tabular-nums'>{fmtUsdt(deal.amount_usdt)} USDT</dd>
 											</div>
-											<div className='bg-gray-50 dark:bg-slate-700/60 p-3 rounded-xl'>
-												<span className='font-semibold dark:text-gray-200'>{fmtUsdt(deal.service_fee)} USDT</span>
-												<p className='text-gray-400 dark:text-gray-500 text-xs mt-0.5'>комісія</p>
+											<div className={`${inner} p-3`}>
+												<dt className='text-xs text-gray-500 dark:text-gray-400'>Комісія</dt>
+												<dd className='font-semibold mt-1 text-gray-900 dark:text-gray-100 tabular-nums'>{fmtUsdt(deal.service_fee)} USDT</dd>
 											</div>
-											<div className='bg-gray-50 dark:bg-slate-700/60 p-3 rounded-xl'>
-												<span className='font-semibold dark:text-gray-200'>{isBuyer ? (deal.seller_name || 'Продавець') : (deal.buyer_name || 'Покупець')}</span>
-												<p className='text-gray-400 dark:text-gray-500 text-xs mt-0.5'>{isBuyer ? 'продавець' : 'покупець'}</p>
+											<div className={`${inner} p-3 min-w-0`}>
+												<dt className='text-xs text-gray-500 dark:text-gray-400'>{isBuyer ? 'Продавець' : 'Покупець'}</dt>
+												<dd className='font-semibold mt-1 text-gray-900 dark:text-gray-100 truncate'>{isBuyer ? (deal.seller_name || 'Продавець') : (deal.buyer_name || 'Покупець')}</dd>
 											</div>
-											<div className='bg-gray-50 dark:bg-slate-700/60 p-3 rounded-xl'>
-												<span className='font-semibold dark:text-gray-200'>{new Date(deal.created_at).toLocaleDateString('uk-UA')}</span>
-												<p className='text-gray-400 dark:text-gray-500 text-xs mt-0.5'>дата</p>
+											<div className={`${inner} p-3`}>
+												<dt className='text-xs text-gray-500 dark:text-gray-400'>Створено</dt>
+												<dd className='font-semibold mt-1 text-gray-900 dark:text-gray-100 tabular-nums'>{new Date(deal.created_at).toLocaleDateString('uk-UA')}</dd>
 											</div>
-										</div>
+										</dl>
 										{deal.dispute_reason && (
-											<p className='mt-3 text-sm bg-red-50 text-red-700 p-3 rounded-xl'>
+											<p className='mt-3 text-sm bg-red-50 dark:bg-red-900/20 border border-red-100 dark:border-red-900/40 text-red-700 dark:text-red-300 px-3 py-2 rounded-xl'>
 												<span className='font-semibold'>Причина спору:</span> {deal.dispute_reason}
 											</p>
 										)}
-									</NavLink>
+										<div className='mt-4 flex justify-end'>
+											<NavLink to={`/deal/${deal.id}`} className={`${next.primary ? btnPrimary : btnSecondary} w-full sm:w-auto`}>
+												{next.text}
+												<FontAwesomeIcon icon={faArrowRight} className='text-xs' />
+											</NavLink>
+										</div>
+									</article>
 								);
 							})}
-						</div>
+						</div>,
 					)}
 				</>
 			) : activeTab.value === 'saved' ? (
 				<SavedSearches />
 			) : (
-				<>
-					{loading ? (
-						<div className='flex justify-center py-20'>
-							<div className='animate-spin rounded-full h-10 w-10 border-b-2 border-blue-500' />
-						</div>
-					) : favorites.length === 0 ? (
-						<div className='text-center py-16 bg-white dark:bg-slate-800 rounded-2xl border border-dashed border-gray-300 dark:border-slate-600'>
-							<div className='text-5xl mb-4'>❤️</div>
-							<p className='text-lg font-semibold text-gray-700 dark:text-gray-200 mb-2'>У вас поки немає обраних каналів</p>
-							<p className='text-gray-500 dark:text-gray-400 mb-6'>Додайте канали в обране з каталогу</p>
-							<NavLink
-								to='/catalog'
-								className='inline-flex items-center gap-2 font-bold bg-[#3498db] text-white py-3 px-8 rounded-xl shadow-lg shadow-blue-200 hover:bg-[#2980b9] duration-300'
-							>
-								Перейти до каталогу
-							</NavLink>
-						</div>
-					) : (
-						<div className='grid grid-cols-1 md:grid-cols-2 2xl:grid-cols-3 gap-6'>
-							{favorites.map(channel => (
-								<CatalogCard key={channel.id} channel={channel} />
-							))}
-						</div>
-					)}
-				</>
+				renderBody(
+					favorites.length === 0 && (
+						<EmptyState
+							icon='❤️'
+							title='У вас поки немає обраних каналів'
+							text='Натисніть ♡ на картці каналу в каталозі, щоб зберегти його тут.'
+							action={<LinkButton to='/catalog'>Перейти до каталогу</LinkButton>}
+						/>
+					),
+					<div className='grid grid-cols-1 md:grid-cols-2 2xl:grid-cols-3 gap-4 sm:gap-6'>
+						{favorites.map(channel => (
+							<CatalogCard key={channel.id} channel={channel} />
+						))}
+					</div>,
+				)
 			)}
 
 			{/* Auction creation modal */}
@@ -628,7 +504,7 @@ const CabinetPage = () => {
 					onClick={() => setShowAuctionModal(false)}
 				>
 					<div
-						className='bg-white dark:bg-slate-800 rounded-2xl shadow-2xl max-w-lg w-full overflow-hidden'
+						className='bg-white dark:bg-card border border-transparent dark:border-card-border rounded-2xl shadow-2xl max-w-lg w-full max-h-[90vh] overflow-y-auto'
 						onClick={e => e.stopPropagation()}
 					>
 						{/* Header */}
@@ -686,7 +562,7 @@ const CabinetPage = () => {
 													<p className='font-semibold text-gray-800 dark:text-white text-sm truncate'>{ch.channel_name}</p>
 													<p className='text-xs text-gray-500 dark:text-gray-400'>{ch.subscribers_count?.toLocaleString('uk-UA')} підписників</p>
 												</div>
-												<button onClick={() => setSelectedChannelId(null)} className='text-xs text-orange-500 hover:text-orange-700 font-medium'>
+												<button onClick={() => setSelectedChannelId(null)} className='min-h-[44px] px-3 -mr-1 text-sm text-orange-600 dark:text-orange-400 hover:text-orange-700 font-semibold rounded-lg'>
 													Змінити
 												</button>
 											</div>
@@ -750,7 +626,7 @@ const CabinetPage = () => {
 							<div className='flex gap-3 mt-5'>
 								<button
 									onClick={() => setShowAuctionModal(false)}
-									className='flex-1 py-3 rounded-xl text-sm font-semibold text-gray-600 dark:text-gray-400 border border-gray-200 dark:border-slate-600 hover:bg-gray-50 dark:hover:bg-slate-700 transition-all'
+									className='flex-1 min-h-[44px] py-3 rounded-xl text-sm font-semibold text-gray-600 dark:text-gray-400 border border-gray-200 dark:border-slate-600 hover:bg-gray-50 dark:hover:bg-slate-700 transition-all'
 								>
 									Скасувати
 								</button>
@@ -758,7 +634,7 @@ const CabinetPage = () => {
 									<button
 										onClick={handleCreateAuction}
 										disabled={auctionSubmitting}
-										className='flex-[2] py-3 rounded-xl text-sm font-semibold bg-gradient-to-r from-orange-500 to-red-500 hover:from-orange-600 hover:to-red-600 text-white shadow-md hover:shadow-lg transition-all disabled:opacity-50 flex items-center justify-center gap-2'
+										className='flex-[2] min-h-[44px] py-3 rounded-xl text-sm font-semibold bg-gradient-to-r from-orange-500 to-red-500 hover:from-orange-600 hover:to-red-600 text-white shadow-md hover:shadow-lg transition-all disabled:opacity-50 flex items-center justify-center gap-2'
 									>
 										{auctionSubmitting ? (
 											<svg className='animate-spin w-5 h-5' fill='none' viewBox='0 0 24 24'>
