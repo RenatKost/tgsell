@@ -44,9 +44,10 @@ def _deal_to_response(deal: Deal, channel: Channel | None = None, buyer: User | 
         bundle_id=deal.bundle_id,
         buyer_id=deal.buyer_id,
         seller_id=deal.seller_id,
-        channel_name=channel.channel_name if channel else (bundle.name if bundle else None),
+        channel_name=channel.channel_name if channel else (
+            bundle.name if bundle else (deal.external_channel_link if deal.external_channel_link else None)),
         channel_avatar_url=public_channel_avatar_url(channel.id, channel.avatar_url) if channel else None,
-        channel_link=channel.telegram_link if channel else None,
+        channel_link=channel.telegram_link if channel else deal.external_channel_link,
         bundle_name=bundle.name if bundle else None,
         bundle_channel_count=len(bundle.bundle_channels) if bundle and bundle.bundle_channels else None,
         buyer_name=buyer.first_name if buyer else None,
@@ -72,6 +73,7 @@ def _deal_to_response(deal: Deal, channel: Channel | None = None, buyer: User | 
         completed_at=deal.completed_at,
         balance_stars=deal.balance_stars,
         balance_ton=deal.balance_ton,
+        is_external=bool(deal.external_channel_link),
     )
 
 

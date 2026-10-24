@@ -22,6 +22,7 @@ STATIC_PAGES = [
     ("/catalog", "hourly", "0.9"),
     ("/auction", "hourly", "0.8"),
     ("/wanted", "daily", "0.7"),
+    ("/escrow", "monthly", "0.7"),
     ("/kupyty-telegram-kanal", "weekly", "0.9"),
     ("/prodaty-telegram-kanal", "weekly", "0.9"),
     ("/skilky-koshtuye-telegram-kanal", "weekly", "0.8"),
@@ -42,6 +43,7 @@ Disallow: /api/
 Disallow: /cabinet
 Disallow: /profile
 Disallow: /deal/
+Disallow: /escrow/
 Allow: /kupyty-telegram-kanal
 Allow: /prodaty-telegram-kanal
 Allow: /skilky-koshtuye-telegram-kanal

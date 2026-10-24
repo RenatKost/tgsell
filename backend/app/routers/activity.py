@@ -135,7 +135,8 @@ async def get_activity_feed(db: AsyncSession = Depends(get_db)):
     # --- Real events ---
     # Recent deals
     result = await db.execute(
-        select(Deal).order_by(Deal.created_at.desc()).limit(5)
+        select(Deal).where(Deal.external_channel_link.is_(None))  # private external deals stay private
+        .order_by(Deal.created_at.desc()).limit(5)
     )
     for deal in result.scalars().all():
         buyer = await db.get(User, deal.buyer_id)

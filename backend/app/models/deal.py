@@ -105,6 +105,9 @@ class Deal(Base):
     bundle_id: Mapped[int | None] = mapped_column(
         Integer, ForeignKey("channel_bundles.id"), nullable=True
     )
+    # «Гарант для зовнішніх угод» (migration 0050): set only for private external deals
+    # (channel_id and bundle_id are both NULL). Never exposed publicly.
+    external_channel_link: Mapped[str | None] = mapped_column(String(255), nullable=True)
 
     # Transfer checklist + reminder dedup (migration 0022).
     # Dedup fields are reset on every checklist activity (tick/confirm), so each

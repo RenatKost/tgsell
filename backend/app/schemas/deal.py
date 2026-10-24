@@ -20,6 +20,7 @@ class DealResponse(BaseModel):
     channel_name: str | None = None
     channel_avatar_url: str | None = None
     channel_link: str | None = None
+    is_external: bool = False  # «Гарант для зовнішніх угод» (private, no catalog lot)
     bundle_name: str | None = None
     bundle_channel_count: int | None = None
     buyer_name: str | None = None

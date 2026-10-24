@@ -331,6 +331,15 @@ export const savedSearchesAPI = {
 };
 
 // ===== «Шукаю канал» =====
+export const escrowAPI = {
+	meta: () => api.get('/escrow/meta'),
+	create: (body) => api.post('/escrow/offers', body),
+	mine: () => api.get('/escrow/offers/my'),
+	cancel: (id) => api.post(`/escrow/offers/${id}/cancel`),
+	invite: (token) => api.get(`/escrow/invite/${encodeURIComponent(token)}`),
+	accept: (token) => api.post(`/escrow/invite/${encodeURIComponent(token)}/accept`),
+};
+
 export const wantedAPI = {
 	meta: () => api.get('/wanted/meta'),
 	list: (params) => api.get('/wanted', { params }),
