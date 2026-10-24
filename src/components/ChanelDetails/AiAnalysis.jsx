@@ -1,3 +1,4 @@
+import { fmtNum } from '../../utils/money';
 import { useEffect, useState } from 'react';
 import { channelsAPI } from '../../services/api';
 import { IcoCpu } from '../Icon3D';
@@ -17,7 +18,7 @@ const ReachBar = ({ value, label, color, maxVal }) => {
 			<div className='flex-1'>
 				<div className='flex items-center justify-between mb-0.5'>
 					<span className='text-[11px] text-gray-400'>{label}</span>
-					<span className={`text-[11px] font-bold ${color}`}>{value?.toLocaleString('uk-UA')}</span>
+					<span className={`text-[11px] font-bold ${color}`}>{fmtNum(value)}</span>
 				</div>
 				<div className='w-full h-1.5 rounded-full bg-gray-700/30'>
 					<div className={`h-full rounded-full transition-all duration-700`} style={{ width: `${pct}%`, backgroundColor: color === 'text-pink-400' ? '#EC4899' : color === 'text-emerald-400' ? '#10B981' : '#F97316' }} />
@@ -235,7 +236,7 @@ const AiAnalysis = ({ channelId, channel }) => {
 														<div className='h-full rounded-full bg-accent' style={{ width: `${Math.min(100, ((item.income_max || 0) / (data.total_potential_income_max || 1)) * 100)}%` }} />
 													</div>
 													<span className='text-[11px] font-bold text-emerald-400 whitespace-nowrap'>
-														{item.income_max?.toLocaleString('uk-UA')} USDT/міс
+														{fmtNum(item.income_max)} USDT/міс
 													</span>
 												</div>
 											</div>

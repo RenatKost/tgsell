@@ -1,4 +1,4 @@
-import { fmtUsdt } from '../utils/money';
+import { fmtUsdt, fmtNum } from '../utils/money';
 import { formatEr } from '../utils/er';
 import { useEffect, useRef, useState } from 'react';
 import { adminAPI, dealsAPI, bundlesAPI } from '../services/api';
@@ -868,12 +868,12 @@ const ModerCabinet = () => {
 										<div className='grid grid-cols-2 md:grid-cols-4 gap-3 text-sm'>
 											<div className='bg-gray-50 dark:bg-slate-700/60 p-3 rounded-xl'>
 												<FontAwesomeIcon icon={faUsers} className='text-gray-400 mr-1' />
-												<span className='font-semibold text-gray-800 dark:text-gray-200'>{channel.subscribers_count?.toLocaleString('uk-UA') || '—'}</span>
+												<span className='font-semibold text-gray-800 dark:text-gray-200'>{fmtNum(channel.subscribers_count) || '—'}</span>
 												<p className='text-gray-400 text-xs mt-0.5'>підписників</p>
 											</div>
 											<div className='bg-gray-50 dark:bg-slate-700/60 p-3 rounded-xl'>
 												<FontAwesomeIcon icon={faEye} className='text-gray-400 mr-1' />
-												<span className='font-semibold text-gray-800 dark:text-gray-200'>{channel.views_hidden ? '🔒' : (channel.avg_views?.toLocaleString('uk-UA') || '—')}</span>
+												<span className='font-semibold text-gray-800 dark:text-gray-200'>{channel.views_hidden ? '🔒' : (fmtNum(channel.avg_views) || '—')}</span>
 												<p className='text-gray-400 text-xs mt-0.5'>переглядів</p>
 											</div>
 											<div className='bg-gray-50 dark:bg-slate-700/60 p-3 rounded-xl'>
@@ -882,14 +882,14 @@ const ModerCabinet = () => {
 												<p className='text-gray-400 text-xs mt-0.5'>ER</p>
 											</div>
 											<div className='bg-gray-50 dark:bg-slate-700/60 p-3 rounded-xl'>
-												<span className='font-semibold text-green-600'>{channel.price?.toLocaleString('uk-UA')} USDT</span>
+												<span className='font-semibold text-green-600'>{fmtNum(channel.price)} USDT</span>
 												<p className='text-gray-400 text-xs mt-0.5'>ціна</p>
 											</div>
 										</div>
 										{(channel.listing_type === 'auction' || channel.listing_type === 'both') && channel.auction_start_price && (
 											<div className='grid grid-cols-2 md:grid-cols-3 gap-3 text-sm mt-3'>
 												<div className='bg-orange-50 dark:bg-orange-900/20 p-3 rounded-xl'>
-													<span className='font-semibold text-orange-600'>{channel.auction_start_price} USDT</span>
+													<span className='font-semibold text-orange-600'>{fmtNum(channel.auction_start_price)} USDT</span>
 													<p className='text-gray-400 text-xs mt-0.5'>старт аукціону</p>
 												</div>
 												<div className='bg-orange-50 dark:bg-orange-900/20 p-3 rounded-xl'>
@@ -937,7 +937,7 @@ const ModerCabinet = () => {
 											<div>
 												<h3 className='font-bold text-white text-lg'>📡 {b.name}</h3>
 												<p className='text-sm text-gray-400'>
-													Продавець: {b.seller_name} · {b.channel_count} каналів · {b.price} USDT
+													Продавець: {b.seller_name} · {b.channel_count} каналів · {fmtNum(b.price)} USDT
 												</p>
 											</div>
 										</div>
@@ -1131,12 +1131,12 @@ const ModerCabinet = () => {
 										<div className='grid grid-cols-2 md:grid-cols-5 gap-2 text-sm'>
 											<div className='bg-gray-50 dark:bg-slate-700/60 p-2.5 rounded-xl'>
 												<FontAwesomeIcon icon={faUsers} className='text-gray-400 mr-1' />
-												<span className='font-semibold text-gray-800 dark:text-gray-200'>{channel.subscribers_count?.toLocaleString('uk-UA') || '—'}</span>
+												<span className='font-semibold text-gray-800 dark:text-gray-200'>{fmtNum(channel.subscribers_count) || '—'}</span>
 												<p className='text-gray-400 text-xs'>підписників</p>
 											</div>
 											<div className='bg-gray-50 dark:bg-slate-700/60 p-2.5 rounded-xl'>
 												<FontAwesomeIcon icon={faEye} className='text-gray-400 mr-1' />
-												<span className='font-semibold text-gray-800 dark:text-gray-200'>{channel.views_hidden ? '🔒' : (channel.avg_views?.toLocaleString('uk-UA') || '—')}</span>
+												<span className='font-semibold text-gray-800 dark:text-gray-200'>{channel.views_hidden ? '🔒' : (fmtNum(channel.avg_views) || '—')}</span>
 												<p className='text-gray-400 text-xs'>переглядів</p>
 											</div>
 											<div className='bg-gray-50 dark:bg-slate-700/60 p-2.5 rounded-xl'>
@@ -1145,7 +1145,7 @@ const ModerCabinet = () => {
 												<p className='text-gray-400 text-xs'>ER</p>
 											</div>
 											<div className='bg-gray-50 dark:bg-slate-700/60 p-2.5 rounded-xl'>
-												<span className='font-semibold text-green-600'>{channel.price?.toLocaleString('uk-UA')} USDT</span>
+												<span className='font-semibold text-green-600'>{fmtNum(channel.price)} USDT</span>
 												<p className='text-gray-400 text-xs'>ціна</p>
 											</div>
 											<div className='bg-gray-50 dark:bg-slate-700/60 p-2.5 rounded-xl'>
@@ -1384,11 +1384,11 @@ const ModerCabinet = () => {
 											</div>
 											<div className='grid grid-cols-2 md:grid-cols-5 gap-2 text-sm mb-4'>
 												<div className='bg-gray-50 dark:bg-slate-700/60 p-2.5 rounded-xl'>
-													<span className='font-semibold text-gray-800 dark:text-gray-200'>{auction.start_price} USDT</span>
+													<span className='font-semibold text-gray-800 dark:text-gray-200'>{fmtNum(auction.start_price)} USDT</span>
 													<p className='text-gray-400 text-xs'>старт</p>
 												</div>
 												<div className='bg-gray-50 dark:bg-slate-700/60 p-2.5 rounded-xl'>
-													<span className='font-semibold text-green-600'>{auction.current_price} USDT</span>
+													<span className='font-semibold text-green-600'>{fmtNum(auction.current_price)} USDT</span>
 													<p className='text-gray-400 text-xs'>поточна</p>
 												</div>
 												<div className='bg-gray-50 dark:bg-slate-700/60 p-2.5 rounded-xl'>
@@ -1577,7 +1577,7 @@ const ModerCabinet = () => {
 														<FontAwesomeIcon icon={faCopy} className='text-xs' />
 													</button>
 												</div>
-												<p className='text-2xl font-bold text-green-600'>{w.balance_usdt.toFixed(2)} <span className='text-sm text-gray-400'>USDT</span></p>
+												<p className='text-2xl font-bold text-green-600'>{fmtUsdt(w.balance_usdt)} <span className='text-sm text-gray-400'>USDT</span></p>
 											</div>
 											{isAdmin && <div className='lg:w-96 flex-shrink-0'>
 												<label className='text-sm text-gray-500 dark:text-gray-400 font-medium mb-1.5 block'>Перевести на адресу (TRC-20)</label>
@@ -1651,7 +1651,7 @@ function PendingBundleCard({ bundle: b, onDone }) {
 					</p>
 				</div>
 				<div className='text-right'>
-					<div className='text-2xl font-bold text-green-600'>{Number(b.price || 0).toLocaleString('uk-UA')} USDT</div>
+					<div className='text-2xl font-bold text-green-600'>{fmtNum(Number(b.price || 0))} USDT</div>
 					<p className='text-xs text-gray-400'>ціна за всю сітку</p>
 				</div>
 			</div>

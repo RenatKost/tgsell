@@ -9,6 +9,7 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
+from app.utils.limits import MAX_PRICE_MSG, MAX_PRICE_USDT
 from app.config import settings
 from app.database import get_db
 from app.models.auction import Auction, AuctionBid, AuctionStatus
@@ -112,6 +113,8 @@ async def create_auction_from_channel(
     db: AsyncSession = Depends(get_db),
 ):
     """Create an auction from an existing approved channel owned by the user."""
+    if start_price > MAX_PRICE_USDT or bid_step > MAX_PRICE_USDT:
+        raise HTTPException(status_code=422, detail=MAX_PRICE_MSG)
     result = await db.execute(
         select(Channel).where(Channel.id == channel_id)
     )

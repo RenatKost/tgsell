@@ -1,3 +1,4 @@
+import { fmtNum } from '../../utils/money';
 const AdvertisingReach = ({ channel }) => {
 	const avgReach = channel?.avg_views;
 	const reach12h = channel?.adv_reach_12h;
@@ -25,12 +26,12 @@ const AdvertisingReach = ({ channel }) => {
 		<div className='bg-white dark:bg-card rounded-xl border border-gray-100 dark:border-card-border shadow-sm px-4 py-4 w-full'>
 			<p className='text-gray-400 text-xs mb-0.5'>Рекламне охоплення</p>
 			<p className='font-bold text-lg text-gray-900 dark:text-white mb-3'>
-				{avgReach?.toLocaleString('uk-UA') || '—'}
+				{fmtNum(avgReach) || '—'}
 			</p>
 			<div className='space-y-2'>
 				{rows.map((r, idx) => r.value != null && (
 					<div key={idx} className={`flex items-center justify-between ${r.bg} rounded-xl px-4 py-3`}>
-						<p className={`font-bold ${r.text}`}>{r.value.toLocaleString('uk-UA')}</p>
+						<p className={`font-bold ${r.text}`}>{fmtNum(r.value)}</p>
 						<p className='text-gray-500 dark:text-gray-400 text-sm'>{r.label}</p>
 					</div>
 				))}

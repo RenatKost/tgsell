@@ -2,7 +2,9 @@
 from __future__ import annotations
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
+
+from app.utils.limits import check_max_price
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -26,6 +28,11 @@ class WantedIn(BaseModel):
     budget_max: float | None = None
     language: str = Field(..., max_length=10)
     comment: str | None = Field(None, max_length=svc.COMMENT_MAX)
+
+    @field_validator("budget_min", "budget_max")
+    @classmethod
+    def _max_price(cls, v):
+        return check_max_price(v)
 
 
 class RejectIn(BaseModel):

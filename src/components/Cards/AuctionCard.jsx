@@ -1,3 +1,4 @@
+import { fmtNum } from '../../utils/money';
 import { useState, useEffect, useRef } from 'react';
 import { motion } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
@@ -173,7 +174,7 @@ const AuctionCard = ({ auction, onBid }) => {
 							transition={{ duration: 0.7 }}
 							className='font-extrabold text-xl text-orange-500 leading-tight'
 						>
-							{auction.current_price?.toLocaleString('uk-UA')}
+							{fmtNum(auction.current_price)}
 							<span className='text-xs font-semibold text-gray-400 ml-1'>USDT</span>
 							{uplift !== null && uplift > 0 && (
 								<span className='ml-2 text-[10px] font-bold text-emerald-500'>+{uplift}%</span>
@@ -184,7 +185,7 @@ const AuctionCard = ({ auction, onBid }) => {
 					<div className='border-l-2 border-gray-300 dark:border-gray-600 bg-gray-50 dark:bg-card-inner rounded-r-lg pl-3 pr-2 py-2'>
 						<p className='text-gray-400 text-[10px]'>Стартова</p>
 						<p className='font-bold text-sm text-gray-500 dark:text-gray-300'>
-							{auction.start_price?.toLocaleString('uk-UA')} <span className='text-[10px]'>USDT</span>
+							{fmtNum(auction.start_price)} <span className='text-[10px]'>USDT</span>
 						</p>
 					</div>
 
@@ -200,7 +201,7 @@ const AuctionCard = ({ auction, onBid }) => {
 						<p className='font-bold text-sm text-gray-800 dark:text-gray-100'>
 							{auction.views_hidden
 								? <span className='text-amber-500 text-xs'>🔒</span>
-								: (auction.avg_views ? auction.avg_views.toLocaleString('uk-UA') : '—')}
+								: (auction.avg_views ? fmtNum(auction.avg_views) : '—')}
 						</p>
 					</div>
 
@@ -208,7 +209,7 @@ const AuctionCard = ({ auction, onBid }) => {
 						<p className='text-gray-400 text-[10px]'>Прибуток / міс.</p>
 						<p className='font-bold text-sm text-gray-800 dark:text-gray-100'>
 							{auction.monthly_income
-								? `${auction.monthly_income.toLocaleString('uk-UA')} USDT`
+								? `${fmtNum(auction.monthly_income)} USDT`
 								: '—'}
 						</p>
 					</div>

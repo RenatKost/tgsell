@@ -1,3 +1,4 @@
+import { MAX_PRICE_USDT, MAX_PRICE_HINT, fmtNum } from '../utils/money';
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { bundlesAPI } from '../services/api';
@@ -84,6 +85,7 @@ export default function BundleSellPage() {
     if (!form.name.trim()) return 'Назва сітки обов\'язкова';
     if (!form.price || isNaN(Number(form.price)) || Number(form.price) <= 0)
       return 'Вкажіть коректну ціну';
+    if (Number(form.price) > MAX_PRICE_USDT) return MAX_PRICE_HINT;
     return '';
   };
 
@@ -196,7 +198,7 @@ export default function BundleSellPage() {
               <div>
                 <label className="block text-sm text-gray-400 mb-1">Ціна продажу (USDT) *</label>
                 <input name="price" value={form.price} onChange={handleFormChange}
-                  type="number" min="0" placeholder="0"
+                  type="number" min="0" max={MAX_PRICE_USDT} title={MAX_PRICE_HINT} placeholder="0"
                   className="w-full bg-card-inner border border-card-border rounded-lg px-4 py-2.5 text-white placeholder-gray-600 focus:outline-none focus:border-accent/50" />
               </div>
               <div>
@@ -298,7 +300,7 @@ export default function BundleSellPage() {
               )}
               <div className="flex justify-between">
                 <span className="text-gray-400">Ціна</span>
-                <span className="text-accent font-bold">{form.price} USDT</span>
+                <span className="text-accent font-bold">{fmtNum(form.price)} USDT</span>
               </div>
               {form.monthly_income && (
                 <div className="flex justify-between">

@@ -1,3 +1,4 @@
+import { fmtNum } from '../../utils/money';
 import { faChartLine, faListAlt, faUsers, faTrash, faArrowRight } from '@fortawesome/free-solid-svg-icons';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { useState } from 'react';
@@ -20,10 +21,10 @@ const CabinetCard = ({ channel, onDelete }) => {
 	};
 
 	const stats = [
-		['Перегляди', channel.views_hidden ? <span className='text-amber-500' title='Приховано'>🔒</span> : (channel.avg_views?.toLocaleString('uk-UA') || '—')],
+		['Перегляди', channel.views_hidden ? <span className='text-amber-500' title='Приховано'>🔒</span> : (fmtNum(channel.avg_views) || '—')],
 		['ER', formatEr(channel.er, channel.subscribers_count)],
 		['Вік', formatAge(channel.age)],
-		['Дохід/міс', channel.monthly_income ? `${channel.monthly_income.toLocaleString('uk-UA')} $` : '—'],
+		['Дохід/міс', channel.monthly_income ? `${fmtNum(channel.monthly_income)} $` : '—'],
 	];
 
 	return (
@@ -51,7 +52,7 @@ const CabinetCard = ({ channel, onDelete }) => {
 						<div className='flex flex-wrap items-center gap-x-3 gap-y-1 mt-2 text-sm text-gray-500 dark:text-gray-400'>
 							<span className='flex items-center gap-1'>
 								<FontAwesomeIcon icon={faUsers} className='text-xs' />
-								{channel.subscribers_count?.toLocaleString('uk-UA') || '0'}
+								{fmtNum(channel.subscribers_count) || '0'}
 							</span>
 							{channel.daily_growth != null && (
 								<span className={`flex items-center gap-1 ${channel.daily_growth >= 0 ? 'text-green-600 dark:text-green-400' : 'text-red-500'}`}>
@@ -89,7 +90,7 @@ const CabinetCard = ({ channel, onDelete }) => {
 					<div className='min-w-0'>
 						<p className='text-xs text-gray-500 dark:text-gray-400'>Ціна</p>
 						<p className='text-lg font-bold text-gray-900 dark:text-white tabular-nums'>
-							{channel.price?.toLocaleString('uk-UA')} <span className='text-sm text-gray-500 dark:text-accent'>USDT</span>
+							{fmtNum(channel.price)} <span className='text-sm text-gray-500 dark:text-accent'>USDT</span>
 						</p>
 					</div>
 					<div className='flex items-center gap-2'>

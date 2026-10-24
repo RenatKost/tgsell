@@ -123,6 +123,10 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
+from app.utils.limits import install_price_limit_handler  # noqa: E402
+
+install_price_limit_handler(app)
+
 # CORS
 allowed_origins = [settings.frontend_url]
 if os.getenv("RAILWAY_ENVIRONMENT"):

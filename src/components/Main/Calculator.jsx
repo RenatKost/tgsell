@@ -1,3 +1,4 @@
+import { fmtNum } from '../../utils/money';
 import { useState } from 'react';
 import { motion } from 'framer-motion';
 
@@ -81,7 +82,7 @@ const Calculator = () => {
     return isNaN(total) ? 0 : Math.round(total);
   };
 
-  const formatCurrency = num => new Intl.NumberFormat('uk-UA').format(num) + ' USDT';
+  const formatCurrency = num => fmtNum(num) + ' USDT';
   const total = calculateTotal();
 
   return (

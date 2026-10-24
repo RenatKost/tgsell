@@ -2,6 +2,9 @@ from datetime import datetime
 from pydantic import BaseModel, Field, field_validator, model_validator
 
 
+from app.utils.limits import check_max_price
+
+
 class BundleChannelInfo(BaseModel):
     id: int
     channel_name: str
@@ -82,7 +85,7 @@ class BundleCreate(BaseModel):
     def validate_price(cls, v: float) -> float:
         if v <= 0:
             raise ValueError("Price must be positive")
-        return v
+        return check_max_price(v)
 
     @field_validator("name")
     @classmethod
@@ -102,6 +105,11 @@ class BundleUpdate(BaseModel):
     resources: str | None = None
     channel_balances: list[ChannelBalanceUpdate] | None = None
 
+
+    @field_validator("price")
+    @classmethod
+    def _max_price(cls, v):
+        return check_max_price(v)
 
 class BundleResponse(BaseModel):
     id: int

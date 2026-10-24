@@ -1,6 +1,7 @@
+import { fmtNum } from './money';
 export const LANGUAGE_LABELS = { ua: 'Україна', ru: 'RU', en: 'EN', other: 'Інше' };
 
-const n = (v) => Number(v).toLocaleString('uk-UA', { maximumFractionDigits: 2 });
+const n = (v) => fmtNum(Number(v));
 
 export const fmtRange = (lo, hi, unit = '') => {
 	const has = (v) => v !== null && v !== undefined && v !== '';

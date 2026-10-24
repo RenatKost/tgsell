@@ -1,3 +1,4 @@
+import { fmtNum } from '../../utils/money';
 import ReactApexChart from 'react-apexcharts';
 import { useState, useEffect } from 'react';
 
@@ -55,7 +56,7 @@ const ChartModal = ({ open, onClose, stats: rawStats = [], title, color, dataKey
 	const diff = last - first;
 	const pct = first ? ((diff / first) * 100).toFixed(1) : '0';
 	const isPercent = dataKey === 'er';
-	const fmt = v => isPercent ? `${v.toFixed(2)}%` : v.toLocaleString('uk-UA');
+	const fmt = v => isPercent ? `${v.toFixed(2)}%` : fmtNum(v);
 
 	const options = {
 		dataLabels: { enabled: false },
@@ -76,12 +77,12 @@ const ChartModal = ({ open, onClose, stats: rawStats = [], title, color, dataKey
 		yaxis: {
 			min: yMin,
 			max: yMax,
-			labels: { show: true, style: { colors: '#6b7280', fontSize: '12px' }, formatter: v => isPercent ? `${v.toFixed(1)}%` : v.toLocaleString('uk-UA') },
+			labels: { show: true, style: { colors: '#6b7280', fontSize: '12px' }, formatter: v => isPercent ? `${v.toFixed(1)}%` : fmtNum(v) },
 		},
 		grid: { show: true, borderColor: '#243447', strokeDashArray: 3, xaxis: { lines: { show: true } } },
 		legend: { show: false },
 		tooltip: {
-			y: { formatter: tooltipFmt || (v => v?.toLocaleString('uk-UA')) },
+			y: { formatter: tooltipFmt || (v => fmtNum(v)) },
 			x: { show: true },
 		},
 		markers: { size: 3, colors: [color], strokeWidth: 0, hover: { size: 6 } },

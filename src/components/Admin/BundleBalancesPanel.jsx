@@ -1,3 +1,4 @@
+import { fmtNum } from '../../utils/money';
 // Task 32: staff (admin / moderator) edit per-channel balances of any bundle.
 import { useEffect, useState } from 'react';
 import { adminAPI } from '../../services/api';
@@ -54,7 +55,7 @@ const BundleBalancesPanel = () => {
 								<div>
 									<div className='font-bold text-white'>📡 #{b.id} {b.name}</div>
 									<div className='text-xs text-gray-400'>
-										{STATUS[b.status] || b.status} · продавець id={b.seller_id} · {b.price} USDT
+										{STATUS[b.status] || b.status} · продавець id={b.seller_id} · {fmtNum(b.price)} USDT
 										{b.has_active_deal && <span className='ml-2 text-yellow-400'>є активна угода</span>}
 									</div>
 								</div>

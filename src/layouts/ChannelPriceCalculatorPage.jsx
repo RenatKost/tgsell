@@ -1,3 +1,4 @@
+import { fmtNum } from '../utils/money';
 import { useState } from 'react';
 import usePageMeta from '../hooks/usePageMeta';
 import { A, Card, Cta, PageShell, Section } from '../components/Seo/SeoBlocks';
@@ -6,7 +7,7 @@ import { estimate, usd } from '../seo/marketData';
 const PATH = '/skilky-koshtuye-telegram-kanal';
 const PRESETS = [1000, 5000, 10000];
 const MAX_SUBS = 10000000;
-const num = (n) => n.toLocaleString('uk-UA');
+const num = (n) => fmtNum(n);
 
 const EstimateRow = ({ subs }) => {
 	const e = estimate(subs);

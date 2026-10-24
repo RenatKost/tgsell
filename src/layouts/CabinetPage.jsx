@@ -1,4 +1,4 @@
-import { fmtUsdt } from '../utils/money';
+import { fmtUsdt, fmtNum, MAX_PRICE_USDT, MAX_PRICE_HINT } from '../utils/money';
 import { useEffect, useState } from 'react';
 import { NavLink, useNavigate } from 'react-router-dom';
 import { channelsAPI, favoritesAPI, dealsAPI, auctionsAPI, bundlesAPI } from '../services/api';
@@ -147,6 +147,7 @@ const CabinetPage = () => {
 		const bs = parseFloat(auctionForm.bid_step);
 		if (!sp || sp <= 0) { setAuctionError('Вкажіть коректну стартову ціну'); return; }
 		if (!bs || bs <= 0) { setAuctionError('Вкажіть коректний крок ставки'); return; }
+		if (sp > MAX_PRICE_USDT || bs > MAX_PRICE_USDT) { setAuctionError(MAX_PRICE_HINT); return; }
 		setAuctionError('');
 		setAuctionSubmitting(true);
 		try {
@@ -542,8 +543,8 @@ const CabinetPage = () => {
 											<div className='flex-1 min-w-0'>
 												<p className='font-semibold text-gray-800 dark:text-white truncate text-sm'>{ch.channel_name}</p>
 												<div className='flex items-center gap-3 text-xs text-gray-500 dark:text-gray-400'>
-													<span><FontAwesomeIcon icon={faUsers} className='mr-1' />{ch.subscribers_count?.toLocaleString('uk-UA') || '0'}</span>
-													<span>{ch.price} USDT</span>
+													<span><FontAwesomeIcon icon={faUsers} className='mr-1' />{fmtNum(ch.subscribers_count) || '0'}</span>
+													<span>{fmtNum(ch.price)} USDT</span>
 												</div>
 											</div>
 											<FontAwesomeIcon icon={faChevronRight} className='text-gray-300 dark:text-gray-600' />
@@ -567,7 +568,7 @@ const CabinetPage = () => {
 												)}
 												<div className='flex-1 min-w-0'>
 													<p className='font-semibold text-gray-800 dark:text-white text-sm truncate'>{ch.channel_name}</p>
-													<p className='text-xs text-gray-500 dark:text-gray-400'>{ch.subscribers_count?.toLocaleString('uk-UA')} підписників</p>
+													<p className='text-xs text-gray-500 dark:text-gray-400'>{fmtNum(ch.subscribers_count)} підписників</p>
 												</div>
 												<button onClick={() => setSelectedChannelId(null)} className='min-h-[44px] px-3 -mr-1 text-sm text-orange-600 dark:text-orange-400 hover:text-orange-700 font-semibold rounded-lg'>
 													Змінити
@@ -585,6 +586,8 @@ const CabinetPage = () => {
 											className='w-full border border-gray-200 dark:border-slate-600 rounded-xl px-4 py-3 text-sm bg-gray-50/50 dark:bg-slate-700/50 dark:text-white focus:border-orange-400 focus:ring-4 focus:ring-orange-50 dark:focus:ring-orange-900/30 transition-all'
 											placeholder='100'
 											min='1'
+											max={MAX_PRICE_USDT}
+											title={MAX_PRICE_HINT}
 										/>
 									</div>
 
@@ -597,6 +600,8 @@ const CabinetPage = () => {
 											className='w-full border border-gray-200 dark:border-slate-600 rounded-xl px-4 py-3 text-sm bg-gray-50/50 dark:bg-slate-700/50 dark:text-white focus:border-orange-400 focus:ring-4 focus:ring-orange-50 dark:focus:ring-orange-900/30 transition-all'
 											placeholder='10'
 											min='1'
+											max={MAX_PRICE_USDT}
+											title={MAX_PRICE_HINT}
 										/>
 									</div>
 

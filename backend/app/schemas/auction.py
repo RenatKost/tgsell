@@ -1,10 +1,17 @@
 from datetime import datetime
 
-from pydantic import BaseModel, model_validator
+from pydantic import BaseModel, field_validator, model_validator
+
+from app.utils.limits import check_max_price
 
 
 class AuctionBidCreate(BaseModel):
     amount: float
+
+    @field_validator("amount")
+    @classmethod
+    def _max_price(cls, v):
+        return check_max_price(v)
 
 
 class AuctionBidResponse(BaseModel):
