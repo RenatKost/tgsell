@@ -1,9 +1,12 @@
 import { useState, useEffect, useRef } from 'react';
-import { motion } from 'framer-motion';
+import { motion, MotionConfig } from 'framer-motion';
 import { NavLink } from 'react-router-dom';
 import { CheckCircle2 } from 'lucide-react';
 import Calculator from '../components/Main/Calculator';
 import ActivityTicker from '../components/Auction/ActivityTicker';
+import useReveal from '../hooks/useReveal';
+import './escrow.css';
+import './premium.css';
 
 // ─── Animated counter ────────────────────────────────────────────────────────
 const StatCounter = ({ end, label, suffix }) => {
@@ -59,7 +62,7 @@ const Step = ({ n, title, desc, stepCls }) => (
 // ─── Hero floating channel card ───────────────────────────────────────────────
 const HeroCard = () => (
   <div className="relative ml-auto max-w-sm w-full">
-    <div className="bg-white dark:bg-card rounded-2xl border border-gray-100 dark:border-card-border p-5" style={{ boxShadow: '0 0 50px rgba(0,255,136,0.08)' }}>
+    <div className="esc-card prm-glow rounded-2xl p-5">
       <div className="flex items-start justify-between mb-4">
         <div className="flex items-center gap-3">
           <div className="w-12 h-12 rounded-xl bg-accent/10 flex items-center justify-center text-xl font-black text-accent">₿</div>
@@ -98,12 +101,12 @@ const HeroCard = () => (
           <p className="text-[10px] text-gray-400">Ціна</p>
           <p className="text-lg font-black text-gray-900 dark:text-white">15 000 <span className="text-sm font-normal text-gray-400">USDT</span></p>
         </div>
-        <div className="bg-accent text-black text-xs font-black px-4 py-2 rounded-xl cursor-pointer">Купити →</div>
+        <div className="esc-btn bg-accent text-black text-xs font-black px-4 py-2 rounded-xl cursor-pointer">Купити →</div>
       </div>
     </div>
     <motion.div
       animate={{ y: [-3, 3, -3] }} transition={{ repeat: Infinity, duration: 3 }}
-      className="absolute -top-3 right-1 sm:right-2 bg-white dark:bg-card border border-gray-100 dark:border-card-border rounded-xl px-2.5 sm:px-3 py-1.5 sm:py-2 shadow-lg"
+      className="esc-card absolute -top-3 right-1 sm:right-2 rounded-xl px-2.5 sm:px-3 py-1.5 sm:py-2 shadow-lg"
     >
       <div className="flex items-center gap-1.5">
         <span className="w-1.5 h-1.5 rounded-full bg-accent animate-pulse" />
@@ -112,7 +115,7 @@ const HeroCard = () => (
     </motion.div>
     <motion.div
       animate={{ y: [3, -3, 3] }} transition={{ repeat: Infinity, duration: 3, delay: 1.2 }}
-      className="absolute -bottom-3 left-1 sm:-left-4 bg-white dark:bg-card border border-gray-100 dark:border-card-border rounded-xl px-2.5 sm:px-3 py-1.5 sm:py-2 shadow-lg"
+      className="esc-card absolute -bottom-3 left-1 sm:-left-4 rounded-xl px-2.5 sm:px-3 py-1.5 sm:py-2 shadow-lg"
     >
       <p className="text-[9px] text-gray-400 whitespace-nowrap">Обіг платформи</p>
       <p className="text-xs sm:text-sm font-black text-accent whitespace-nowrap">$2.4M+ USDT</p>
@@ -122,7 +125,7 @@ const HeroCard = () => (
 
 // ─── Mock UI: AI аналіз ───────────────────────────────────────────────────────
 const AIMockUI = () => (
-  <div className="bg-white dark:bg-card rounded-2xl border border-gray-100 dark:border-card-border p-5 shadow-sm dark:shadow-neon w-full max-w-xs">
+  <div className="esc-card esc-lift rounded-2xl p-5 w-full max-w-xs">
     <div className="flex items-center justify-between mb-4">
       <span className="text-xs font-bold text-gray-400 uppercase tracking-wider">TgSell Аналіз</span>
       <span className="bg-accent text-black text-xs font-black px-3 py-1 rounded-full">КУПИТИ</span>
@@ -160,7 +163,7 @@ const AIMockUI = () => (
 const EscrowMockUI = () => {
   const steps = ['Оплата', 'Ескроу', 'Передача', 'Виплата'];
   return (
-    <div className="bg-white dark:bg-card rounded-2xl border border-gray-100 dark:border-card-border p-5 shadow-sm dark:shadow-neon w-full max-w-xs">
+    <div className="esc-card esc-lift rounded-2xl p-5 w-full max-w-xs">
       <p className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-4">Угода в ескроу</p>
       <div className="relative flex justify-between mb-5">
         <div className="absolute top-4 left-4 right-4 h-px bg-gray-100 dark:bg-card-border" />
@@ -234,7 +237,7 @@ const CatalogMockUI = () => (
 const AuctionMockUI = () => {
   const [bid, setBid] = useState(3200);
   return (
-    <div className="bg-white dark:bg-card rounded-2xl border border-gray-100 dark:border-card-border p-5 shadow-sm dark:shadow-neon w-full max-w-xs">
+    <div className="esc-card esc-lift rounded-2xl p-5 w-full max-w-xs">
       <div className="flex items-center justify-between mb-4">
         <span className="text-xs font-bold text-gray-400 uppercase tracking-wider">Аукціон</span>
         <span className="text-[10px] bg-orange-400/10 text-orange-400 font-bold px-2 py-0.5 rounded-full border border-orange-400/20">LIVE</span>
@@ -275,6 +278,7 @@ const AuctionMockUI = () => {
 
 // ─── Main ─────────────────────────────────────────────────────────────────────
 const HomePage = () => {
+  useReveal();
   const earnCards = [
     {
       gradient: 'linear-gradient(135deg,#00FF88,#00cc6a)',
@@ -405,23 +409,20 @@ const HomePage = () => {
   ];
 
   return (
-    <div>
+    <MotionConfig reducedMotion="user">
+    <div className="esc-page prm-home relative overflow-x-clip">
       {/* ── 1. HERO ─────────────────────────────────────────────────────── */}
       <section className="relative min-h-[88vh] flex items-center pt-20 pb-8 overflow-hidden">
-        <div className="absolute inset-0 pointer-events-none" style={{
-          backgroundImage: 'linear-gradient(rgba(0,255,136,0.025) 1px, transparent 1px), linear-gradient(90deg, rgba(0,255,136,0.025) 1px, transparent 1px)',
-          backgroundSize: '60px 60px'
-        }} />
-        <div className="absolute top-1/3 right-1/4 w-96 h-96 rounded-full blur-3xl pointer-events-none" style={{ background: 'rgba(0,255,136,0.04)' }} />
+        <div className="esc-bg esc-bg-short" aria-hidden="true"><span className="esc-grid" /><span className="esc-blob esc-blob-1" /><span className="esc-blob esc-blob-2" /></div>
         <div className="w-full grid lg:grid-cols-2 gap-12 items-center relative z-10">
           <motion.div initial={{ opacity: 0, y: 40 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.7 }}>
             <div className="inline-flex items-center gap-2 bg-accent/10 border border-accent/20 rounded-full px-4 py-1.5 mb-6">
               <span className="w-1.5 h-1.5 rounded-full bg-accent animate-pulse" />
               <span className="text-xs font-bold text-accent">Перша Ukrainian Telegram Marketplace</span>
             </div>
-            <h1 className="text-4xl lg:text-5xl xl:text-6xl font-black text-gray-900 dark:text-white leading-tight mb-6">
+            <h1 className="esc-title text-4xl lg:text-5xl xl:text-6xl font-black leading-tight mb-6">
               Купуй та продавай<br />
-              <span className="text-accent">Telegram</span> канали<br />
+              <span className="prm-accent-text">Telegram</span> канали<br />
               безпечно
             </h1>
             <p className="text-lg text-gray-500 dark:text-gray-300 leading-relaxed mb-8 max-w-lg">
@@ -434,10 +435,10 @@ const HomePage = () => {
               <StatCounter end={2400000} label="USDT обіг" suffix="+" />
             </div>
             <div className="flex gap-4 flex-wrap">
-              <NavLink to="/catalog" className="bg-accent text-black font-black px-8 py-3.5 rounded-xl text-sm uppercase tracking-wider shadow-lg shadow-accent/20 hover:brightness-110 transition-all">
+              <NavLink to="/catalog" className="esc-btn bg-accent text-black font-black px-8 py-3.5 rounded-xl text-sm uppercase tracking-wider shadow-lg shadow-accent/20 hover:brightness-110 transition-all">
                 Переглянути каталог
               </NavLink>
-              <NavLink to="/sell" className="border border-gray-200 dark:border-card-border text-gray-800 dark:text-white font-bold px-8 py-3.5 rounded-xl text-sm uppercase tracking-wider hover:border-accent hover:text-accent dark:hover:border-accent dark:hover:text-accent transition-all">
+              <NavLink to="/sell" className="esc-btn-ghost border border-gray-200 dark:border-card-border text-gray-800 dark:text-white font-bold px-8 py-3.5 rounded-xl text-sm uppercase tracking-wider hover:border-accent hover:text-accent dark:hover:border-accent dark:hover:text-accent transition-all">
                 Продати канал
               </NavLink>
             </div>
@@ -460,16 +461,13 @@ const HomePage = () => {
         </div>
         <div className="grid md:grid-cols-3 gap-6">
           {earnCards.map((card, i) => (
-            <motion.div
+            <div
               key={card.label}
-              initial={{ opacity: 0, y: 30 }}
-              whileInView={{ opacity: 1, y: 0 }}
-              viewport={{ once: true }}
-              transition={{ delay: i * 0.12, duration: 0.5 }}
-              className="flex flex-col"
+              style={{ '--d': `${i * 100}ms` }}
+              className="esc-reveal flex flex-col"
             >
               <div className="h-1 rounded-t-2xl" style={{ background: card.gradient }} />
-              <div className="bg-white dark:bg-card rounded-b-2xl border border-t-0 border-gray-100 dark:border-card-border p-6 flex flex-col flex-1">
+              <div className="esc-card prm-flat-top rounded-b-2xl p-6 flex flex-col flex-1">
                 <span className="text-5xl font-black text-gray-100 dark:text-white/5 mb-2 leading-none select-none">{card.label}</span>
                 <h3 className="text-lg font-black text-gray-900 dark:text-white mb-1">{card.title}</h3>
                 <p className="text-sm font-semibold mb-4" style={{ color: card.accentColor }}>{card.benefit}</p>
@@ -483,7 +481,7 @@ const HomePage = () => {
                 </ul>
                 <NavLink to={card.to} className="text-sm font-bold text-accent hover:underline">{card.cta} →</NavLink>
               </div>
-            </motion.div>
+            </div>
           ))}
         </div>
       </section>
@@ -497,13 +495,9 @@ const HomePage = () => {
         </div>
         <div className="space-y-24">
           {features.map((f, i) => (
-            <motion.div
+            <div
               key={f.tag}
-              initial={{ opacity: 0, y: 40 }}
-              whileInView={{ opacity: 1, y: 0 }}
-              viewport={{ once: true, margin: '-80px' }}
-              transition={{ duration: 0.6 }}
-              className="grid lg:grid-cols-2 gap-12 items-center"
+              className="esc-reveal grid lg:grid-cols-2 gap-12 items-center"
             >
               <div className={f.reverse ? 'lg:order-2' : ''}>
                 <Tag text={f.tag} />
@@ -521,26 +515,25 @@ const HomePage = () => {
               <div className={"flex " + (f.reverse ? 'lg:order-1 justify-center lg:justify-start' : 'justify-center lg:justify-end')}>
                 <f.MockUI />
               </div>
-            </motion.div>
+            </div>
           ))}
         </div>
       </section>
 
       {/* ── 5. КАЛЬКУЛЯТОР ───────────────────────────────────────────────── */}
       <section id="calculator" className="py-20 scroll-mt-20">
-        <motion.div
-          initial={{ opacity: 0, y: 30 }}
-          whileInView={{ opacity: 1, y: 0 }}
-          viewport={{ once: true }}
-          className="bg-white dark:bg-card rounded-3xl border border-gray-100 dark:border-card-border p-8 lg:p-12 shadow-sm dark:shadow-neon-lg"
+        <div
+          className="esc-reveal"
         >
+          <div className="esc-card rounded-3xl p-8 lg:p-12">
           <div className="text-center mb-10">
             <Tag text="Калькулятор" />
             <h2 className="text-3xl font-black text-gray-900 dark:text-white">Скільки коштує твій канал?</h2>
             <p className="text-gray-400 mt-3">Введи параметри і дізнайся ринкову вартість за нашою формулою</p>
           </div>
           <Calculator />
-        </motion.div>
+        </div>
+        </div>
       </section>
 
       {/* ── 6. ЯК ЦЕ ПРАЦЮЄ ─────────────────────────────────────────────── */}
@@ -552,56 +545,51 @@ const HomePage = () => {
         </div>
         <div className="grid md:grid-cols-2 gap-8">
           {howItWorks.map(flow => (
-            <motion.div
+            <div
               key={flow.title}
-              initial={{ opacity: 0, y: 30 }}
-              whileInView={{ opacity: 1, y: 0 }}
-              viewport={{ once: true }}
-              transition={{ duration: 0.5 }}
-              className={"rounded-2xl border overflow-hidden " + flow.borderCls}
+              className={"esc-reveal prm-flow rounded-2xl border overflow-hidden " + flow.borderCls}
             >
               <div className={"px-6 py-4 " + flow.headerCls}>
                 <h3 className={"font-black text-lg " + flow.titleCls}>{flow.title}</h3>
               </div>
-              <div className="bg-white dark:bg-card p-6 space-y-5">
+              <div className="prm-panel p-6 space-y-5">
                 {flow.steps.map((step, i) => (
                   <Step key={step.title} n={i + 1} title={step.title} desc={step.desc} stepCls={flow.stepCls} />
                 ))}
               </div>
-            </motion.div>
+            </div>
           ))}
         </div>
       </section>
 
       {/* ── 7. CTA ───────────────────────────────────────────────────────── */}
       <section className="py-20">
-        <motion.div
-          initial={{ opacity: 0, scale: 0.97 }}
-          whileInView={{ opacity: 1, scale: 1 }}
-          viewport={{ once: true }}
-          className="bg-white dark:bg-card rounded-3xl border border-gray-100 dark:border-card-border p-12 text-center relative overflow-hidden"
-          style={{ boxShadow: '0 0 80px rgba(0,255,136,0.06)' }}
+        <div
+          className="esc-reveal"
         >
+          <div className="esc-card prm-glow rounded-3xl p-12 text-center relative overflow-hidden">
           <div className="absolute inset-0 pointer-events-none" style={{ background: 'radial-gradient(ellipse at center, rgba(0,255,136,0.05) 0%, transparent 65%)' }} />
           <div className="relative">
             <Tag text="Починай зараз" />
             <h2 className="text-4xl lg:text-5xl font-black text-gray-900 dark:text-white mb-4">Готовий почати?</h2>
             <p className="text-gray-400 text-lg mb-8 max-w-md mx-auto">Приєднуйся до тисяч покупців та продавців Telegram-каналів в Україні</p>
             <div className="flex gap-4 justify-center flex-wrap">
-              <NavLink to="/catalog" className="bg-accent text-black font-black px-10 py-4 rounded-xl shadow-lg shadow-accent/20 hover:brightness-110 transition-all text-sm uppercase tracking-wider">
+              <NavLink to="/catalog" className="esc-btn bg-accent text-black font-black px-10 py-4 rounded-xl shadow-lg shadow-accent/20 hover:brightness-110 transition-all text-sm uppercase tracking-wider">
                 Купити канал
               </NavLink>
-              <NavLink to="/auction" className="border border-gray-200 dark:border-card-border text-gray-800 dark:text-white font-bold px-10 py-4 rounded-xl hover:border-accent hover:text-accent dark:hover:border-accent dark:hover:text-accent transition-all text-sm uppercase tracking-wider">
+              <NavLink to="/auction" className="esc-btn-ghost border border-gray-200 dark:border-card-border text-gray-800 dark:text-white font-bold px-10 py-4 rounded-xl hover:border-accent hover:text-accent dark:hover:border-accent dark:hover:text-accent transition-all text-sm uppercase tracking-wider">
                 Аукціони
               </NavLink>
-              <NavLink to="/sell" className="border border-gray-200 dark:border-card-border text-gray-800 dark:text-white font-bold px-10 py-4 rounded-xl hover:border-accent hover:text-accent dark:hover:border-accent dark:hover:text-accent transition-all text-sm uppercase tracking-wider">
+              <NavLink to="/sell" className="esc-btn-ghost border border-gray-200 dark:border-card-border text-gray-800 dark:text-white font-bold px-10 py-4 rounded-xl hover:border-accent hover:text-accent dark:hover:border-accent dark:hover:text-accent transition-all text-sm uppercase tracking-wider">
                 Продати канал
               </NavLink>
             </div>
           </div>
-        </motion.div>
+          </div>
+        </div>
       </section>
     </div>
+    </MotionConfig>
   );
 };
 

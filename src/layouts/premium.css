@@ -1,0 +1,38 @@
+/* Преміальні доповнення для / і /channel/:id (лише візуал, поверх escrow.css) */
+.prm-accent-text { color: var(--esc-accent); -webkit-text-fill-color: var(--esc-accent); }
+html:not(.dark) .prm-accent-text { color: #059669; -webkit-text-fill-color: #059669; }
+.prm-glow { box-shadow: 0 0 0 1px rgba(var(--esc-accent-rgb), 0.06), 0 24px 70px -24px rgba(var(--esc-accent-rgb), 0.35); }
+.prm-flat-top { border-top-left-radius: 0; border-top-right-radius: 0; border-top-width: 0; }
+.prm-panel { background: linear-gradient(160deg, rgba(16, 30, 30, 0.78), rgba(8, 14, 14, 0.88)); }
+html:not(.dark) .prm-panel { background: #fff; }
+.prm-flow { transition: box-shadow 0.25s, opacity 0.6s ease, transform 0.6s ease; }
+.prm-flow:hover { box-shadow: 0 14px 40px -18px rgba(var(--esc-accent-rgb), 0.35); }
+/* Постійний легкий shimmer на головних CTA (лише transform) */
+.prm-home .esc-btn.bg-accent::after, .chd-page .chd-buy::after { animation: prm-shimmer 3.8s ease-in-out infinite; }
+@keyframes prm-shimmer { 0%, 60% { transform: translateX(-160%) skewX(-20deg); } 100% { transform: translateX(260%) skewX(-20deg); } }
+
+/* ---------- Картка каналу ---------- */
+.chd-page > * { position: relative; z-index: 1; }
+.chd-page > .esc-bg { position: absolute; z-index: 0; }
+.chd-page .bg-white.dark\:bg-card { transition: border-color 0.25s, box-shadow 0.25s; }
+.dark .chd-page .dark\:bg-card {
+	background: linear-gradient(160deg, rgba(16, 30, 30, 0.8), rgba(8, 14, 14, 0.9));
+	border-color: #1a3a2a;
+	-webkit-backdrop-filter: blur(12px); backdrop-filter: blur(12px);
+}
+.chd-page .dark\:bg-card:hover { border-color: rgba(var(--esc-accent-rgb), 0.45); box-shadow: 0 14px 40px -18px rgba(var(--esc-accent-rgb), 0.35); }
+.chd-avatar { box-shadow: 0 0 0 2px rgba(var(--esc-accent-rgb), 0.35), 0 0 22px rgba(var(--esc-accent-rgb), 0.45); }
+.chd-page .chd-buy { position: relative; overflow: hidden; box-shadow: 0 0 26px rgba(var(--esc-accent-rgb), 0.45); }
+.chd-page .chd-buy:hover { box-shadow: 0 0 38px rgba(var(--esc-accent-rgb), 0.65); transform: translateY(-1px); }
+.chd-title { font-size: 1rem; }
+
+/* ---------- Слабкі пристрої: менше blur ---------- */
+@media (max-width: 640px), (hover: none) {
+	.prm-home .esc-card, .dark .chd-page .dark\:bg-card, .prm-home .esc-badge { -webkit-backdrop-filter: none; backdrop-filter: none; }
+	.prm-home .esc-blob, .chd-page .esc-blob { filter: blur(48px); }
+}
+@media (prefers-reduced-motion: reduce) {
+	.prm-home .esc-btn::after, .chd-page .chd-buy::after { animation: none !important; }
+	.chd-page *, .chd-page *::before, .chd-page *::after { animation: none !important; transition: none !important; }
+	.chd-page .chd-buy:hover { transform: none; }
+}

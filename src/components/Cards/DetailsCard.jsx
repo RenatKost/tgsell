@@ -77,9 +77,9 @@ const DetailsCard = ({ channel, onBuy, onAuction, stats = [] }) => {
 			<div className='p-4'>
 				<div className='flex items-center gap-3'>
 					{channel.avatar_url && !avatarError ? (
-						<img className='w-10 h-10 rounded-lg object-cover flex-shrink-0' src={channel.avatar_url} alt={channel.channel_name} onError={() => setAvatarError(true)} />
+						<img className='chd-avatar w-10 h-10 rounded-lg object-cover flex-shrink-0' src={channel.avatar_url} alt={channel.channel_name} onError={() => setAvatarError(true)} />
 					) : (
-						<div className='w-10 h-10 rounded-lg bg-gradient-to-br from-accent to-emerald-700 flex items-center justify-center text-white text-sm font-bold flex-shrink-0'>
+						<div className='chd-avatar w-10 h-10 rounded-lg bg-gradient-to-br from-accent to-emerald-700 flex items-center justify-center text-white text-sm font-bold flex-shrink-0'>
 							{channel.channel_name?.[0] || '?'}
 						</div>
 					)}
@@ -302,7 +302,7 @@ const DetailsCard = ({ channel, onBuy, onAuction, stats = [] }) => {
 				}>
 					{channel.bundle_id ? (
 						<a href={`/bundle/${channel.bundle_id}`}
-							className='w-full font-bold bg-accent text-black py-2.5 rounded-lg shadow-lg shadow-accent/30 hover:brightness-110 transition-all text-sm flex items-center justify-center gap-1.5'>
+							className='esc-btn chd-buy w-full font-bold bg-accent text-black py-2.5 rounded-lg shadow-lg shadow-accent/30 hover:brightness-110 transition-all text-sm flex items-center justify-center gap-1.5'>
 							📡 Перейти до сітки
 						</a>
 					) : (
@@ -310,7 +310,7 @@ const DetailsCard = ({ channel, onBuy, onAuction, stats = [] }) => {
 							{(channel.listing_type === 'sale' || channel.listing_type === 'both' || !channel.listing_type) && (
 								<button
 									onClick={onBuy}
-									className='w-full font-bold bg-accent text-black py-2.5 rounded-lg shadow-lg shadow-accent/30 hover:shadow-accent/50 hover:brightness-110 transition-all text-sm'
+									className='esc-btn chd-buy w-full font-bold bg-accent text-black py-2.5 rounded-lg shadow-lg shadow-accent/30 hover:shadow-accent/50 hover:brightness-110 transition-all text-sm'
 								>
 									Купити канал
 								</button>
