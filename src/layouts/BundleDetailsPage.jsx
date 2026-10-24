@@ -7,6 +7,10 @@ import { useAppContext } from '../context/AppContext';
 import { IcoUsers, IcoChart, IcoDollar, IcoSignal, IcoTrophy, IcoPackage, IcoWarning, IcoRocket, IcoTarget, IcoLink, IcoUser } from '../components/Icon3D';
 import { formatEr, reliableEr } from '../utils/er';
 import BalanceBadges from '../components/Balance/BalanceBadges';
+import useReveal from '../hooks/useReveal';
+import './escrow.css';
+import './premium.css';
+import './public.css';
 
 function fmt(n) {
   if (n == null) return '—';
@@ -36,6 +40,7 @@ function ScoreRing({ score }) {
 }
 
 export default function BundleDetailsPage() {
+	useReveal();
   const { id } = useParams();
   const navigate = useNavigate();
   const { isAuthenticated, user } = useAppContext();
@@ -213,11 +218,12 @@ export default function BundleDetailsPage() {
   const vCfg = verdictCfg[aiAnalysis?.verdict] || verdictCfg.hold;
 
   return (
-    <div className="min-h-screen bg-page text-white">
+    <div className="esc-page prm-pub relative overflow-x-clip min-h-screen bg-page text-white">
+      <div className="esc-bg" aria-hidden="true"><span className="esc-grid" /><span className="esc-blob esc-blob-1" /><span className="esc-blob esc-blob-2" /><span className="esc-blob esc-blob-3" /></div>
       <div className="max-w-6xl mx-auto px-4 pt-24 pb-16 space-y-5">
 
         {/* ═══════════ HERO ═══════════ */}
-        <div className="bg-card border border-card-border rounded-2xl p-6 shadow-neon-lg">
+        <div className="esc-reveal bg-card border border-card-border rounded-2xl p-6 shadow-neon-lg">
           <div className="flex flex-col lg:flex-row gap-6">
 
             {/* Left */}
@@ -235,7 +241,7 @@ export default function BundleDetailsPage() {
                   <span className="text-xs px-2.5 py-1 rounded-full bg-red-900/40 text-red-400 border border-red-800">ПРОДАНО</span>
                 )}
               </div>
-              <h1 className="text-3xl lg:text-4xl font-black text-white mb-3 leading-tight">{bundle.name}</h1>
+              <h1 className="esc-title text-3xl lg:text-4xl font-black text-white mb-3 leading-tight">{bundle.name}</h1>
               {bundle.description && (
                 <div className="mt-1 bg-card-inner border border-card-border rounded-xl p-3">
                   <div className="text-[11px] font-semibold uppercase tracking-wide text-gray-500 mb-1">💬 Коментар власника</div>
@@ -486,7 +492,7 @@ export default function BundleDetailsPage() {
         )}
 
         {/* ═══════════ AI ANALYSIS ═══════════ */}
-        <div className="bg-card border border-card-border rounded-2xl p-6 shadow-neon-lg">
+        <div className="esc-reveal bg-card border border-card-border rounded-2xl p-6 shadow-neon-lg">
 
           <div className="flex items-center gap-3 mb-5">
             <div className="w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0" style={{background: 'linear-gradient(135deg, rgba(0,255,136,0.15), rgba(0,212,170,0.08))', border: '1px solid rgba(0,255,136,0.25)'}}>

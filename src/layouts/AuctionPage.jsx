@@ -4,6 +4,10 @@ import { auctionsAPI, activityAPI } from '../services/api';
 import AuctionCard from '../components/Cards/AuctionCard';
 import BidModal from '../components/Auction/BidModal';
 import ActivityTicker from '../components/Auction/ActivityTicker';
+import useReveal from '../hooks/useReveal';
+import './escrow.css';
+import './premium.css';
+import './public.css';
 
 /* ─── Floating spark particles ─────────────────────────────────── */
 const SPARKS = Array.from({ length: 18 }, (_, i) => ({
@@ -162,6 +166,7 @@ const SORT_OPTIONS = [
 
 /* ─── Page component ───────────────────────────────────────────── */
 const AuctionPage = () => {
+	useReveal();
 	const [auctions, setAuctions] = useState([]);
 	const [stats, setStats] = useState(null);
 	const [loading, setLoading] = useState(true);
@@ -301,7 +306,8 @@ const AuctionPage = () => {
 	];
 
 	return (
-		<section className='min-h-screen pt-28 pb-10 relative'>
+		<section className='esc-page prm-pub min-h-screen pt-28 pb-10 relative overflow-x-clip'>
+			<div className='esc-bg' aria-hidden='true'><span className='esc-grid' /><span className='esc-blob esc-blob-1' /><span className='esc-blob esc-blob-2' /><span className='esc-blob esc-blob-3' /></div>
 			<FloatingParticles />
 
 			{/* Header */}
@@ -324,7 +330,7 @@ const AuctionPage = () => {
 					initial={{ opacity: 0, y: 10 }}
 					animate={{ opacity: 1, y: 0 }}
 					transition={{ duration: 0.5, delay: 0.1 }}
-					className='text-3xl md:text-4xl font-bold text-gray-900 dark:text-white mb-3'
+					className='esc-title text-3xl md:text-4xl font-bold text-gray-900 dark:text-white mb-3'
 				>
 					Аукціон Telegram-каналів
 				</motion.h1>

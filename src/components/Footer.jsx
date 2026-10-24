@@ -1,6 +1,8 @@
 import { NavLink } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import SocialLinks from './SocialLinks';
+import '../layouts/escrow.css';
+import '../layouts/public.css';
 
 const Logo = () => (
   <svg width="32" height="32" viewBox="0 0 32 32" fill="none" aria-hidden="true">
@@ -56,7 +58,7 @@ const cols = [
 const Footer = () => {
   const year = new Date().getFullYear();
   return (
-    <footer className="mt-20 bg-white dark:bg-card border-t border-gray-100 dark:border-card-border">
+    <footer className="esc-page prm-footer mt-20 bg-white dark:bg-card border-t border-gray-100 dark:border-card-border">
       {/* Top neon line */}
       <motion.div
         className="h-px w-full"

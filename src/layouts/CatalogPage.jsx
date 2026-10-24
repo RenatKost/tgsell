@@ -7,6 +7,10 @@ import { channelsAPI, bundlesAPI, savedSearchesAPI } from '../services/api';
 import { useAuth } from '../context/AppContext';
 import BundleCard from '../components/Cards/BundleCard';
 import { options as categoryOptions } from '../components/Main/Calculator';
+import useReveal from '../hooks/useReveal';
+import './escrow.css';
+import './premium.css';
+import './public.css';
 
 /* ── Dual-range price slider ────────────────────────────────────── */
 const PriceRangeSlider = ({ min = 0, max = 50000, value, onChange }) => {
@@ -81,6 +85,7 @@ const SUBS_BUCKETS = [
 ];
 
 const CatalogPage = () => {
+	useReveal();
 	const { isAuthenticated } = useAuth();
 	const [saveMsg, setSaveMsg] = useState('');
 	const [subsBucket, setSubsBucket] = useState('');
@@ -406,11 +411,12 @@ const CatalogPage = () => {
 	);
 
 	return (
-		<section className='pt-24 md:pt-28 pb-10'>
+		<section className='esc-page prm-pub relative overflow-x-clip pt-24 md:pt-28 pb-10'>
+			<div className='esc-bg' aria-hidden='true'><span className='esc-grid' /><span className='esc-blob esc-blob-1' /><span className='esc-blob esc-blob-2' /><span className='esc-blob esc-blob-3' /></div>
 			{/* ── Header row ── */}
-			<div className='flex flex-col sm:flex-row sm:items-end gap-2 sm:gap-3 mb-3 md:mb-5'>
+			<div className='esc-reveal flex flex-col sm:flex-row sm:items-end gap-2 sm:gap-3 mb-3 md:mb-5'>
 				<div>
-					<h1 className='font-black text-xl md:text-3xl text-gray-900 dark:text-white tracking-tight uppercase'>
+					<h1 className='esc-title font-black text-xl md:text-3xl text-gray-900 dark:text-white tracking-tight uppercase'>
 						Каталог каналів
 					</h1>
 					<p className='hidden md:block text-gray-500 dark:text-gray-400 text-sm mt-0.5'>
