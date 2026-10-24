@@ -13,15 +13,23 @@ const errText = (ex, fb) => { const d = ex?.response?.data?.detail; return typeo
 
 const STATUS = { open: 'Очікує покупця', accepted: 'Угоду розпочато', cancelled: 'Скасовано' };
 
+// Поява при скролі. `is-visible` ставиться напряму в DOM, тому елемент з .esc-reveal
+// не повинен мати className, що змінюється при ре-рендері (React перезапише клас і сховає його).
+// Fallback: елементи, що вже у viewport або вище нього (стрибок скролом), показуються одразу,
+// а через REVEAL_FALLBACK_MS показуються всі — контент ніколи не лишається невидимим.
+const REVEAL_FALLBACK_MS = 1500;
 const useReveal = () => {
 	useEffect(() => {
-		const els = document.querySelectorAll('.esc-reveal');
-		if (!('IntersectionObserver' in window)) { els.forEach((el) => el.classList.add('is-visible')); return undefined; }
+		const els = [...document.querySelectorAll('.esc-reveal:not(.is-visible)')];
+		const show = (el) => el.classList.add('is-visible');
+		if (!els.length) return undefined;
+		if (!('IntersectionObserver' in window)) { els.forEach(show); return undefined; }
 		const io = new IntersectionObserver((entries) => entries.forEach((en) => {
-			if (en.isIntersecting) { en.target.classList.add('is-visible'); io.unobserve(en.target); }
+			if (en.isIntersecting || en.boundingClientRect.top < 0) { show(en.target); io.unobserve(en.target); }
 		}), { threshold: 0.15, rootMargin: '0px 0px -40px 0px' });
 		els.forEach((el) => io.observe(el));
-		return () => io.disconnect();
+		const t = setTimeout(() => { els.forEach(show); io.disconnect(); }, REVEAL_FALLBACK_MS);
+		return () => { clearTimeout(t); io.disconnect(); };
 	});
 };
 
@@ -96,7 +104,8 @@ const FAQ = ({ fee, min }) => {
 				{items.map((it, i) => {
 					const isOpen = open === i;
 					return (
-						<div key={it.q} className={`esc-faq esc-reveal ${isOpen ? 'is-open' : ''}`} style={{ '--d': `${i * 60}ms` }}>
+						<div key={it.q} className='esc-reveal' style={{ '--d': `${i * 60}ms` }}>
+						<div className={`esc-faq ${isOpen ? 'is-open' : ''}`}>
 							<button type='button' className='w-full flex items-center justify-between gap-3 text-left px-4 sm:px-5 py-4 min-h-[56px]' aria-expanded={isOpen} aria-controls={`esc-faq-${i}`} onClick={() => setOpen(isOpen ? -1 : i)}>
 								<span className='font-semibold text-[15px] text-gray-900 dark:text-white'>{it.q}</span>
 								<ChevronDown className='esc-faq-chev w-5 h-5 shrink-0 text-accent' aria-hidden='true' />
@@ -104,6 +113,7 @@ const FAQ = ({ fee, min }) => {
 							<div id={`esc-faq-${i}`} className='esc-faq-body' role='region'>
 								<div className='overflow-hidden'><p className='px-4 sm:px-5 pb-4 text-sm leading-relaxed text-gray-600 dark:text-gray-400'>{it.a}</p></div>
 							</div>
+						</div>
 						</div>
 					);
 				})}

@@ -116,7 +116,7 @@ html:not(.dark) .esc-step-card { background: #fff; border-color: #e5e7eb; }
 .esc-reveal.is-visible { opacity: 1; transform: none; }
 
 /* ---------- FAQ ---------- */
-.esc-faq { border-radius: 1rem; background: rgba(13, 23, 23, 0.75); border: 1px solid #1a3a2a; transition: border-color 0.25s, opacity 0.6s ease, transform 0.6s ease; }
+.esc-faq { border-radius: 1rem; background: rgba(13, 23, 23, 0.75); border: 1px solid #1a3a2a; transition: border-color 0.25s; }
 .esc-faq.is-open { border-color: rgba(var(--esc-accent-rgb), 0.35); }
 html:not(.dark) .esc-faq { background: #fff; border-color: #e5e7eb; }
 .esc-faq-chev { transition: transform 0.3s; }
