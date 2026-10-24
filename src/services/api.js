@@ -340,6 +340,16 @@ export const escrowAPI = {
 	accept: (token) => api.post(`/escrow/invite/${encodeURIComponent(token)}/accept`),
 };
 
+export const servicesAPI = {
+	catalog: () => api.get('/services/catalog'),
+	order: (body) => api.post('/services/orders', body),
+	mine: () => api.get('/services/orders/my'),
+	adminOrders: (params) => api.get('/admin/services/orders', { params }),
+	adminSetStatus: (id, status, note) => api.post(`/admin/services/orders/${id}/status`, { status, note }),
+	adminSettings: () => api.get('/admin/services/settings'),
+	adminSaveSettings: (body) => api.put('/admin/services/settings', body),
+};
+
 export const wantedAPI = {
 	meta: () => api.get('/wanted/meta'),
 	list: (params) => api.get('/wanted', { params }),

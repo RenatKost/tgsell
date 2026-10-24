@@ -124,6 +124,12 @@ const CatalogCard = ({ channel }) => {
 							↗ Відкрити
 						</a>
 					)}
+					{channel.is_top && (
+						<span className='bg-orange-500/10 text-orange-500 text-[11px] font-bold px-2.5 py-1 rounded-lg border border-orange-500/40'>🚀 Топ</span>
+					)}
+					{channel.tgsell_verified && (
+						<span title='Канал пройшов ручну перевірку TgSell' className='bg-green-500/10 text-green-500 text-[11px] font-bold px-2.5 py-1 rounded-lg border border-green-500/40'>✅ Перевірено TgSell</span>
+					)}
 					{channel.is_closed && (
 						<span className='bg-amber-50 dark:bg-amber-900/20 text-amber-600 dark:text-amber-400 text-[11px] font-semibold px-2.5 py-1 rounded-lg border border-amber-200 dark:border-amber-800/40'>
 							🔒 Закритий

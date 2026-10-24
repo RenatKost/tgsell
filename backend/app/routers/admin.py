@@ -1556,6 +1556,9 @@ async def admin_dashboard_stats(
         )
     )).scalar() or 0
 
+    from app.services.paid_services import services_revenue
+    services_income = await services_revenue(db)
+
     return {
         "total_channels": total_channels,
         "pending_channels": pending_channels,
@@ -1569,6 +1572,7 @@ async def admin_dashboard_stats(
         "total_revenue": round(float(total_revenue), 2),
         "fee_accrued": round(float(total_revenue), 2),
         "fee_collected": round(float(fee_collected), 2),
+        "services_revenue": services_income,
     }
 
 

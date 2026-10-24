@@ -106,6 +106,9 @@ class ChannelResponse(BaseModel):
     ton_balance: float | None = None
     # Admin-set warning for buyers (migration 0046)
     buyer_warning: str | None = None
+    # Paid services (migration 0051)
+    is_top: bool = False
+    tgsell_verified: bool = False
 
     @model_validator(mode="after")
     def _sanitize_avatar(self):
