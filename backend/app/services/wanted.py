@@ -31,9 +31,10 @@ BUDGET_TOLERANCE = 1.2  # lot price <= budget_max * 1.2 still notifies the buyer
 LANGUAGES = {"ua": "Україна", "ru": "RU", "en": "EN", "other": "Інше"}
 SRC = "src=wanted"
 
-# Mirrors src/components/Main/Calculator.jsx `options` (catalog categories) minus 18+.
+# Mirrors src/components/Main/Calculator.jsx `options` (catalog categories) minus 18+ and «Вульгарні».
+EXCLUDED_CATEGORIES = ("Новини 18+", "Вульгарні")
 CATEGORIES = [
-    "Новини/ЗМІ", "Регіональні", "Пізнавальні", "Гумор", "Жіночі", "Лінгвістика", "Вульгарні",
+    "Новини/ЗМІ", "Регіональні", "Пізнавальні", "Гумор", "Жіночі", "Лінгвістика",
     "Кулінарія", "Вакансія/Робота", "Криптовалюта", "Чоловіче", "Авто/Мото", "Політика",
     "Медицина", "Музика", "Подорожі/Країни", "Бізнес", "ІТ/Додатки", "Дизайн", "Авторські",
     "Історичні", "Спорт", "Товари/Магазини", "Кіно/Мультфільми", "Інвестиції/Акції", "Блогери",
@@ -54,18 +55,25 @@ _ADULT = re.compile(r"18\s*\+|порн|porn|xxx|onlyfans|еротик|эроти
 _GAMBLING = re.compile(r"казино|casino|ставк|ставок|беттинг|бетинг|betting|букмекер|bookmaker|1xbet|слоти|слоты|slots|gambl", re.I)
 
 
-def check_text(text: str | None) -> str | None:
-    """Return a Ukrainian rejection reason, or None if the text is clean."""
+def check_reasons(text: str | None) -> list[str]:
+    """Moderator-only flags (never shown to the user, never block creation/approval)."""
     t = (text or "").strip()
     if not t:
-        return None
+        return []
+    out = []
     if _ADULT.search(t):
-        return "Запити 18+ заборонені"
+        out.append("18+")
     if _GAMBLING.search(t):
-        return "Запити на канали ставок/казино заборонені"
+        out.append("ставки/казино")
     if any(p.search(t) for p in _CONTACT_PATTERNS):
-        return "Не вказуйте контакти, юзернейми, телефони чи посилання — покупця сповістить платформа"
-    return None
+        out.append("контакти/посилання в тексті")
+    return out
+
+
+def check_text(text: str | None) -> str | None:
+    """First flag or None (backward-compatible helper)."""
+    r = check_reasons(text)
+    return r[0] if r else None
 
 
 def validate(data: dict) -> dict:
@@ -100,9 +108,6 @@ def validate(data: dict) -> dict:
     comment = (data.get("comment") or "").strip() or None
     if comment and len(comment) > COMMENT_MAX:
         raise ValueError(f"Коментар до {COMMENT_MAX} символів")
-    reason = check_text(comment)
-    if reason:
-        raise ValueError(reason)
     return {"category": cat, "language": lang, "subs_min": smin, "subs_max": smax,
             "budget_min": bmin, "budget_max": bmax, "comment": comment}
 
@@ -144,7 +149,8 @@ async def create(db: AsyncSession, user: User, data: dict) -> WantedRequest:
     now = utcnow_naive()
     if await count_active(db, user.id, now) >= MAX_ACTIVE_PER_USER:
         raise ValueError(f"Максимум {MAX_ACTIVE_PER_USER} активні запити")
-    row = WantedRequest(user_id=user.id, status="pending", expires_at=now + TTL, **clean)
+    row = WantedRequest(user_id=user.id, status="pending", expires_at=now + TTL,
+                        auto_flags=check_reasons(clean["comment"]) or None, **clean)
     db.add(row)
     await db.commit()
     await db.refresh(row)
@@ -182,6 +188,8 @@ def summary(r: WantedRequest) -> str:
 async def notify_admin_new_request(r: WantedRequest) -> bool:
     from app.services.alerts import send_admin_alert
     lines = [f"🔎 <b>Новий запит «Шукаю канал» #{r.id}</b> — на модерації", summary(r)]
+    if r.auto_flags:
+        lines.append(f"⚠️ <b>Автоперевірка:</b> {escape(', '.join(r.auto_flags))}")
     if r.comment:
         lines.append(f"💬 {escape(r.comment)}")
     lines.append("Адмінка → «Шукаю канал»")

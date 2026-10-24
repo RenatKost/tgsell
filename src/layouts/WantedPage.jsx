@@ -5,7 +5,7 @@ import { useAuth } from '../context/AppContext';
 import { options as categoryOptions } from '../components/Main/Calculator';
 import { LANGUAGE_LABELS, fmtRange, fmtDate } from '../utils/wanted';
 
-const CATEGORIES = categoryOptions.map((o) => o.label).filter((l) => !l.includes('18+'));
+const CATEGORIES = categoryOptions.map((o) => o.label).filter((l) => !l.includes('18+') && l !== 'Вульгарні');
 const inputCls = 'w-full bg-white dark:bg-slate-900 border border-gray-200 dark:border-card-border rounded-xl px-3 py-2.5 text-sm text-gray-800 dark:text-gray-100 focus:outline-none focus:border-accent';
 const EMPTY = { category: '', subs_min: '', subs_max: '', budget_min: '', budget_max: '', language: 'ua', comment: '' };
 
@@ -82,6 +82,7 @@ const WantedForm = ({ onDone, onCancel }) => {
 				<div className='text-right text-xs text-gray-400'>{v.comment.length}/300</div>
 			</div>
 			<p className='text-xs text-gray-400'>Запит з'явиться після модерації і буде активним 30 днів. Максимум 3 активні запити. Ваші контакти не показуються — коли з'явиться відповідний канал, ми надішлемо сповіщення в Telegram-бот.</p>
+			<BotHint />
 			{err && <div className='text-sm text-red-500'>{err}</div>}
 			<div className='flex gap-3'>
 				<button type='submit' disabled={busy} className='flex-1 bg-accent text-black font-bold rounded-xl py-2.5 text-sm disabled:opacity-60'>{busy ? 'Надсилаємо…' : 'Надіслати на модерацію'}</button>
@@ -90,6 +91,14 @@ const WantedForm = ({ onDone, onCancel }) => {
 		</form>
 	);
 };
+
+const BOT_URL = 'https://t.me/tgsell_alert_bot';
+const BotHint = () => (
+	<p className='text-xs text-gray-500 dark:text-gray-400'>
+		🔔 Натисніть Start в{' '}
+		<a href={BOT_URL} target='_blank' rel='noopener noreferrer' className='text-accent font-semibold underline'>@tgsell_alert_bot</a>, щоб отримати сповіщення
+	</p>
+);
 
 const STATUS_UA = { pending: 'На модерації', approved: 'Опубліковано', rejected: 'Відхилено', closed: 'Закрито' };
 
@@ -100,6 +109,7 @@ const WantedPage = () => {
 	const [showForm, setShowForm] = useState(false);
 	const [mine, setMine] = useState(null);
 	const [notice, setNotice] = useState('');
+	const [sent, setSent] = useState(false);
 
 	const load = async () => {
 		setLoading(true);
@@ -115,7 +125,7 @@ const WantedPage = () => {
 
 	const onCreate = () => {
 		if (!isAuthenticated) { setNotice('Увійдіть, щоб залишити запит'); return; }
-		setNotice(''); setShowForm(true);
+		setNotice(''); setSent(false); setShowForm(true);
 	};
 	const closeReq = async (id) => {
 		if (!window.confirm('Закрити цей запит?')) return;
@@ -128,16 +138,21 @@ const WantedPage = () => {
 				<div className='flex flex-col md:flex-row md:items-end md:justify-between gap-4 mb-8'>
 					<div>
 						<h1 className='text-3xl md:text-4xl font-black text-gray-900 dark:text-white'>Шукаю <span className='text-accent'>канал</span></h1>
-						<p className='text-gray-500 dark:text-gray-400 mt-1'>Запити покупців. Маєте відповідний канал — виставте його на продаж.</p>
+						<p className='text-gray-500 dark:text-gray-400 mt-3'>Запити покупців. Маєте відповідний канал — виставте його на продаж.</p>
 					</div>
-					<button onClick={onCreate} className='bg-accent text-black font-bold rounded-xl px-6 py-3 text-sm self-start md:self-auto'>Залишити запит</button>
+					<button onClick={onCreate} className='w-full md:w-auto bg-accent text-black font-bold rounded-xl px-6 py-3 text-sm md:self-auto'>Залишити запит</button>
 				</div>
 
-				{notice && <div className='mb-6 text-sm text-yellow-500'>{notice}</div>}
+				{notice && (
+					<div className='mb-6 space-y-1'>
+						<div className='text-sm text-yellow-500'>{notice}</div>
+						{sent && <BotHint />}
+					</div>
+				)}
 				{showForm && (
-					<div className='max-w-xl mb-10'>
+					<div className='max-w-2xl mx-auto mb-10'>
 						<WantedForm onCancel={() => setShowForm(false)}
-							onDone={() => { setShowForm(false); setNotice('Запит надіслано на модерацію'); loadMine(); }} />
+							onDone={() => { setShowForm(false); setNotice('Запит надіслано на модерацію'); setSent(true); loadMine(); }} />
 					</div>
 				)}
 

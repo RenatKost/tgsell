@@ -1,6 +1,22 @@
 import { NavLink } from 'react-router-dom';
+import { useAuth } from '../../context/AppContext';
+
+const ITEMS = [
+	{ to: '/catalog', label: 'Каталог каналів', active: 'bg-blue-500/10 text-blue-500 dark:bg-blue-500/20 dark:text-blue-400' },
+	{ to: '/auction', label: '🔥 Аукціон', active: 'bg-orange-500/10 text-orange-500 dark:bg-orange-500/20 dark:text-orange-400' },
+	{ to: '/wanted', label: 'Шукаю канал', active: 'bg-emerald-500/10 text-emerald-500 dark:bg-emerald-500/20 dark:text-emerald-400' },
+	{ to: '/contacts', label: 'Контакти', active: 'bg-cyan-500/10 text-cyan-500 dark:bg-cyan-500/20 dark:text-cyan-400' },
+];
+const itemCls = (active) => ({ isActive }) =>
+	`block w-full px-4 py-3 rounded-xl font-bold text-lg transition-colors duration-200 ${
+		isActive ? active : 'text-gray-800 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-white/5'
+	}`;
+
 
 const MobileNav = ({ showMenu, setShowMenu }) => {
+	const { user, isAuthenticated, logout } = useAuth();
+	const close = () => setShowMenu(false);
+	const isStaff = isAuthenticated && user && (user.role === 'admin' || user.role === 'moderator');
 	return (
 		<>
 			<div
@@ -28,63 +44,52 @@ const MobileNav = ({ showMenu, setShowMenu }) => {
 				/>
 			</div>
 			<nav
-				className={`duration-500 ease-out px-8 flex flex-col justify-center items-start absolute w-screen h-screen bg-white dark:bg-slate-900 top-0 right-0 left-0 bottom-0 ${
-					showMenu ? 'translate-x-0 opacity-100' : 'translate-x-[-100%] opacity-0'
+				aria-hidden={!showMenu}
+				className={`duration-500 ease-out px-5 pt-20 pb-8 flex flex-col justify-start items-stretch fixed inset-0 w-screen h-[100dvh] overflow-y-auto bg-white dark:bg-slate-900 z-40 ${
+					showMenu ? 'translate-x-0 opacity-100' : 'translate-x-[-100%] opacity-0 pointer-events-none'
 				}`}
 			>
-				<ul className='grid space-y-3'>
-					<li>
-						<NavLink
-							to='/catalog'
-							className='text-gray-800 dark:text-gray-200 font-bold text-lg hover:text-blue-500 transition-colors duration-200 block py-2'
-							onClick={() => setShowMenu(false)}
-						>
-							Каталог каналів
-						</NavLink>
-					</li>
-					<li>
-						<NavLink
-							to='/auction'
-							className='text-gray-800 dark:text-gray-200 font-bold text-lg hover:text-orange-500 transition-colors duration-200 block py-2 flex items-center gap-2'
-							onClick={() => setShowMenu(false)}
-						>
-							🔥 Аукціон
-						</NavLink>
-					</li>
-					<li>
-						<NavLink
-							to='/wanted'
-							className='text-gray-800 dark:text-gray-200 font-bold text-lg hover:text-emerald-500 transition-colors duration-200 block py-2'
-							onClick={() => setShowMenu(false)}
-						>
-							Шукаю канал
-						</NavLink>
-					</li>
-					<li>
-						<NavLink
-							to='/contacts'
-							className='text-gray-800 dark:text-gray-200 font-bold text-lg hover:text-cyan-500 transition-colors duration-200 block py-2'
-							onClick={() => setShowMenu(false)}
-						>
-							Контакти
-						</NavLink>
-					</li>
+				<ul className='grid gap-1 w-full'>
+					{ITEMS.map((it) => (
+						<li key={it.to}>
+							<NavLink to={it.to} className={itemCls(it.active)} onClick={close}>{it.label}</NavLink>
+						</li>
+					))}
+					{isStaff && (
+						<li>
+							<NavLink to='/admin' className={itemCls('bg-red-500/10 text-red-500')} onClick={close}>Адмін</NavLink>
+						</li>
+					)}
+					{isAuthenticated && user && (
+						<li>
+							<NavLink to='/cabinet' className={itemCls('bg-blue-500/10 text-blue-500 dark:bg-blue-500/20 dark:text-blue-400')} onClick={close}>Кабінет</NavLink>
+						</li>
+					)}
 				</ul>
-				<div className='grid mt-8 space-y-3 w-full max-w-xs'>
+				<div className='grid mt-6 gap-3 w-full'>
 					<NavLink
-						className='text-center font-semibold text-blue-500 border border-blue-500/30 py-3 px-6 rounded-xl hover:bg-blue-500 hover:text-white transition-all duration-200'
+						className='w-full text-center font-semibold text-blue-500 border border-blue-500/30 py-3 px-6 rounded-xl hover:bg-blue-500 hover:text-white transition-all duration-200'
 						to='/catalog'
-						onClick={() => setShowMenu(false)}
+						onClick={close}
 					>
 						Купити канал
 					</NavLink>
 					<NavLink
-						className='text-center font-semibold bg-gradient-to-r from-emerald-500 to-green-500 text-white py-3 px-6 rounded-xl hover:shadow-lg hover:shadow-green-500/25 transition-all duration-200'
+						className='w-full text-center font-semibold bg-gradient-to-r from-emerald-500 to-green-500 text-white py-3 px-6 rounded-xl hover:shadow-lg hover:shadow-green-500/25 transition-all duration-200'
 						to='/sell'
-						onClick={() => setShowMenu(false)}
+						onClick={close}
 					>
 						Продати канал
 					</NavLink>
+					{isAuthenticated && user && (
+						<button
+							type='button'
+							onClick={() => { close(); logout(); }}
+							className='w-full text-center font-semibold text-gray-500 hover:text-red-500 border border-gray-200 dark:border-slate-700 py-3 px-6 rounded-xl transition-colors duration-200'
+						>
+							Вийти
+						</button>
+					)}
 				</div>
 			</nav>
 		</>

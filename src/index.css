@@ -36,7 +36,9 @@ body {
 		radial-gradient(ellipse 120% 60% at 50% 36%, rgba(0, 180, 75, 0.20) 0%, rgba(0, 110, 44, 0.09) 44%, transparent 70%);
 	background-attachment: fixed;
 	font-family: 'Montserrat', sans-serif;
-	overflow-x: hidden;
+	/* clip (not hidden): `hidden` + height:100% made <body> the scroll container,
+	   so window.scrollY stayed 0 and the fixed header never got its background. */
+	overflow-x: clip;
 	transition: background-color 0.3s, color 0.3s;
 }
 

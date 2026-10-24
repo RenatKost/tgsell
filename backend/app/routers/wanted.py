@@ -101,7 +101,7 @@ async def admin_list(status_: str = Query("pending", alias="status"), admin: Use
         u = users.get(r.user_id)
         out.append(svc.owner_out(r) | {"user_id": r.user_id,
                                        "user_name": (u.username or u.first_name) if u else None,
-                                       "auto_check": svc.check_text(r.comment)})
+                                       "auto_flags": r.auto_flags or []})
     return {"items": out}
 
 
@@ -122,9 +122,6 @@ async def _pending(db, request_id) -> WantedRequest:
 @admin_router.post("/{request_id}/approve")
 async def admin_approve(request_id: int, admin: User = Depends(get_admin_user), db: AsyncSession = Depends(get_db)):
     r = await _pending(db, request_id)
-    reason = svc.check_text(r.comment)
-    if reason:
-        raise HTTPException(status_code=400, detail=f"Автоперевірка: {reason}")
     now = utcnow_naive()
     r.status, r.moderator_id, r.moderated_at = "approved", admin.id, now
     audit(db, admin, "wanted.approve", "wanted_request", r.id)
