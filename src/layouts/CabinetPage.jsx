@@ -5,6 +5,7 @@ import { channelsAPI, favoritesAPI, dealsAPI, auctionsAPI, bundlesAPI } from '..
 import { useAuth } from '../context/AppContext';
 import CabinetCard from '../components/Cards/CabinetCard';
 import CatalogCard from '../components/Cards/CatalogCard';
+import AlertBotHint from '../components/Services/AlertBotHint';
 import SavedSearches from '../components/Cabinet/SavedSearches';
 import BundleBalanceEditor from '../components/Balance/BundleBalanceEditor';
 import BalanceBadges from '../components/Balance/BalanceBadges';
@@ -212,6 +213,8 @@ const CabinetPage = () => {
 					Виставити канал
 				</NavLink>
 			</div>
+
+			<AlertBotHint className='mb-6' />
 
 			{/* Tabs: 3×2 grid on phones (all visible, no hidden scroll), underline row from md */}
 			<div role='tablist' aria-label='Розділи кабінету'

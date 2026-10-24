@@ -43,6 +43,11 @@ class User(Base):
     deals_as_buyer = relationship("Deal", back_populates="buyer", foreign_keys="Deal.buyer_id")
     deals_as_seller = relationship("Deal", back_populates="seller", foreign_keys="Deal.seller_id")
 
+    @property
+    def alert_bot_started(self) -> bool:
+        """True when the user pressed Start in @tgsell_alert_bot and is still reachable (no DB column)."""
+        return bool(self.telegram_id and self.tg_bot_started_at and not self.tg_bot_unreachable_at)
+
 
 class AdminAuditLog(Base):
     """Append-only log of admin actions (migration 0027)."""
