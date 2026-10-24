@@ -266,6 +266,14 @@ export const EscrowOverview = () => {
 							<div>Очікує збору: <b>{fmt(d.totals.pending_sweep_usdt)}</b> ({d.totals.pending_sweep_count} угод, мін. {d.fee_sweep_min_usdt})</div>
 							<div>Рішення за Ренатом: <b>{fmt(d.totals.renat_decision_usdt)}</b> (#29, #3)</div>
 						</div>
+						{d.services && (
+							<div className='mt-2 grid grid-cols-2 lg:grid-cols-4 gap-2'>
+								<div>Дохід від послуг: <b>{fmt(d.services.revenue)}</b></div>
+								<div>Послуги — зібрано в казну: <b>{fmt(d.services.collected_usdt)}</b> ({d.services.collected_count})</div>
+								<div>Послуги — очікує збору: <b>{fmt(d.services.pending_usdt)}</b> ({d.services.pending_count})</div>
+								<div className={d.services.failed_count ? 'text-red-600' : ''}>Послуги — failed: <b>{fmt(d.services.failed_usdt)}</b> ({d.services.failed_count})</div>
+							</div>
+						)}
 						{d.onchain && (
 							<div className='mt-2 p-2 rounded border border-gray-200 dark:border-slate-600'>
 								<div className='flex items-center justify-between gap-2'>

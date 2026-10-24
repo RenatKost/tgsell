@@ -349,7 +349,9 @@ async def escrow_overview(
         })
     totals["earned"] = totals["accrued"]
     treasury_txs = sorted((t for t in txs if t.type == TransactionType.fee_sweep), key=lambda t: t.id, reverse=True)
-    return {"items": items, "treasury_address": fs.settings.treasury_address,
+    from app.services.paid_services import services_money_summary
+    services = await services_money_summary(db)
+    return {"items": items, "treasury_address": fs.settings.treasury_address, "services": services,
             "fee_sweep_min_usdt": fs.settings.fee_sweep_min_usdt,
             "treasury_txs": [_tx_row(t) for t in treasury_txs[:50]], "totals": {k: round(v, 6) if isinstance(v, float) else v for k, v in totals.items()},
             "balances_checked_at": balances.get("checked_at"), "cached": balances.get("cached"),

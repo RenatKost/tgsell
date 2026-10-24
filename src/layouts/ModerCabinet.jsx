@@ -9,6 +9,7 @@ import AuditLogPanel from '../components/Admin/AuditLogPanel';
 import InactiveChannelsPanel from '../components/Admin/InactiveChannelsPanel';
 import WantedPanel from '../components/Admin/WantedPanel';
 import ServicesPanel from '../components/Admin/ServicesPanel';
+import BroadcastPanel from '../components/Admin/BroadcastPanel';
 import BundleBalancesPanel from '../components/Admin/BundleBalancesPanel';
 import BalanceBadges, { balanceText } from '../components/Balance/BalanceBadges';
 import { GasCard, SummaryCard, TransactionsPanel, PayoutQueuePanel, EscrowOverview } from '../components/Admin/MoneyPanels';
@@ -63,6 +64,7 @@ const SECTIONS = [
 	{ id: 'users', label: 'Користувачі', icon: faUsers, adminOnly: true },
 	{ id: 'inactive', label: 'Неактивні канали', icon: faClock, adminOnly: true },
 	{ id: 'audit', label: 'Журнал дій', icon: faList, adminOnly: true },
+	{ id: 'broadcast', label: 'Розсилка', icon: faUsers, adminOnly: true },
 ];
 
 const STATUS_FILTERS = [
@@ -1603,6 +1605,7 @@ const ModerCabinet = () => {
 
 				{section === 'wanted' && <WantedPanel />}
 				{section === 'services' && <ServicesPanel isAdmin={isAdmin} />}
+				{isAdmin && section === 'broadcast' && <BroadcastPanel />}
 				{section === 'bundle_balances' && <BundleBalancesPanel />}
 				{isAdmin && section === 'transactions' && <TransactionsPanel />}
 				{isAdmin && section === 'queue' && <PayoutQueuePanel />}

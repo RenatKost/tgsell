@@ -350,6 +350,11 @@ export const servicesAPI = {
 	adminSaveSettings: (body) => api.put('/admin/services/settings', body),
 };
 
+export const broadcastAPI = {
+	run: (body) => api.post('/admin/broadcast', body),
+	stats: (key) => api.get(`/admin/broadcast/${encodeURIComponent(key)}`),
+};
+
 export const wantedAPI = {
 	meta: () => api.get('/wanted/meta'),
 	list: (params) => api.get('/wanted', { params }),

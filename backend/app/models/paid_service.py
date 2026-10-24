@@ -56,3 +56,5 @@ class PaidServiceOrder(Base):
     sweep_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
     # One-shot admin alert about a partial payment after the deadline.
     partial_alerted_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    # One-shot admin alert about an overpayment (migration 0053). Sweep behaviour unchanged.
+    overpay_alerted_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
