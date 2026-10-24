@@ -211,8 +211,315 @@ async def collect_all(db, actor) -> dict:
     results = []
     for deal_id in ids:
         results.append(await sweep_deal(db, deal_id, force=True, actor=actor, allowed_states=("pending_sweep",)))
-    queued = [r for r in results if r["result"] == "queued"]
+    svc_results = await collect_all_services(db, actor)
+    queued = [r for r in results + svc_results if r["result"] == "queued"]
     return {
         "ok": True, "treasury": settings.treasury_address, "queued": len(queued),
         "amount_usdt": round(sum(r.get("amount_usdt") or 0 for r in queued), 6), "results": results,
+        "service_results": svc_results,
     }
+
+
+# ═══════════════════════════════════════════════════════════════════════
+#   Paid services (paid_service_orders) → the same TREASURY_ADDRESS
+# ═══════════════════════════════════════════════════════════════════════
+#
+# Same destination (treasury_address()), same min (FEE_SWEEP_MIN_USDT), same gas/energy path
+# (payouts.prepare_service_sweep: CatFee energy when enabled, TRX top-up / burn fallback,
+# persisted gas tx / energy order reused on retry), same single leader (payout worker).
+# Orders are not deals, so the job state lives on the order row itself:
+#   NULL → queued → processing → broadcast → done | failed;  NULL → pending_sweep (< min) | empty (0)
+# Idempotency: every transition happens under the order row lock; txid is persisted BEFORE
+# broadcast and a row that has a sweep_tx_hash is never prepared/broadcast again; done/failed
+# rows are never re-queued automatically.
+
+SERVICE_PENDING_STALE_AFTER_SEC = 600  # TRON tx expires 60 s after build
+
+
+def _svc_models():
+    from app.models.paid_service import PaidServiceOrder
+    from app.services import paid_services as ps
+
+    return PaidServiceOrder, ps
+
+
+def service_fully_paid(order) -> bool:
+    _, ps = _svc_models()
+    return bool(
+        order.status in ps.PAID_STATUSES
+        and order.received_usdt is not None
+        and float(order.received_usdt) + 1e-6 >= float(order.price_usdt)
+    )
+
+
+async def _lock_order(db, order_id: int):
+    PaidServiceOrder, _ = _svc_models()
+    return (await db.execute(
+        select(PaidServiceOrder).where(PaidServiceOrder.id == order_id).with_for_update()
+        .execution_options(populate_existing=True)
+    )).scalar_one()
+
+
+def _svc_ledger(db, actor, order, action: str, **details) -> None:
+    from app.services.moderation import audit
+
+    audit(db, actor, action, "paid_service_order", order.id, **details)
+
+
+async def _svc_alert(text: str, key: str) -> None:
+    payouts = __import__("importlib").import_module("app.services.payouts")
+    await payouts._alert(text, key)
+
+
+async def _svc_sweep_trx(order) -> None:
+    import importlib
+
+    escrow_svc = importlib.import_module("app.services.escrow")
+    try:
+        await asyncio.to_thread(escrow_svc.sweep_trx_to_master, order.escrow_private_key_encrypted)
+    except Exception as e:  # pragma: no cover
+        logger.warning(f"[FEE-SWEEP] service order #{order.id}: TRX sweep-back failed: {e}")
+
+
+async def decide_service_sweep(db, order_id: int, *, force: bool, actor=None, allowed_states=(None,)) -> dict:
+    """Decide one order: queued / pending_sweep / empty. Commits. Never sends anything."""
+    import importlib
+
+    escrow_svc = importlib.import_module("app.services.escrow")
+    payouts = importlib.import_module("app.services.payouts")
+    treasury = treasury_address()
+    o = await _lock_order(db, order_id)
+    if o.sweep_status not in allowed_states or not service_fully_paid(o) or o.sweep_tx_hash:
+        await db.commit()
+        return {"order_id": order_id, "result": "skipped"}
+    addr = o.escrow_wallet_address
+    await db.commit()  # no row lock during the network read
+    try:
+        units = int(await asyncio.to_thread(escrow_svc.fetch_usdt_balance_units, addr))
+    except escrow_svc.BalanceUnavailable as e:
+        return {"order_id": order_id, "result": "balance_unknown", "reason": str(e)}
+    o = await _lock_order(db, order_id)
+    if o.sweep_status not in allowed_states or not service_fully_paid(o) or o.sweep_tx_hash:
+        await db.commit()
+        return {"order_id": order_id, "result": "skipped", "reason": "state changed"}
+    now = __import__("app.utils.timeutil", fromlist=["utcnow_naive"]).utcnow_naive()
+    if units <= 0:
+        o.sweep_status, o.sweep_finalized_at = "empty", now
+        _svc_ledger(db, actor, o, "fee_sweep.service.empty", escrow=addr)
+        await db.commit()
+        return {"order_id": order_id, "result": "empty"}
+    if not force and units < min_units():
+        o.sweep_status = "pending_sweep"
+        _svc_ledger(db, actor, o, "fee_sweep.service.pending", escrow=addr, amount_units=units)
+        await db.commit()
+        return {"order_id": order_id, "result": "pending_sweep", "amount_usdt": payouts.units_to_usdt(units)}
+    o.sweep_status, o.sweep_amount_units, o.sweep_reason = "queued", units, None
+    _svc_ledger(db, actor, o, "fee_sweep.service.queued", escrow=addr, to_address=treasury, amount_units=units)
+    await db.commit()
+    logger.info(f"[FEE-SWEEP] service order #{order_id}: {payouts.units_to_usdt(units)} USDT → treasury queued")
+    return {"order_id": order_id, "result": "queued", "amount_usdt": payouts.units_to_usdt(units)}
+
+
+async def _svc_fail(db, order_id: int, code: str, msg: str, *, sweep_trx: bool) -> dict:
+    from app.utils.timeutil import utcnow_naive
+
+    o = await _lock_order(db, order_id)
+    o.sweep_status, o.sweep_reason, o.sweep_finalized_at = "failed", f"{code}: {msg}"[:1000], utcnow_naive()
+    _svc_ledger(db, None, o, "fee_sweep.service.failed", reason=code, tx_hash=o.sweep_tx_hash)
+    await db.commit()
+    await _svc_alert(f"🔴 <b>Service fee sweep FAILED</b> — заявка #{order_id}\n{code}: {msg}",
+                     f"svc_sweep_failed_{order_id}")
+    if sweep_trx:
+        await _svc_sweep_trx(o)
+    return {"order_id": order_id, "result": "failed", "reason": code}
+
+
+async def _svc_finalize_receipt(db, order_id: int, receipt: dict) -> dict:
+    from app.utils.timeutil import utcnow_naive
+
+    o = await _lock_order(db, order_id)
+    if o.sweep_status != "broadcast":
+        await db.commit()
+        return {"order_id": order_id, "result": o.sweep_status}
+    if receipt.get("status") == "SUCCESS":
+        o.sweep_status, o.sweep_finalized_at = "done", utcnow_naive()
+        _svc_ledger(db, None, o, "fee_sweep.service.done", tx_hash=o.sweep_tx_hash,
+                    to_address=settings.treasury_address, amount_units=o.sweep_amount_units)
+        await db.commit()
+        await _svc_sweep_trx(o)
+        logger.info(f"[FEE-SWEEP] service order #{order_id}: SUCCESS tx={o.sweep_tx_hash}")
+        return {"order_id": order_id, "result": "done"}
+    if receipt.get("status") == "FAILED":
+        await db.commit()
+        return await _svc_fail(db, order_id, receipt.get("reason") or "FAILED", f"TX {o.sweep_tx_hash}", sweep_trx=True)
+    await db.commit()
+    return {"order_id": order_id, "result": "pending"}
+
+
+async def process_service_sweep(db, order_id: int, *, receipt_timeout: float | None = None) -> dict:
+    """Execute one queued order sweep. Never resends (txid persisted before broadcast)."""
+    import importlib
+
+    from app.utils.timeutil import utcnow_naive
+
+    escrow_svc = importlib.import_module("app.services.escrow")
+    payouts = importlib.import_module("app.services.payouts")
+
+    o = await _lock_order(db, order_id)
+    if o.sweep_status != "queued" or o.sweep_tx_hash:
+        await db.commit()
+        return {"order_id": order_id, "result": "skipped"}
+    try:
+        treasury = treasury_address()
+    except FeeSweepError as e:
+        await db.commit()
+        return await _svc_fail(db, order_id, "BAD_TREASURY", e.message, sweep_trx=False)
+    units = int(o.sweep_amount_units or 0)
+    enc, addr = o.escrow_private_key_encrypted, o.escrow_wallet_address
+    prior_gas, prior_energy = o.sweep_gas_tx_hash, o.sweep_energy_order_id
+    o.sweep_status = "processing"
+    await db.commit()  # release the row lock during network calls
+
+    if units <= 0:
+        return await _svc_fail(db, order_id, "BAD_AMOUNT", "Некоректна сума", sweep_trx=False)
+    try:
+        balance = await asyncio.to_thread(escrow_svc.fetch_usdt_balance_units, addr)
+    except escrow_svc.BalanceUnavailable as e:
+        o = await _lock_order(db, order_id)
+        o.sweep_status, o.sweep_reason = "queued", f"BALANCE_UNKNOWN: {e}"[:1000]
+        await db.commit()
+        return {"order_id": order_id, "result": "deferred", "reason": "BALANCE_UNKNOWN"}
+    if balance < units:
+        return await _svc_fail(db, order_id, "INSUFFICIENT_ESCROW",
+                               f"{payouts.units_to_usdt(balance)} < {payouts.units_to_usdt(units)} USDT", sweep_trx=False)
+
+    try:
+        prepared = await asyncio.to_thread(
+            payouts.prepare_service_sweep, enc, treasury, units, order_id=order_id,
+            prior_gas_tx=prior_gas, prior_energy_order=prior_energy,
+        )
+    except Exception as e:
+        o = await _lock_order(db, order_id)
+        order_id_energy = getattr(e, "energy_order_id", None)
+        if order_id_energy:
+            o.sweep_energy_order_id = order_id_energy  # never ordered twice
+        if getattr(e, "gas_tx", None):
+            o.sweep_gas_tx_hash = e.gas_tx
+        if getattr(e, "retryable", False):
+            o.sweep_attempts = int(o.sweep_attempts or 0) + 1
+            if o.sweep_attempts < payouts.MAX_GAS_ATTEMPTS:
+                o.sweep_status = "queued"
+                o.sweep_reason = (getattr(e, "message", None) or str(e))[:1000]
+                await db.commit()
+                return {"order_id": order_id, "result": "deferred", "reason": getattr(e, "reason", "GAS_RETRY")}
+            await db.commit()
+            return await _svc_fail(db, order_id, getattr(e, "reason", "GAS_RETRY"),
+                                   "газ не підтвердився після всіх спроб", sweep_trx=False)
+        await db.commit()
+        return await _svc_fail(db, order_id, getattr(e, "reason", "PREPARE_ERROR"),
+                               getattr(e, "message", None) or str(e), sweep_trx=True)
+
+    o = await _lock_order(db, order_id)
+    o.sweep_tx_hash = prepared["txid"]
+    if prepared.get("gas_tx"):
+        o.sweep_gas_tx_hash = prepared["gas_tx"]
+    en = prepared.get("energy") or {}
+    if en.get("order_id"):
+        o.sweep_energy_order_id = en["order_id"]
+    o.sweep_status, o.sweep_broadcast_at = "broadcast", utcnow_naive()
+    await db.commit()  # txid persisted BEFORE broadcast
+    try:
+        await asyncio.to_thread(payouts.broadcast_service_sweep, prepared)
+    except Exception as e:
+        logger.error(f"[FEE-SWEEP] service order #{order_id}: broadcast raised: {e} — checking receipt")
+    timeout = escrow_svc.RECEIPT_TIMEOUT_SEC if receipt_timeout is None else receipt_timeout
+    receipt = await asyncio.to_thread(escrow_svc.get_receipt, prepared["txid"], timeout)
+    return await _svc_finalize_receipt(db, order_id, receipt)
+
+
+async def reconcile_service_sweeps(db, now=None) -> int:
+    """Finalize broadcast service sweeps by receipt; fail crashed 'processing' rows. Never resends."""
+    import importlib
+
+    from app.utils.timeutil import utcnow_naive
+
+    escrow_svc = importlib.import_module("app.services.escrow")
+    PaidServiceOrder, _ = _svc_models()
+    now = now or utcnow_naive()
+    rows = (await db.execute(select(PaidServiceOrder.id, PaidServiceOrder.sweep_status).where(
+        PaidServiceOrder.sweep_status.in_(("broadcast", "processing"))).order_by(PaidServiceOrder.id))).all()
+    await db.commit()
+    done = 0
+    for oid, st in rows:
+        try:
+            o = await _lock_order(db, oid)
+            ref = o.sweep_broadcast_at or o.updated_at or now
+            stale = (now - ref).total_seconds() >= SERVICE_PENDING_STALE_AFTER_SEC
+            if o.sweep_status == "processing":
+                await db.commit()
+                if o.sweep_tx_hash is None and stale:
+                    # txid is persisted before broadcast → nothing was sent; admin decides on retry.
+                    await _svc_fail(db, oid, "NEVER_BROADCAST", "обробку перервано до відправлення", sweep_trx=False)
+                    done += 1
+                continue
+            txh = o.sweep_tx_hash
+            await db.commit()
+            receipt = await asyncio.to_thread(escrow_svc.get_receipt, txh, 0)
+            if receipt.get("status") in ("SUCCESS", "FAILED"):
+                await _svc_finalize_receipt(db, oid, receipt)
+                done += 1
+            elif stale:
+                await _svc_alert(f"🟠 <b>Service fee sweep unresolved</b> — заявка #{oid}\nTX: <code>{txh}</code>\n"
+                                 f"Немає квитанції понад 10 хв. Повтор НЕ виконується — перевірте вручну.",
+                                 f"svc_sweep_unresolved_{oid}")
+        except Exception as e:
+            logger.error(f"[FEE-SWEEP] reconcile service order #{oid}: {e}", exc_info=True)
+            await db.rollback()
+    return done
+
+
+async def service_sweep_cycle(session_factory, *, receipt_timeout: float | None = None) -> dict:
+    """Worker step (payout-worker leader only): decide new, run queued, reconcile broadcast."""
+    if not settings.fee_sweep_enabled:
+        return {"enabled": False}
+    PaidServiceOrder, ps = _svc_models()
+    out = {"decided": 0, "processed": 0, "reconciled": 0}
+    async with session_factory() as db:
+        new_ids = (await db.execute(select(PaidServiceOrder.id).where(
+            PaidServiceOrder.sweep_status.is_(None), PaidServiceOrder.status.in_(ps.PAID_STATUSES),
+            PaidServiceOrder.received_usdt.isnot(None),
+        ).order_by(PaidServiceOrder.id))).scalars().all()
+        await db.commit()
+    for oid in new_ids:
+        async with session_factory() as db:
+            try:
+                r = await decide_service_sweep(db, oid, force=False)
+                out["decided"] += r["result"] in ("queued", "pending_sweep", "empty")
+            except Exception as e:
+                logger.error(f"[FEE-SWEEP] decide service order #{oid}: {e}", exc_info=True)
+                await db.rollback()
+    async with session_factory() as db:
+        queued = (await db.execute(select(PaidServiceOrder.id).where(
+            PaidServiceOrder.sweep_status == "queued").order_by(PaidServiceOrder.id))).scalars().all()
+        await db.commit()
+    for oid in queued:
+        async with session_factory() as db:
+            try:
+                await process_service_sweep(db, oid, receipt_timeout=receipt_timeout)
+                out["processed"] += 1
+            except Exception as e:
+                logger.error(f"[FEE-SWEEP] process service order #{oid}: {e}", exc_info=True)
+                await db.rollback()
+    async with session_factory() as db:
+        out["reconciled"] = await reconcile_service_sweeps(db)
+    return out
+
+
+async def collect_all_services(db, actor) -> list[dict]:
+    """"Зібрати все" for services: queue every pending_sweep order (force, any positive balance)."""
+    PaidServiceOrder, _ = _svc_models()
+    ids = (await db.execute(select(PaidServiceOrder.id).where(
+        PaidServiceOrder.sweep_status == "pending_sweep").order_by(PaidServiceOrder.id))).scalars().all()
+    await db.commit()
+    return [await decide_service_sweep(db, oid, force=True, actor=actor, allowed_states=("pending_sweep",))
+            for oid in ids]

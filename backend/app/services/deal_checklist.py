@@ -495,7 +495,11 @@ async def advance_to_awaiting_payout(db, deal: Deal) -> None:
     """Move deal → awaiting_payout and mark channel/bundle sold. Caller commits.
 
     Caller MUST have checked can_advance_to_awaiting_payout() (gate).
+    Defence in depth: never advances without the buyer's own transfer confirmation
+    (external /escrow deals have no lot to verify, so the buyer's word is the check).
     """
+    if not deal.buyer_confirmed_transfer or not deal.seller_confirmed_transfer:
+        raise ChecklistError("not_confirmed", "Передачу каналу ще не підтверджено обома сторонами")
     from sqlalchemy import select
     from app.models.channel import Channel, ChannelStatus
 

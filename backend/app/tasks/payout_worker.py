@@ -119,6 +119,12 @@ class PayoutWorker:
             await fee_sweep.schedule_due(self.session_factory)
         except Exception as e:
             logger.error(f"[PAYOUT-WORKER] fee sweep scheduling failed: {e}", exc_info=True)
+        try:  # paid services → same treasury fee sweep (same leader lock, same gas/energy path)
+            fee_sweep = __import__("importlib").import_module("app.services.fee_sweep")
+
+            await fee_sweep.service_sweep_cycle(self.session_factory, receipt_timeout=self.receipt_timeout)
+        except Exception as e:
+            logger.error(f"[PAYOUT-WORKER] service fee sweep failed: {e}", exc_info=True)
         if (self.cycles - 1) % MASTER_CHECK_EVERY_N_CYCLES == 0:
             await self.gas_cycle()
         try:  # deal chat → Telegram bridge (same single-instance lock)

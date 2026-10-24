@@ -8,7 +8,7 @@ external_channel_link set) that goes through the standard escrow flow unchanged.
 import enum
 from datetime import datetime
 
-from sqlalchemy import DateTime, Float, ForeignKey, Integer, String, func
+from sqlalchemy import BigInteger, DateTime, Float, ForeignKey, Integer, String, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database import Base
@@ -31,6 +31,9 @@ class ExternalEscrowOffer(Base):
     service_fee: Mapped[float] = mapped_column(Float)
     # Stored lowercase, without '@'.
     buyer_username: Mapped[str] = mapped_column(String(64))
+    # Bound on the invited buyer's first authenticated open (migration 0052). Once set, access
+    # is by telegram_id only — a later @username change does not matter.
+    buyer_telegram_id: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
     token: Mapped[str] = mapped_column(String(64), unique=True, index=True)
     # ExternalOfferStatus value (plain string column — no PG enum type to migrate).
     status: Mapped[str] = mapped_column(String(20), default=ExternalOfferStatus.open.value)
