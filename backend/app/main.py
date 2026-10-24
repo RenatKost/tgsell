@@ -156,6 +156,8 @@ app.include_router(chat_router.router, prefix="/api")
 app.include_router(deals.router, prefix="/api")
 app.include_router(admin.router, prefix="/api")
 app.include_router(admin_money.router, prefix="/api")
+from app.routers import admin_broadcast as admin_broadcast_router  # noqa: E402
+app.include_router(admin_broadcast_router.router, prefix="/api")
 app.include_router(users.router, prefix="/api")
 app.include_router(favorites.router, prefix="/api")
 app.include_router(auctions.router, prefix="/api")

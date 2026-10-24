@@ -189,7 +189,7 @@ async def check_orders_once(session_factory, now: datetime | None = None, fetch_
             except escrow_svc.BalanceUnavailable:
                 return None
     stats = {"paid": 0, "cancelled": 0, "expired": 0, "partial_alerts": 0}
-    partial_alerts: list[tuple[int, str]] = []
+    partial_alerts: list[tuple[str, str]] = []
     async with session_factory() as db:
         orders = (await db.execute(select(PaidServiceOrder).where(PaidServiceOrder.status == ST_AWAITING))).scalars().all()
         for o in orders:
@@ -199,6 +199,13 @@ async def check_orders_once(session_factory, now: datetime | None = None, fetch_
             if bal + 1e-6 >= o.price_usdt:
                 await mark_paid(db, o, float(bal), now)
                 stats["paid"] += 1
+                over = round(float(bal) - float(o.price_usdt), 6)
+                if over > 1e-6 and o.overpay_alerted_at is None:
+                    o.overpay_alerted_at = now  # one-shot: marked in the same commit, sent after it
+                    partial_alerts.append((f"svc_overpay_{o.id}", (
+                        f"🟠 <b>Переплата за послугу</b> — заявка #{o.id} ({KIND_LABELS.get(o.kind, o.kind)})\n"
+                        f"Ціна {o.price_usdt:g} USDT, отримано {float(bal):g} USDT, переплата <b>{over:g} USDT</b>.\n"
+                        f"Адреса: <code>{o.escrow_wallet_address}</code>\nРішення — за адміністратором.")))
             elif o.payment_deadline_at and o.payment_deadline_at <= now:
                 if bal <= 0:
                     o.status, o.updated_at = ST_CANCELLED, now
@@ -208,7 +215,7 @@ async def check_orders_once(session_factory, now: datetime | None = None, fetch_
                         o.received_usdt = float(bal)  # partial payment: stays for admin review, never auto-cancelled
                     if o.partial_alerted_at is None:
                         o.partial_alerted_at = now  # one-shot: marked in the same commit, sent after it
-                        partial_alerts.append((o.id, (
+                        partial_alerts.append((f"svc_partial_{o.id}", (
                             f"🟡 <b>Часткова оплата послуги</b> — заявка #{o.id} ({KIND_LABELS.get(o.kind, o.kind)})\n"
                             f"Отримано {float(bal):g} з {o.price_usdt:g} USDT, строк оплати минув.\n"
                             f"Адреса: <code>{o.escrow_wallet_address}</code>\nРішення — за адміністратором.")))
@@ -216,13 +223,34 @@ async def check_orders_once(session_factory, now: datetime | None = None, fetch_
         await db.commit()
     if partial_alerts:
         from app.services.alerts import send_admin_alert
-        for oid, text in partial_alerts:
+        for alert_key, text in partial_alerts:
             try:
-                await send_admin_alert(text, alert_key=f"svc_partial_{oid}")
+                await send_admin_alert(text, alert_key=alert_key)
                 stats["partial_alerts"] += 1
             except Exception as e:  # never re-sent: the order is already marked
-                logger.error(f"[SERVICES] partial alert #{oid} failed: {e}")
+                logger.error(f"[SERVICES] alert {alert_key} failed: {e}")
     return stats
+
+
+async def services_money_summary(db) -> dict:
+    """«Гроші»: services revenue + treasury collection state (USDT)."""
+    rows = (await db.execute(select(PaidServiceOrder.sweep_status, func.count(PaidServiceOrder.id),
+                                    func.sum(PaidServiceOrder.sweep_amount_units), func.sum(PaidServiceOrder.received_usdt))
+                             .where(PaidServiceOrder.status.in_(PAID_STATUSES))
+                             .group_by(PaidServiceOrder.sweep_status))).all()
+    out = {"revenue": float(await services_revenue(db)), "collected_usdt": 0.0, "collected_count": 0,
+           "pending_usdt": 0.0, "pending_count": 0, "failed_usdt": 0.0, "failed_count": 0}
+    for st, n, units, received in rows:
+        if st == "done":
+            out["collected_count"] += n
+            out["collected_usdt"] += int(units or 0) / 1_000_000
+        elif st == "failed":
+            out["failed_count"] += n
+            out["failed_usdt"] += float(received or 0)
+        elif st != "empty":  # None (not decided yet) / pending_sweep / queued / processing / broadcast
+            out["pending_count"] += n
+            out["pending_usdt"] += float(received or 0)
+    return {k: round(v, 6) if isinstance(v, float) else v for k, v in out.items()}
 
 
 async def services_revenue(db) -> float:

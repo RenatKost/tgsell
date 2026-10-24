@@ -264,3 +264,58 @@ def test_migration_chain():
     from pathlib import Path
     src = (Path(__file__).resolve().parents[1] / "alembic/versions/0052_escrow_hardening.py").read_text()
     assert 'revision = "0052"' in src and 'down_revision = "0051"' in src
+
+
+@pytest.mark.asyncio
+async def test_overpay_alert_once_and_sweep_unchanged(orm, monkeypatch):
+    from app.models.paid_service import PaidServiceOrder
+    from app.services import paid_services as svc
+    from app.utils.timeutil import utcnow_naive
+    sent = []
+
+    async def fake_alert(text, alert_key=None, **_kw):
+        sent.append((alert_key, text))
+        return True
+    monkeypatch.setattr(importlib.import_module("app.services.alerts"), "send_admin_alert", fake_alert)
+    env = Tron()
+    oid, addr = await _order(orm, env, status="awaiting_payment", price=10.0, received=None, balance_units=0)
+
+    async def bal(_a):
+        return 12.5
+    await svc.check_orders_once(orm.session, fetch_balance=bal)
+    await svc.check_orders_once(orm.session, now=utcnow_naive() + timedelta(minutes=5), fetch_balance=bal)
+    assert len(sent) == 1 and sent[0][0] == f"svc_overpay_{oid}"
+    assert "2.5 USDT" in sent[0][1] and addr in sent[0][1] and f"#{oid}" in sent[0][1]
+    async with orm.session() as db:
+        o = await db.get(PaidServiceOrder, oid)
+        assert o.overpay_alerted_at is not None and o.status == "active" and o.received_usdt == 12.5
+    # exact payment → no overpay alert
+    sent.clear()
+    oid2, _ = await _order(orm, env, status="awaiting_payment", price=15.0, received=None, balance_units=0)
+
+    async def exact(_a):
+        return 15.0
+    await svc.check_orders_once(orm.session, fetch_balance=exact)
+    assert sent == []
+
+
+@pytest.mark.asyncio
+async def test_services_money_summary(env):
+    from app.services.paid_services import services_money_summary
+    a, _ = await _order(env.orm, env, price=10.0, received=10.0)
+    await _cycle(env.orm)  # a → done (10)
+    env.receipt_status = "FAILED"
+    b, _ = await _order(env.orm, env, price=15.0, received=15.0, status="published", kind="post")
+    await _cycle(env.orm)  # b → failed (15)
+    env.receipt_status = "SUCCESS"
+    from app.models.paid_service import PaidServiceOrder
+    async with env.orm.session() as db:
+        await _order(env.orm, env, price=20.0, received=20.0, status="paid", kind="verified")
+        from app.config import settings
+    settings_enabled = settings.fee_sweep_enabled
+    async with env.orm.session() as db:
+        s = await services_money_summary(db)
+    assert s["revenue"] == 45.0 and s["collected_usdt"] == 10.0 and s["collected_count"] == 1
+    assert s["failed_count"] == 1 and s["failed_usdt"] == 15.0
+    assert s["pending_count"] == 1 and s["pending_usdt"] == 20.0
+    assert settings_enabled is True
