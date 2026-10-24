@@ -21,6 +21,7 @@ STATIC_PAGES = [
     ("/", "daily", "1.0"),
     ("/catalog", "hourly", "0.9"),
     ("/auction", "hourly", "0.8"),
+    ("/wanted", "daily", "0.7"),
     ("/kupyty-telegram-kanal", "weekly", "0.9"),
     ("/prodaty-telegram-kanal", "weekly", "0.9"),
     ("/skilky-koshtuye-telegram-kanal", "weekly", "0.8"),

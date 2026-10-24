@@ -556,6 +556,11 @@ async def create_channel(
             ton_balance=body.ton_balance,
             status=ChannelStatus.pending,
         )
+        if body.wanted_request_id:
+            from app.models.wanted import WantedRequest
+            wr = await db.get(WantedRequest, body.wanted_request_id)
+            if wr is not None and wr.status == "approved" and wr.user_id != user.id:
+                channel.wanted_request_id = wr.id
         db.add(channel)
         await db.commit()
         await db.refresh(channel)

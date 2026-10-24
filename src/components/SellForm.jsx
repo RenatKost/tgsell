@@ -1,7 +1,7 @@
 import { useFormik } from 'formik';
 import { useState, useEffect } from 'react';
 import * as Yup from 'yup';
-import { channelsAPI } from '../services/api';
+import { channelsAPI, wantedAPI } from '../services/api';
 import { useAuth } from '../context/AppContext';
 import { options } from './Main/Calculator';
 import { useNavigate } from 'react-router-dom';
@@ -98,7 +98,8 @@ const InputField = ({ label, error, touched, children }) => (
 
 const inputClass = 'w-full bg-card-inner border border-card-border rounded-lg px-4 py-2.5 text-white placeholder-gray-600 focus:outline-none focus:border-accent/50 text-sm transition-colors';
 
-const SellForm = ({ onBack }) => {
+const SellForm = ({ onBack, wantedId = null }) => {
+	const [wanted, setWanted] = useState(null);
 	const { isAuthenticated } = useAuth();
 	const navigate = useNavigate();
 	const [submitError, setSubmitError] = useState('');
@@ -207,6 +208,7 @@ const SellForm = ({ onBack }) => {
 					if (vals.avg_views) payload.avg_views = parseInt(vals.avg_views, 10);
 					if (vals.er) payload.er = parseFloat(vals.er);
 				}
+				if (wanted?.id) payload.wanted_request_id = wanted.id;
 				await channelsAPI.create(payload);
 				setSubmittedListingType(vals.listing_type);
 				resetForm();
@@ -216,6 +218,17 @@ const SellForm = ({ onBack }) => {
 			}
 		},
 	});
+
+	// «Шукаю канал»: prefill category from the buyer request (?wanted=<id>)
+	useEffect(() => {
+		const id = parseInt(wantedId, 10);
+		if (!id) return;
+		wantedAPI.get(id).then(({ data }) => {
+			setWanted(data);
+			if (data?.category) setFieldValue('category', data.category);
+		}).catch(() => setWanted(null));
+		// eslint-disable-next-line react-hooks/exhaustive-deps
+	}, [wantedId]);
 
 	return (
 		<>
@@ -244,6 +257,12 @@ const SellForm = ({ onBack }) => {
 							Заповніть форму — канал з'явиться в каталозі після перевірки
 						</p>
 					</div>
+					{wanted && (
+						<div className='mb-6 rounded-xl border border-accent/40 bg-accent/5 px-4 py-3 text-sm text-gray-300'>
+							Запит покупця: <b className='text-white'>{wanted.category}</b>
+							{wanted.budget_max ? <> · бюджет до {wanted.budget_max} USDT</> : null}. Після схвалення лоту покупець отримає сповіщення.
+						</div>
+					)}
 
 					{/* Form Card */}
 					<form

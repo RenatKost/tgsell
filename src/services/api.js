@@ -330,6 +330,20 @@ export const savedSearchesAPI = {
 	remove: (id) => api.delete(`/saved-searches/${id}`),
 };
 
+// ===== «Шукаю канал» =====
+export const wantedAPI = {
+	meta: () => api.get('/wanted/meta'),
+	list: (params) => api.get('/wanted', { params }),
+	get: (id) => api.get(`/wanted/${id}`),
+	mine: () => api.get('/wanted/mine'),
+	create: (body) => api.post('/wanted', body),
+	close: (id) => api.delete(`/wanted/${id}`),
+	adminList: (status) => api.get('/admin/wanted', { params: { status } }),
+	adminStats: () => api.get('/admin/wanted/stats'),
+	approve: (id) => api.post(`/admin/wanted/${id}/approve`),
+	reject: (id, reason) => api.post(`/admin/wanted/${id}/reject`, { reason }),
+};
+
 // ===== Favorites =====
 export const favoritesAPI = {
 	getAll: () =>

@@ -17,6 +17,7 @@ from app.routers import admin_money
 from app.routers import user_activity as user_activity_router
 from app.routers import saved_searches as saved_searches_router
 from app.routers import chat as chat_router
+from app.routers import wanted as wanted_router
 from app.tasks.payment_checker import run_payment_checker
 from app.tasks.payout_worker import run_payout_worker
 from app.tasks.stats_collector import run_stats_collector, run_view_tracker
@@ -100,6 +101,8 @@ async def lifespan(app: FastAPI):
     background_tasks.append(loop.create_task(run_quality_scorer(startup_delay_sec=60)))
     from app.services.saved_searches import run_saved_search_notifier
     background_tasks.append(loop.create_task(run_saved_search_notifier()))
+    from app.services.wanted import run_wanted_digest
+    background_tasks.append(loop.create_task(run_wanted_digest()))
     yield
     logger.info("Shutting down background tasks…")
     for task in background_tasks:
@@ -158,6 +161,8 @@ app.include_router(media.router, prefix="/api")
 app.include_router(support.router, prefix="/api")
 app.include_router(user_activity_router.router, prefix="/api")
 app.include_router(saved_searches_router.router, prefix="/api")
+app.include_router(wanted_router.router, prefix="/api")
+app.include_router(wanted_router.admin_router, prefix="/api")
 
 from app.routers import seo as seo_router  # noqa: E402
 
@@ -188,6 +193,7 @@ if STATIC_DIR.exists():
         "",
         "sell",
         "catalog",
+        "wanted",
         "auction",
         "cabinet",
         "admin",

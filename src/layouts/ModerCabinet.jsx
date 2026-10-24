@@ -7,6 +7,7 @@ import UsersPanel from '../components/Admin/UsersPanel';
 import DealChat from '../components/DealChat/DealChat';
 import AuditLogPanel from '../components/Admin/AuditLogPanel';
 import InactiveChannelsPanel from '../components/Admin/InactiveChannelsPanel';
+import WantedPanel from '../components/Admin/WantedPanel';
 import BundleBalancesPanel from '../components/Admin/BundleBalancesPanel';
 import BalanceBadges, { balanceText } from '../components/Balance/BalanceBadges';
 import { GasCard, SummaryCard, TransactionsPanel, PayoutQueuePanel, EscrowOverview } from '../components/Admin/MoneyPanels';
@@ -46,6 +47,7 @@ import {
 const SECTIONS = [
 	{ id: 'dashboard', label: 'Дашборд', icon: faTachometerAlt },
 	{ id: 'pending', label: 'На модерації', icon: faClipboardCheck },
+	{ id: 'wanted', label: 'Шукаю канал', icon: faEye },
 	{ id: 'bundles', label: 'Сітки', icon: faLayerGroup },
 	{ id: 'bundle_balances', label: 'Баланси сіток', icon: faWallet },
 	{ id: 'channels', label: 'Канали', icon: faLayerGroup },
@@ -1594,6 +1596,7 @@ const ModerCabinet = () => {
 					</div>
 				)}
 
+				{section === 'wanted' && <WantedPanel />}
 				{section === 'bundle_balances' && <BundleBalancesPanel />}
 				{isAdmin && section === 'transactions' && <TransactionsPanel />}
 				{isAdmin && section === 'queue' && <PayoutQueuePanel />}

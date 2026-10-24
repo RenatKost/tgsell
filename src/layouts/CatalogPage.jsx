@@ -1,7 +1,7 @@
 import { trackEvent } from '../utils/tracking';
 import { useEffect, useState, useRef, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { useSearchParams } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import CatalogCard from '../components/Cards/CatalogCard';
 import { channelsAPI, bundlesAPI, savedSearchesAPI } from '../services/api';
 import { useAuth } from '../context/AppContext';
@@ -574,6 +574,17 @@ const CatalogPage = () => {
 					{channels.map(channel => (
 						<CatalogCard key={channel.id} channel={channel} />
 					))}
+				</div>
+			)}
+
+			{/* «Шукаю канал» */}
+			{!loading && (
+				<div className='mt-10 rounded-2xl border border-accent/40 bg-accent/5 p-5 flex flex-col md:flex-row md:items-center md:justify-between gap-3'>
+					<div>
+						<p className='font-bold text-gray-900 dark:text-white'>Не знайшли? Залиште запит</p>
+						<p className='text-sm text-gray-500 dark:text-gray-400'>Опишіть, який канал шукаєте — продавці побачать запит, а ми сповістимо вас, коли з'явиться відповідний лот.</p>
+					</div>
+					<Link to='/wanted?src=catalog' className='bg-accent text-black font-bold rounded-xl px-5 py-2.5 text-sm text-center whitespace-nowrap'>Залишити запит</Link>
 				</div>
 			)}
 

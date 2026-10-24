@@ -21,6 +21,7 @@ import BundleDetailsPage from './layouts/BundleDetailsPage';
 import BuyChannelLanding from './layouts/BuyChannelLanding';
 import SellChannelLanding from './layouts/SellChannelLanding';
 import ChannelPriceCalculatorPage from './layouts/ChannelPriceCalculatorPage';
+import WantedPage from './layouts/WantedPage';
 
 export const router = createBrowserRouter([
 	{
@@ -43,6 +44,10 @@ export const router = createBrowserRouter([
 			{
 				path: '/catalog',
 				element: <CatalogPage />,
+			},
+			{
+				path: '/wanted',
+				element: <WantedPage />,
 			},
 			{
 				path: '/auction',
