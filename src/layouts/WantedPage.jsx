@@ -4,13 +4,15 @@ import { wantedAPI } from '../services/api';
 import { useAuth } from '../context/AppContext';
 import { options as categoryOptions } from '../components/Main/Calculator';
 import { LANGUAGE_LABELS, fmtRange, fmtDate } from '../utils/wanted';
+import useReveal from '../hooks/useReveal';
+import './escrow.css';
 
 const CATEGORIES = categoryOptions.map((o) => o.label).filter((l) => !l.includes('18+') && l !== 'Вульгарні');
-const inputCls = 'w-full bg-white dark:bg-slate-900 border border-gray-200 dark:border-card-border rounded-xl px-3 py-2.5 text-sm text-gray-800 dark:text-gray-100 focus:outline-none focus:border-accent';
+const inputCls = 'esc-input w-full bg-white dark:bg-slate-900/70 border border-gray-200 dark:border-card-border rounded-xl px-3 py-2.5 text-sm text-gray-800 dark:text-gray-100 focus:outline-none focus:border-accent';
 const EMPTY = { category: '', subs_min: '', subs_max: '', budget_min: '', budget_max: '', language: 'ua', comment: '' };
 
 const WantedCard = ({ r }) => (
-	<div className='bg-white dark:bg-card rounded-2xl border border-gray-100 dark:border-card-border p-5 flex flex-col gap-3'>
+	<div className='esc-card esc-lift rounded-2xl p-5 flex flex-col gap-3 h-full'>
 		<div className='flex items-start justify-between gap-2'>
 			<span className='text-lg font-bold text-gray-900 dark:text-white'>{r.category}</span>
 			<span className='text-xs text-gray-400 whitespace-nowrap'>{fmtDate(r.created_at)}</span>
@@ -22,7 +24,7 @@ const WantedCard = ({ r }) => (
 		</dl>
 		{r.comment && <p className='text-sm text-gray-600 dark:text-gray-400 break-words'>{r.comment}</p>}
 		<Link to={`/sell?wanted=${r.id}&src=wanted`}
-			className='mt-auto text-center bg-accent/10 hover:bg-accent/20 text-accent border border-accent/50 font-semibold rounded-xl py-2.5 text-sm transition-colors'>
+			className='esc-btn-ghost mt-auto text-center bg-accent/10 hover:bg-accent/20 text-accent border border-accent/50 font-semibold rounded-xl py-2.5 text-sm transition-colors'>
 			У мене є такий канал
 		</Link>
 	</div>
@@ -55,7 +57,8 @@ const WantedForm = ({ onDone, onCancel }) => {
 	};
 
 	return (
-		<form onSubmit={submit} className='bg-white dark:bg-card rounded-2xl border border-gray-100 dark:border-card-border p-5 space-y-4'>
+		<div className='esc-glass-wrap'>
+		<form onSubmit={submit} className='esc-glass space-y-4 p-5 sm:p-7'>
 			<div>
 				<label className='block text-xs text-gray-400 mb-1'>Тематика</label>
 				<select className={inputCls} value={v.category} onChange={set('category')}>
@@ -85,10 +88,11 @@ const WantedForm = ({ onDone, onCancel }) => {
 			<BotHint />
 			{err && <div className='text-sm text-red-500'>{err}</div>}
 			<div className='flex gap-3'>
-				<button type='submit' disabled={busy} className='flex-1 bg-accent text-black font-bold rounded-xl py-2.5 text-sm disabled:opacity-60'>{busy ? 'Надсилаємо…' : 'Надіслати на модерацію'}</button>
-				<button type='button' onClick={onCancel} className='px-4 border border-gray-200 dark:border-card-border rounded-xl text-sm text-gray-600 dark:text-gray-300'>Скасувати</button>
+				<button type='submit' disabled={busy} className='esc-btn flex-1 bg-accent text-black font-bold rounded-xl py-2.5 min-h-[44px] text-sm disabled:opacity-60'>{busy ? 'Надсилаємо…' : 'Надіслати на модерацію'}</button>
+				<button type='button' onClick={onCancel} className='esc-btn-ghost px-4 border border-gray-200 dark:border-card-border rounded-xl text-sm text-gray-600 dark:text-gray-300 hover:border-accent'>Скасувати</button>
 			</div>
 		</form>
+		</div>
 	);
 };
 
@@ -110,6 +114,7 @@ const WantedPage = () => {
 	const [mine, setMine] = useState(null);
 	const [notice, setNotice] = useState('');
 	const [sent, setSent] = useState(false);
+	useReveal();
 
 	const load = async () => {
 		setLoading(true);
@@ -133,14 +138,15 @@ const WantedPage = () => {
 	};
 
 	return (
-		<section className='min-h-screen pt-24 md:pt-28 pb-16'>
-			<div className='max-w-6xl mx-auto px-4'>
-				<div className='flex flex-col md:flex-row md:items-end md:justify-between gap-4 mb-8'>
+		<section className='esc-page relative overflow-x-clip min-h-screen pt-24 md:pt-28 pb-16'>
+			<div className='esc-bg esc-bg-short' aria-hidden='true'><span className='esc-grid' /><span className='esc-blob esc-blob-1' /><span className='esc-blob esc-blob-2' /></div>
+			<div className='relative z-10 max-w-6xl mx-auto px-4'>
+				<div className='esc-reveal flex flex-col md:flex-row md:items-end md:justify-between gap-4 mb-8'>
 					<div>
-						<h1 className='text-3xl md:text-4xl font-black text-gray-900 dark:text-white'>Шукаю <span className='text-accent'>канал</span></h1>
+						<h1 className='esc-title text-[2rem] leading-[1.1] sm:text-5xl font-extrabold tracking-tight'>Шукаю канал</h1>
 						<p className='text-gray-500 dark:text-gray-400 mt-3'>Запити покупців. Маєте відповідний канал — виставте його на продаж.</p>
 					</div>
-					<button onClick={onCreate} className='w-full md:w-auto bg-accent text-black font-bold rounded-xl px-6 py-3 text-sm md:self-auto'>Залишити запит</button>
+					<button onClick={onCreate} className='esc-btn w-full md:w-auto bg-accent text-black font-bold rounded-xl px-6 py-3 min-h-[44px] text-sm md:self-auto shadow-[0_0_24px_rgba(0,255,136,0.25)]'>Залишити запит</button>
 				</div>
 
 				{notice && (
@@ -157,11 +163,11 @@ const WantedPage = () => {
 				)}
 
 				{mine?.items?.length > 0 && (
-					<div className='mb-10'>
+					<div className='esc-reveal mb-10'>
 						<h2 className='text-lg font-bold text-gray-900 dark:text-white mb-3'>Мої запити ({mine.active}/{mine.max} активних)</h2>
 						<div className='space-y-2'>
 							{mine.items.map((r) => (
-								<div key={r.id} className='flex flex-wrap items-center gap-3 bg-white dark:bg-card border border-gray-100 dark:border-card-border rounded-xl px-4 py-3 text-sm'>
+								<div key={r.id} className='esc-card flex flex-wrap items-center gap-3 rounded-xl px-4 py-3 text-sm'>
 									<b className='text-gray-900 dark:text-white'>{r.category}</b>
 									<span className='text-gray-500'>{fmtRange(r.subs_min, r.subs_max, 'підп.')} · {fmtRange(r.budget_min, r.budget_max, 'USDT')}</span>
 									<span className='text-xs px-2 py-0.5 rounded-full bg-gray-100 dark:bg-white/10 text-gray-600 dark:text-gray-300'>{STATUS_UA[r.status] || r.status}</span>
@@ -177,13 +183,13 @@ const WantedPage = () => {
 
 				{loading ? (
 					<div className='grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6'>
-						{[1, 2, 3].map((i) => <div key={i} className='h-48 rounded-2xl bg-white dark:bg-card animate-pulse' />)}
+						{[1, 2, 3].map((i) => <div key={i} className='esc-card h-48 rounded-2xl animate-pulse' />)}
 					</div>
 				) : items.length === 0 ? (
-					<div className='text-center py-16 text-gray-500 dark:text-gray-400'>Поки що немає активних запитів. Будьте першим!</div>
+					<div className='esc-card text-center py-16 px-4 text-gray-500 dark:text-gray-400'>Поки що немає активних запитів. Будьте першим!</div>
 				) : (
 					<div className='grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6'>
-						{items.map((r) => <WantedCard key={r.id} r={r} />)}
+						{items.map((r, i) => <div key={r.id} className='esc-reveal' style={{ '--d': `${(i % 3) * 80}ms` }}><WantedCard r={r} /></div>)}
 					</div>
 				)}
 			</div>
