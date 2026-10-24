@@ -1,0 +1,22 @@
+/* /contacts — преміальний стиль поверх escrow.css (лише візуал) */
+.ctc-icon {
+	display: grid; place-items: center; flex-shrink: 0; width: 52px; height: 52px; border-radius: 16px;
+	color: rgb(var(--c)); background: rgba(var(--c), 0.12); border: 1px solid rgba(var(--c), 0.35);
+	box-shadow: 0 0 22px rgba(var(--c), 0.28), inset 0 0 14px rgba(var(--c), 0.12);
+	transition: transform 0.25s;
+}
+.ctc-card:hover .ctc-icon { transform: scale(1.06); }
+.ctc-card:hover { border-color: rgba(var(--c), 0.55); box-shadow: 0 14px 40px -18px rgba(var(--c), 0.5); }
+.ctc-main { border-color: rgba(var(--esc-accent-rgb), 0.45); background: linear-gradient(160deg, rgba(0, 255, 136, 0.1), rgba(8, 14, 14, 0.9) 60%); }
+html:not(.dark) .ctc-main { background: linear-gradient(160deg, #ecfdf5, #fff 60%); border-color: #6ee7b7; }
+.ctc-pill { padding: 0.1rem 0.5rem; border-radius: 9999px; font-size: 10px; color: #000; background: var(--esc-accent); letter-spacing: 0.08em; }
+.ctc-tile {
+	color: #d1d5db; background: rgba(13, 23, 23, 0.7); border-color: #1a3a2a;
+	transition: transform 0.2s, border-color 0.2s, box-shadow 0.2s, color 0.2s;
+}
+.ctc-tile:hover { transform: translateY(-2px); color: var(--esc-accent); border-color: rgba(var(--esc-accent-rgb), 0.45); box-shadow: 0 0 20px rgba(var(--esc-accent-rgb), 0.2); }
+.ctc-tile.is-main { color: #22d3ee; border-color: rgba(34, 211, 238, 0.35); background: rgba(34, 211, 238, 0.08); }
+html:not(.dark) .ctc-tile { color: #374151; background: #fff; border-color: #e5e7eb; }
+@media (prefers-reduced-motion: reduce) {
+	.ctc-card:hover .ctc-icon, .ctc-tile:hover { transform: none; }
+}
