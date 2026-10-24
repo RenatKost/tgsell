@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { NavLink } from 'react-router-dom';
 import { formatEr } from '../../utils/er';
 import { Badge, LISTING_STATUS, surface, btnSecondary, btnDanger } from '../Cabinet/ui';
+import SellerServices from '../Services/SellerServices';
 
 const CabinetCard = ({ channel, onDelete }) => {
 	const status = LISTING_STATUS[channel.status] || LISTING_STATUS.pending;
@@ -44,6 +45,8 @@ const CabinetCard = ({ channel, onDelete }) => {
 							<Badge tone={status.tone}>{status.text}</Badge>
 							{(channel.listing_type === 'auction' || channel.listing_type === 'both') && <Badge tone='orange' dot={false}>🔥 Аукціон</Badge>}
 							{channel.is_closed && <Badge tone='gray' dot={false}>🔒 Закритий</Badge>}
+							{channel.is_top && <Badge tone='orange' dot={false}>🚀 Топ</Badge>}
+							{channel.tgsell_verified && <Badge tone='green' dot={false}>✅ Перевірено TgSell</Badge>}
 						</div>
 						<div className='flex flex-wrap items-center gap-x-3 gap-y-1 mt-2 text-sm text-gray-500 dark:text-gray-400'>
 							<span className='flex items-center gap-1'>
@@ -102,6 +105,7 @@ const CabinetCard = ({ channel, onDelete }) => {
 					</div>
 				</div>
 			</div>
+			{onDelete && <SellerServices channel={channel} />}
 		</article>
 	);
 };

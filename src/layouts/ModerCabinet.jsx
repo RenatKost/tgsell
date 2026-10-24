@@ -8,6 +8,7 @@ import DealChat from '../components/DealChat/DealChat';
 import AuditLogPanel from '../components/Admin/AuditLogPanel';
 import InactiveChannelsPanel from '../components/Admin/InactiveChannelsPanel';
 import WantedPanel from '../components/Admin/WantedPanel';
+import ServicesPanel from '../components/Admin/ServicesPanel';
 import BundleBalancesPanel from '../components/Admin/BundleBalancesPanel';
 import BalanceBadges, { balanceText } from '../components/Balance/BalanceBadges';
 import { GasCard, SummaryCard, TransactionsPanel, PayoutQueuePanel, EscrowOverview } from '../components/Admin/MoneyPanels';
@@ -48,6 +49,7 @@ const SECTIONS = [
 	{ id: 'dashboard', label: 'Дашборд', icon: faTachometerAlt },
 	{ id: 'pending', label: 'На модерації', icon: faClipboardCheck },
 	{ id: 'wanted', label: 'Шукаю канал', icon: faEye },
+	{ id: 'services', label: 'Платні послуги', icon: faWallet },
 	{ id: 'bundles', label: 'Сітки', icon: faLayerGroup },
 	{ id: 'bundle_balances', label: 'Баланси сіток', icon: faWallet },
 	{ id: 'channels', label: 'Канали', icon: faLayerGroup },
@@ -628,6 +630,9 @@ const ModerCabinet = () => {
 									<StatCard label='Угод за тиждень' value={dashStats.deals_this_week} icon={faChartLine} />
 									<StatCard label='Комісія нарахована (USDT)' value={dashStats.fee_accrued ?? dashStats.total_revenue} icon={faWallet} color='text-green-600' />
 									<StatCard label='Комісія зібрана (USDT)' value={dashStats.fee_collected ?? 0} icon={faWallet} color='text-green-600' />
+								</div>
+								<div className='grid grid-cols-2 lg:grid-cols-4 gap-4 mt-4'>
+									<StatCard label='Дохід від послуг (USDT)' value={dashStats.services_revenue ?? 0} icon={faWallet} color='text-violet-500' onClick={() => setSection('services')} />
 								</div>
 
 								{/* ── Telethon re-auth panel ── */}
@@ -1597,6 +1602,7 @@ const ModerCabinet = () => {
 				)}
 
 				{section === 'wanted' && <WantedPanel />}
+				{section === 'services' && <ServicesPanel isAdmin={isAdmin} />}
 				{section === 'bundle_balances' && <BundleBalancesPanel />}
 				{isAdmin && section === 'transactions' && <TransactionsPanel />}
 				{isAdmin && section === 'queue' && <PayoutQueuePanel />}
