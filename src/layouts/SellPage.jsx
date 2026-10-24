@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import SellForm from '../components/SellForm';
 
 const CHANNEL_URL = '/megaphone-3d.png';
@@ -83,11 +83,13 @@ const ChoiceCard = ({ imgSrc, imgAlt, title, desc, cta, onClick, color = 'teal' 
 };
 
 const SellPage = () => {
-	const [mode, setMode] = useState(null);
+	const [params] = useSearchParams();
+	const wantedId = params.get('wanted');
+	const [mode, setMode] = useState(wantedId ? 'channel' : null);
 	const navigate = useNavigate();
 
 	if (mode === 'channel') {
-		return <SellForm onBack={() => setMode(null)} />;
+		return <SellForm onBack={() => setMode(null)} wantedId={wantedId} />;
 	}
 
 	return (

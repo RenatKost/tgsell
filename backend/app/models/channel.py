@@ -105,6 +105,10 @@ class Channel(Base):
 
     # Admin-set warning for buyers (migration 0046); editable only by staff.
     buyer_warning: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # «Шукаю канал»: lot created via «У мене є такий канал» (migration 0048)
+    wanted_request_id: Mapped[int | None] = mapped_column(
+        ForeignKey("wanted_requests.id", ondelete="SET NULL"), nullable=True, index=True
+    )
 
     # Relationships
     seller = relationship("User", back_populates="channels", foreign_keys=[seller_id])

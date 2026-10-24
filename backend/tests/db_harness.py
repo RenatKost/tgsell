@@ -134,7 +134,7 @@ def _install_strict_guard(engine) -> None:
 _ISOLATED_PREFIXES = (
     # Everything that binds to app.database.Base / async_session at import time.
     "app.database", "app.models", "app.routers", "app.tasks", "bot.",
-    "app.services.deal_checklist", "app.services.deal_lifecycle", "app.services.user_activity", "app.services.similar", "app.services.saved_searches",
+    "app.services.deal_checklist", "app.services.deal_lifecycle", "app.services.user_activity", "app.services.similar", "app.services.saved_searches", "app.services.wanted",
     "app.services.catalog_filters", "app.services.weekly_stats",
     "app.services.payment_deadlines", "app.services.checklist_autoverify",
     "app.services.payouts", "app.tasks.payout_worker", "app.services.moderation",
@@ -157,6 +157,15 @@ async def orm(db_url):
     for key in list(sys.modules):
         if key.startswith(_ISOLATED_PREFIXES):
             del sys.modules[key]
+            # Drop the stale package attribute too, so ``from app.services import x``
+            # re-imports the fresh module instead of returning the old one.
+            parent_name, _, child = key.rpartition(".")
+            parent = sys.modules.get(parent_name)
+            if parent is not None and getattr(parent, child, None) is snapshot.get(key):
+                try:
+                    delattr(parent, child)
+                except AttributeError:
+                    pass
 
     engine_kwargs = {}
     if kind == "sqlite":

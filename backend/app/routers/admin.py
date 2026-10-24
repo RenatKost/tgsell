@@ -181,6 +181,15 @@ async def approve_channel(
             await db.rollback()
             await db.refresh(channel)
 
+        # «Шукаю канал»: notify buyers whose active request this lot fits
+        try:
+            from app.services.wanted import notify_buyers_for_channel
+            await notify_buyers_for_channel(db, channel.id)
+        except Exception as e:
+            logger.warning(f"Wanted matching failed for channel #{channel_id}: {type(e).__name__}")
+            await db.rollback()
+            await db.refresh(channel)
+
         return ChannelResponse.model_validate(channel)
     except HTTPException:
         raise

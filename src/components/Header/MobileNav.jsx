@@ -53,6 +53,15 @@ const MobileNav = ({ showMenu, setShowMenu }) => {
 					</li>
 					<li>
 						<NavLink
+							to='/wanted'
+							className='text-gray-800 dark:text-gray-200 font-bold text-lg hover:text-emerald-500 transition-colors duration-200 block py-2'
+							onClick={() => setShowMenu(false)}
+						>
+							Шукаю канал
+						</NavLink>
+					</li>
+					<li>
+						<NavLink
 							to='/contacts'
 							className='text-gray-800 dark:text-gray-200 font-bold text-lg hover:text-cyan-500 transition-colors duration-200 block py-2'
 							onClick={() => setShowMenu(false)}

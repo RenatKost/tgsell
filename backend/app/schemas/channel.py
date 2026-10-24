@@ -26,6 +26,8 @@ class ChannelCreate(BaseModel):
     # Task 31: seller-stated balance (optional, >= 0; "зі слів продавця")
     stars_balance: int | None = Field(default=None, ge=0, le=10**12)
     ton_balance: float | None = Field(default=None, ge=0, le=10**11)
+    # «Шукаю канал»: lot created via «У мене є такий канал»
+    wanted_request_id: int | None = None
 
 
 class ChannelUpdate(BaseModel):

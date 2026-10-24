@@ -46,6 +46,20 @@ const Navigation = () => {
 					</li>
 					<li>
 						<NavLink
+							to='/wanted'
+							className={({ isActive }) =>
+								`px-4 py-2 rounded-xl text-sm font-semibold transition-all duration-200 ${
+									isActive
+										? 'bg-emerald-500/10 text-emerald-500 dark:bg-emerald-500/20 dark:text-emerald-400'
+										: 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-white/5'
+								}`
+							}
+						>
+							Шукаю канал
+						</NavLink>
+					</li>
+					<li>
+						<NavLink
 							to='/contacts'
 							className={({ isActive }) =>
 								`px-4 py-2 rounded-xl text-sm font-semibold transition-all duration-200 ${
