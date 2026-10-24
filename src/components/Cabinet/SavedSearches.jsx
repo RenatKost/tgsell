@@ -1,7 +1,7 @@
 // Task 24: saved catalog searches in the cabinet (list + delete).
 import { useEffect, useState } from 'react';
-import { NavLink } from 'react-router-dom';
 import { savedSearchesAPI } from '../../services/api';
+import { Spinner, EmptyState, LinkButton, surface, btnDanger } from './ui';
 
 const STATUS = {
 	sent: { text: 'Сповіщення надіслано', cls: 'text-green-600 dark:text-green-400' },
@@ -34,50 +34,45 @@ const SavedSearches = () => {
 		}
 	};
 
-	if (loading) {
-		return (
-			<div className='flex justify-center py-20'>
-				<div className='animate-spin rounded-full h-10 w-10 border-b-2 border-blue-500' />
-			</div>
-		);
-	}
+	if (loading) return <Spinner />;
 
 	return (
 		<div>
-			<p className='text-sm text-gray-500 dark:text-gray-400 mb-4'>
-				Збережено {items.length} з {max}. Коли з’явиться новий канал за вашими фільтрами, ми надішлемо
-				повідомлення в @tgsell_alert_bot (не частіше ніж раз на годину для кожного пошуку).
+			<p className='text-sm text-gray-500 dark:text-gray-400 mb-4 leading-relaxed'>
+				Збережено <span className='font-semibold text-gray-800 dark:text-gray-200'>{items.length} з {max}</span>. Коли з’явиться новий канал за вашими фільтрами,
+				ми надішлемо повідомлення в @tgsell_alert_bot (не частіше ніж раз на годину для кожного пошуку).
 			</p>
-			{error && <p className='text-sm text-red-500 mb-3'>{error}</p>}
+			{error && (
+				<p role='alert' className='text-sm text-red-700 dark:text-red-300 bg-red-50 dark:bg-red-900/20 border border-red-100 dark:border-red-900/40 rounded-xl px-3 py-2 mb-4'>{error}</p>
+			)}
 			{items.length === 0 ? (
-				<div className='text-center py-16 bg-white dark:bg-slate-800 rounded-2xl border border-dashed border-gray-300 dark:border-slate-600'>
-					<div className='text-5xl mb-4'>🔔</div>
-					<p className='text-lg font-semibold text-gray-700 dark:text-gray-200 mb-2'>У вас поки немає збережених пошуків</p>
-					<p className='text-gray-500 dark:text-gray-400 mb-6'>Налаштуйте фільтри в каталозі та натисніть «Зберегти пошук»</p>
-					<NavLink to='/catalog' className='inline-flex items-center gap-2 font-bold bg-[#3498db] text-white py-3 px-8 rounded-xl hover:bg-[#2980b9] duration-300'>
-						Перейти до каталогу
-					</NavLink>
-				</div>
+				!error && (
+					<EmptyState
+						icon='🔔'
+						title='У вас поки немає збережених пошуків'
+						text='Налаштуйте фільтри в каталозі та натисніть «Зберегти пошук».'
+						action={<LinkButton to='/catalog'>Перейти до каталогу</LinkButton>}
+					/>
+				)
 			) : (
-				<div className='flex flex-col gap-3'>
+				<ul className='flex flex-col gap-3'>
 					{items.map(s => (
-						<div key={s.id} className='flex items-center gap-3 bg-white dark:bg-slate-800 rounded-xl border border-gray-100 dark:border-slate-700 p-4'>
+						<li key={s.id} className={`${surface} flex flex-col sm:flex-row sm:items-center gap-3 p-4`}>
 							<div className='min-w-0 flex-1'>
-								<div className='font-semibold text-gray-900 dark:text-white truncate'>{s.name}</div>
-								<div className='text-xs text-gray-500 dark:text-gray-400'>
+								<div className='font-semibold text-gray-900 dark:text-white leading-snug break-words line-clamp-2'>{s.name}</div>
+								<div className='text-xs text-gray-500 dark:text-gray-400 mt-1 leading-relaxed'>
 									Створено {s.created_at ? new Date(s.created_at + 'Z').toLocaleDateString('uk-UA') : '—'}
 									{s.last_delivery_status && STATUS[s.last_delivery_status] && (
-										<span className={`ml-2 ${STATUS[s.last_delivery_status].cls}`}>· {STATUS[s.last_delivery_status].text}</span>
+										<span className={`block sm:inline sm:ml-2 ${STATUS[s.last_delivery_status].cls}`}><span className='hidden sm:inline'>· </span>{STATUS[s.last_delivery_status].text}</span>
 									)}
 								</div>
 							</div>
-							<button onClick={() => remove(s.id)}
-								className='text-sm text-red-500 hover:text-red-600 font-semibold px-3 py-1.5 rounded-lg border border-red-200 dark:border-red-900/40 hover:bg-red-50 dark:hover:bg-red-900/20'>
+							<button type='button' onClick={() => remove(s.id)} className={`${btnDanger} w-full sm:w-auto`}>
 								Видалити
 							</button>
-						</div>
+						</li>
 					))}
-				</div>
+				</ul>
 			)}
 		</div>
 	);
