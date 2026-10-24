@@ -1,14 +1,18 @@
 import { NavLink } from 'react-router-dom';
 import { motion } from 'framer-motion';
+import './escrow.css';
+import './premium.css';
+import './public.css';
 
 const NotFoundPage = () => (
   <motion.div
     initial={{ opacity: 0, y: 16 }}
     animate={{ opacity: 1, y: 0 }}
     transition={{ duration: 0.35 }}
-    className="py-24 flex flex-col items-center justify-center text-center px-4"
+    className="esc-page prm-pub relative overflow-x-clip pt-32 pb-24 flex flex-col items-center justify-center text-center px-4"
   >
-    <p className="text-7xl font-black text-gray-200 dark:text-slate-700 tracking-tighter mb-2">404</p>
+    <div className="esc-bg esc-bg-short" aria-hidden="true"><span className="esc-grid" /><span className="esc-blob esc-blob-1" /><span className="esc-blob esc-blob-2" /></div>
+    <p className="esc-title text-7xl sm:text-8xl font-black tracking-tighter mb-2">404</p>
     <h1 className="text-2xl font-black text-gray-900 dark:text-white mb-2">Сторінку не знайдено</h1>
     <p className="text-sm text-gray-500 dark:text-gray-400 mb-8 max-w-md">
       Такої адреси на TgSell немає. Перевірте URL або поверніться на головну.

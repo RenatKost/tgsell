@@ -1,6 +1,9 @@
 import SocialLinks from '../components/SocialLinks';
 import { motion } from 'framer-motion';
 import { NavLink } from 'react-router-dom';
+import './escrow.css';
+import './premium.css';
+import './public.css';
 
 const Section = ({ title, children }) => (
   <div className="mb-8">
@@ -19,11 +22,12 @@ const FaqPage = () => (
     initial={{ opacity: 0, y: 20 }}
     animate={{ opacity: 1, y: 0 }}
     transition={{ duration: 0.4 }}
-    className="py-12 max-w-3xl mx-auto"
+    className="esc-page prm-pub relative pt-24 md:pt-32 pb-12 max-w-3xl mx-auto"
   >
+    <div className="esc-bg esc-bg-short" aria-hidden="true"><span className="esc-grid" /><span className="esc-blob esc-blob-1" /><span className="esc-blob esc-blob-2" /></div>
     <div className="mb-10">
-      <span className="inline-block bg-violet-400/10 border border-violet-400/20 text-violet-400 text-xs font-bold uppercase tracking-widest px-3 py-1 rounded-full mb-3">Довідка</span>
-      <h1 className="text-3xl font-black text-gray-900 dark:text-white mb-2">Часті запитання (FAQ)</h1>
+      <span data-qa="badge" className="inline-block bg-violet-400/10 border border-violet-400/20 text-violet-400 text-xs font-bold uppercase tracking-widest px-3 py-1 rounded-full mb-3">Довідка</span>
+      <h1 className="esc-title text-3xl sm:text-4xl font-black text-gray-900 dark:text-white mb-2">Часті запитання (FAQ)</h1>
       <p className="text-sm text-gray-400">Як купувати й продавати Telegram-канали на TgSell</p>
     </div>
 

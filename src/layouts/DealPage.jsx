@@ -6,6 +6,9 @@ import { Handshake, DollarSign, Send, CreditCard, CheckCircle2, Check } from 'lu
 import { dealsAPI } from '../services/api';
 import { useAuth } from '../context/AppContext';
 import TransferChecklist from '../components/Deal/TransferChecklist';
+import './escrow.css';
+import './premium.css';
+import './public.css';
 
 const STEPS = [
 	{ key: 'created',         label: 'Готовність', short: 'Старт', LIcon: Handshake,    preset: 'blue'   },
@@ -211,7 +214,8 @@ const DealPage = () => {
 	};
 
 	return (
-		<section className='my-24 sm:my-28 max-w-3xl mx-auto px-3 sm:px-4 overflow-x-hidden'>
+		<section className='esc-page prm-pub relative my-24 sm:my-28 max-w-3xl mx-auto px-3 sm:px-4 overflow-x-hidden'>
+			<div className='esc-bg esc-bg-short' aria-hidden='true'><span className='esc-grid' /><span className='esc-blob esc-blob-1' /><span className='esc-blob esc-blob-2' /></div>
 
 			{/* Error toast */}
 			{error && (

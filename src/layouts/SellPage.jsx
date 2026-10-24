@@ -1,6 +1,9 @@
 import { useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import SellForm from '../components/SellForm';
+import './escrow.css';
+import './premium.css';
+import './public.css';
 
 const CHANNEL_URL = '/megaphone-3d.png';
 const BUNDLE_URL = '/satellite-3d.png';
@@ -93,11 +96,12 @@ const SellPage = () => {
 	}
 
 	return (
-		<div className="md:min-h-screen text-white flex items-center">
+		<div className="esc-page prm-pub relative overflow-x-clip md:min-h-screen text-white flex items-center">
+		<div className="esc-bg esc-bg-short" aria-hidden="true"><span className="esc-grid" /><span className="esc-blob esc-blob-1" /><span className="esc-blob esc-blob-2" /></div>
 		<div className="w-full max-w-2xl mx-auto px-4" style={{ paddingTop: '7rem', paddingBottom: '5rem' }}>
 				{/* Heading */}
 				<div className="text-center mb-10">
-					<h1 className="text-4xl md:text-5xl font-black mb-3 leading-tight">
+					<h1 className="esc-title text-4xl md:text-5xl font-black mb-3 leading-tight">
 						Що ви хочете{' '}
 						<span className="text-accent">продати?</span>
 					</h1>
