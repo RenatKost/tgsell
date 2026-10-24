@@ -19,6 +19,7 @@ from app.routers import saved_searches as saved_searches_router
 from app.routers import chat as chat_router
 from app.routers import wanted as wanted_router
 from app.routers import external_escrow as external_escrow_router
+from app.routers import paid_services as paid_services_router
 from app.tasks.payment_checker import run_payment_checker
 from app.tasks.payout_worker import run_payout_worker
 from app.tasks.stats_collector import run_stats_collector, run_view_tracker
@@ -104,6 +105,8 @@ async def lifespan(app: FastAPI):
     background_tasks.append(loop.create_task(run_saved_search_notifier()))
     from app.services.wanted import run_wanted_digest
     background_tasks.append(loop.create_task(run_wanted_digest()))
+    from app.services.paid_services import run_service_payment_checker
+    background_tasks.append(loop.create_task(run_service_payment_checker()))
     yield
     logger.info("Shutting down background tasks…")
     for task in background_tasks:
@@ -159,6 +162,8 @@ app.include_router(auctions.router, prefix="/api")
 app.include_router(activity.router, prefix="/api")
 app.include_router(bundles_router.router, prefix="/api")
 app.include_router(external_escrow_router.router, prefix="/api")
+app.include_router(paid_services_router.router, prefix="/api")
+app.include_router(paid_services_router.admin_router, prefix="/api")
 app.include_router(media.router, prefix="/api")
 app.include_router(support.router, prefix="/api")
 app.include_router(user_activity_router.router, prefix="/api")

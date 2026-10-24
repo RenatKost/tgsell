@@ -110,6 +110,16 @@ class Channel(Base):
         ForeignKey("wanted_requests.id", ondelete="SET NULL"), nullable=True, index=True
     )
 
+    # Paid seller services (migration 0051): «Топ каталогу» until this naive-UTC moment,
+    # «Перевірено TgSell» badge (set by admin after a manual audit).
+    top_until: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    tgsell_verified: Mapped[bool] = mapped_column(Boolean, server_default="false", default=False)
+
+    @property
+    def is_top(self) -> bool:
+        from app.utils.timeutil import utcnow_naive
+        return bool(self.top_until and self.top_until > utcnow_naive())
+
     # Relationships
     seller = relationship("User", back_populates="channels", foreign_keys=[seller_id])
     stats = relationship("ChannelStats", back_populates="channel", cascade="all, delete-orphan", passive_deletes=True)
