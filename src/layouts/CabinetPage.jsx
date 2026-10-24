@@ -14,6 +14,8 @@ import {
 	LinkButton, FilterChips, surface, inner, btnPrimary, btnSecondary, btnDanger,
 } from '../components/Cabinet/ui';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
+import useReveal from '../hooks/useReveal';
+import './escrow.css';
 import {
 	faList,
 	faHeart,
@@ -54,6 +56,7 @@ const CabinetPage = () => {
 	const { user } = useAuth();
 	const navigate = useNavigate();
 	const [unread, setUnread] = useState({});
+	useReveal();
 	const [activeTab, setActiveTab] = useState(TABS[0]);
 	const [activeFilter, setActiveFilter] = useState(STATUS_FILTERS[0]);
 	const [dealFilter, setDealFilter] = useState(DEAL_FILTERS[0]);
@@ -197,28 +200,29 @@ const CabinetPage = () => {
 	const renderBody = (empty, list) => (loading ? <Spinner /> : loadError ? <ErrorState onRetry={() => setReloadKey(k => k + 1)} /> : empty ? empty : list);
 
 	return (
-		<section className='pt-24 sm:pt-28 mb-16'>
+		<section className='esc-page relative isolate pt-24 sm:pt-28 mb-16'>
+			<div className='esc-bg esc-bg-short -z-10' aria-hidden='true'><span className='esc-grid' /><span className='esc-blob esc-blob-1' /><span className='esc-blob esc-blob-2' /></div>
 			{/* Header */}
-			<div className='flex flex-col sm:flex-row sm:items-end justify-between gap-4 mb-6 sm:mb-8'>
+			<div className='esc-reveal flex flex-col sm:flex-row sm:items-end justify-between gap-4 mb-6 sm:mb-8'>
 				<div className='min-w-0'>
-					<h1 className='text-2xl md:text-3xl font-bold text-gray-900 dark:text-white leading-tight break-words'>
-						{user?.first_name ? `Привіт, ${user.first_name} 👋` : 'Особистий кабінет'}
+					<h1 className='esc-title text-[1.75rem] sm:text-4xl font-extrabold tracking-tight leading-tight break-words'>
+						{user?.first_name ? <>{`Привіт, ${user.first_name} `}<span className='esc-emoji'>👋</span></> : 'Особистий кабінет'}
 					</h1>
 					<p className='text-sm sm:text-base text-gray-500 dark:text-gray-400 mt-2 leading-relaxed'>
 						Ваші оголошення, угоди та збережені пошуки в одному місці
 					</p>
 				</div>
-				<NavLink to='/sell' className={`${btnPrimary} w-full sm:w-auto shadow-neon`}>
+				<NavLink to='/sell' className={`${btnPrimary} esc-btn w-full sm:w-auto shadow-neon`}>
 					<FontAwesomeIcon icon={faPlus} />
 					Виставити канал
 				</NavLink>
 			</div>
 
-			<AlertBotHint className='mb-6' />
+			<div className='esc-reveal' style={{ '--d': '80ms' }}><AlertBotHint className='mb-6' /></div>
 
 			{/* Tabs: 3×2 grid on phones (all visible, no hidden scroll), underline row from md */}
 			<div role='tablist' aria-label='Розділи кабінету'
-				className='grid grid-cols-3 gap-2 mb-6 md:flex md:gap-1 md:border-b md:border-gray-200 md:dark:border-card-border'>
+				className='esc-tabs grid grid-cols-3 gap-2 mb-6 md:flex md:gap-1'>
 				{TABS.map(tab => {
 					const on = activeTab.value === tab.value;
 					const n = tabCount(tab.value);
@@ -229,10 +233,10 @@ const CabinetPage = () => {
 							role='tab'
 							aria-selected={on}
 							onClick={() => setActiveTab(tab)}
-							className={`relative flex flex-col md:flex-row items-center justify-center gap-1 md:gap-2 min-h-[56px] md:min-h-[48px] px-2 md:px-4 rounded-xl md:rounded-none text-xs md:text-sm font-semibold text-center leading-tight transition-all border md:border-0 md:border-b-2 md:-mb-px ${
+							className={`relative flex flex-col md:flex-row items-center justify-center gap-1 md:gap-2 min-h-[56px] md:min-h-[48px] px-2 md:px-4 rounded-xl text-xs md:text-sm font-semibold text-center leading-tight transition-all border ${
 								on
-									? 'bg-accent/10 border-accent text-gray-900 dark:text-accent md:bg-transparent'
-									: 'bg-white dark:bg-card border-gray-200 dark:border-card-border text-gray-500 dark:text-gray-400 hover:text-gray-800 dark:hover:text-white md:bg-transparent md:dark:bg-transparent md:border-transparent'
+									? 'bg-accent/10 border-accent text-gray-900 dark:text-accent'
+									: 'bg-white dark:bg-card border-gray-200 dark:border-card-border text-gray-500 dark:text-gray-400 hover:text-gray-800 dark:hover:text-white md:bg-transparent md:dark:bg-transparent md:border-transparent md:hover:bg-accent/5'
 							}`}
 						>
 							<FontAwesomeIcon icon={tab.icon} className='text-sm' />
@@ -261,7 +265,7 @@ const CabinetPage = () => {
 								action={<LinkButton to='/sell'><FontAwesomeIcon icon={faPlus} />Виставити канал</LinkButton>}
 							/>
 						),
-						<div className='grid grid-cols-1 lg:grid-cols-2 2xl:grid-cols-3 gap-4 sm:gap-5'>
+						<div className='esc-cab-list grid grid-cols-1 lg:grid-cols-2 2xl:grid-cols-3 gap-4 sm:gap-5'>
 							{filteredChannels.map(channel => (
 								<CabinetCard key={channel.id} channel={channel} onDelete={handleDelete} />
 							))}
@@ -282,7 +286,7 @@ const CabinetPage = () => {
 							{myBundles.map(b => {
 								const st = b.status === 'sold' ? LISTING_STATUS.sold : (LISTING_STATUS[b.status] || LISTING_STATUS.pending);
 								return (
-									<article key={b.id} className={`${surface} p-4 sm:p-5 flex flex-col`}>
+									<article key={b.id} className={`${surface} esc-card p-4 sm:p-5 flex flex-col`}>
 										<div className='flex items-start justify-between gap-3 mb-2'>
 											<h3 className='font-semibold text-gray-900 dark:text-white leading-snug break-words line-clamp-2 min-w-0'>
 												<span aria-hidden='true' className='mr-1.5'>📡</span>{b.name}
@@ -347,7 +351,7 @@ const CabinetPage = () => {
 				<>
 					<div className='flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-5'>
 						<p className='text-sm text-gray-500 dark:text-gray-400'>Опубліковані канали можна виставити на аукціон.</p>
-						<button type='button' onClick={handleOpenAuctionModal} className={`${btnPrimary} w-full sm:w-auto`}>
+						<button type='button' onClick={handleOpenAuctionModal} className={`${btnPrimary} esc-btn w-full sm:w-auto`}>
 							<FontAwesomeIcon icon={faGavel} />
 							Виставити на аукціон
 						</button>
@@ -372,7 +376,7 @@ const CabinetPage = () => {
 								const timeStr = timeRemaining > 0 ? `${hoursLeft} год ${minsLeft} хв` : 'Завершено';
 								const st = AUCTION_STATUS[auction.status] || { text: auction.status, tone: 'gray' };
 								return (
-									<article key={auction.id} className={`${surface} p-4 sm:p-5`}>
+									<article key={auction.id} className={`${surface} esc-card p-4 sm:p-5`}>
 										<div className='flex items-start gap-3 mb-4'>
 											{auction.channel_avatar ? (
 												<img className='w-12 h-12 rounded-xl object-cover flex-shrink-0' src={auction.channel_avatar} alt='' />
@@ -430,7 +434,7 @@ const CabinetPage = () => {
 								const isBuyer = user?.id === deal.buyer_id;
 								const next = dealNextStep(deal, isBuyer);
 								return (
-									<article key={deal.id} className={`${surface} p-4 sm:p-5`}>
+									<article key={deal.id} className={`${surface} esc-card p-4 sm:p-5`}>
 										<div className='flex flex-col sm:flex-row sm:items-start justify-between gap-2 sm:gap-4 mb-4'>
 											<div className='min-w-0'>
 												<h3 className='font-bold text-gray-900 dark:text-white text-base sm:text-lg leading-snug line-clamp-2 break-words'>
@@ -492,7 +496,7 @@ const CabinetPage = () => {
 							action={<LinkButton to='/catalog'>Перейти до каталогу</LinkButton>}
 						/>
 					),
-					<div className='grid grid-cols-1 md:grid-cols-2 2xl:grid-cols-3 gap-4 sm:gap-6'>
+					<div className='esc-cab-list grid grid-cols-1 md:grid-cols-2 2xl:grid-cols-3 gap-4 sm:gap-6'>
 						{favorites.map(channel => (
 							<CatalogCard key={channel.id} channel={channel} />
 						))}

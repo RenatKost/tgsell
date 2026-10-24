@@ -4,6 +4,7 @@ import { escrowAPI } from '../services/api';
 import { useAuth } from '../context/AppContext';
 import { ShieldCheck, Link2, AtSign, Coins, Lock, Percent, Scale, UserCheck, Wallet, KeyRound, BadgeCheck, ChevronDown, Sparkles } from 'lucide-react';
 import './escrow.css';
+import useReveal from '../hooks/useReveal';
 
 const inputCls = 'esc-input w-full bg-white dark:bg-slate-900/70 border border-gray-200 dark:border-card-border rounded-xl px-3 py-2.5 text-sm text-gray-800 dark:text-gray-100 focus:outline-none focus:border-accent';
 const card = 'bg-white dark:bg-card rounded-2xl border border-gray-100 dark:border-card-border p-5';
@@ -12,26 +13,6 @@ const fmt = (n) => Number(n || 0).toFixed(2).replace(/\.00$/, '');
 const errText = (ex, fb) => { const d = ex?.response?.data?.detail; return typeof d === 'string' ? d : fb; };
 
 const STATUS = { open: 'Очікує покупця', accepted: 'Угоду розпочато', cancelled: 'Скасовано' };
-
-// Поява при скролі. `is-visible` ставиться напряму в DOM, тому елемент з .esc-reveal
-// не повинен мати className, що змінюється при ре-рендері (React перезапише клас і сховає його).
-// Fallback: елементи, що вже у viewport або вище нього (стрибок скролом), показуються одразу,
-// а через REVEAL_FALLBACK_MS показуються всі — контент ніколи не лишається невидимим.
-const REVEAL_FALLBACK_MS = 1500;
-const useReveal = () => {
-	useEffect(() => {
-		const els = [...document.querySelectorAll('.esc-reveal:not(.is-visible)')];
-		const show = (el) => el.classList.add('is-visible');
-		if (!els.length) return undefined;
-		if (!('IntersectionObserver' in window)) { els.forEach(show); return undefined; }
-		const io = new IntersectionObserver((entries) => entries.forEach((en) => {
-			if (en.isIntersecting || en.boundingClientRect.top < 0) { show(en.target); io.unobserve(en.target); }
-		}), { threshold: 0.15, rootMargin: '0px 0px -40px 0px' });
-		els.forEach((el) => io.observe(el));
-		const t = setTimeout(() => { els.forEach(show); io.disconnect(); }, REVEAL_FALLBACK_MS);
-		return () => { clearTimeout(t); io.disconnect(); };
-	});
-};
 
 const Hero = ({ fee }) => (
 	<header className='esc-hero relative text-center pt-4 pb-2'>
