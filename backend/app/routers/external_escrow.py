@@ -131,25 +131,41 @@ async def _offer_for_buyer(db: AsyncSession, token: str, user: User, lock: bool 
     if lock:
         q = q.with_for_update()
     o = (await db.execute(q)).scalar_one_or_none()
-    uname = (user.username or "").lower().lstrip("@")
     # Same 404 for unknown token and wrong user → token existence is not revealed.
-    if o is None or not uname or not _secrets.compare_digest(uname, o.buyer_username):
+    if o is None or o.seller_id == user.id or not user.telegram_id:
         raise HTTPException(status_code=404, detail=NOT_FOUND)
-    if o.seller_id == user.id:
+    if o.buyer_telegram_id is not None:
+        # Already bound: telegram_id is the only key (username changes don't matter).
+        if int(o.buyer_telegram_id) != int(user.telegram_id):
+            raise HTTPException(status_code=404, detail=NOT_FOUND)
+        return o
+    uname = (user.username or "").lower().lstrip("@")
+    if not uname or not _secrets.compare_digest(uname, o.buyer_username):
         raise HTTPException(status_code=404, detail=NOT_FOUND)
+    if o.deal_id is not None:
+        # Legacy accepted offer (pre-0052): bind only if this user IS the deal's buyer.
+        deal = await db.get(Deal, o.deal_id)
+        if deal is None or deal.buyer_id != user.id:
+            raise HTTPException(status_code=404, detail=NOT_FOUND)
+    o.buyer_telegram_id = int(user.telegram_id)  # first open by the invited buyer → bind
+    await db.flush()
+    logger.info(f"[ESCROW-EXT] offer #{o.id} bound to buyer user={user.id}")
     return o
 
 
 @router.get("/invite/{token}")
 async def view_invite(token: str, user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
-    o = await _offer_for_buyer(db, token, user)
-    return _buyer_view(o, await db.get(User, o.seller_id))
+    o = await _offer_for_buyer(db, token, user, lock=True)
+    seller = await db.get(User, o.seller_id)
+    await db.commit()  # persist the telegram_id binding
+    return _buyer_view(o, seller)
 
 
 @router.post("/invite/{token}/accept")
 async def accept_invite(token: str, user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
     o = await _offer_for_buyer(db, token, user, lock=True)
     if o.status == ExternalOfferStatus.accepted.value and o.deal_id:
+        await db.commit()
         return {"deal_id": o.deal_id}
     if o.status != ExternalOfferStatus.open.value:
         raise HTTPException(status_code=400, detail="Продавець скасував цю угоду")

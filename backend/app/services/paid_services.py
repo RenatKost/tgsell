@@ -188,7 +188,8 @@ async def check_orders_once(session_factory, now: datetime | None = None, fetch_
                 return await asyncio.to_thread(escrow_svc.fetch_usdt_balance, addr)
             except escrow_svc.BalanceUnavailable:
                 return None
-    stats = {"paid": 0, "cancelled": 0, "expired": 0}
+    stats = {"paid": 0, "cancelled": 0, "expired": 0, "partial_alerts": 0}
+    partial_alerts: list[tuple[int, str]] = []
     async with session_factory() as db:
         orders = (await db.execute(select(PaidServiceOrder).where(PaidServiceOrder.status == ST_AWAITING))).scalars().all()
         for o in orders:
@@ -202,10 +203,25 @@ async def check_orders_once(session_factory, now: datetime | None = None, fetch_
                 if bal <= 0:
                     o.status, o.updated_at = ST_CANCELLED, now
                     stats["cancelled"] += 1
-                elif o.received_usdt != bal:
-                    o.received_usdt = float(bal)  # partial payment: stays for admin review, never auto-cancelled
+                else:
+                    if o.received_usdt != bal:
+                        o.received_usdt = float(bal)  # partial payment: stays for admin review, never auto-cancelled
+                    if o.partial_alerted_at is None:
+                        o.partial_alerted_at = now  # one-shot: marked in the same commit, sent after it
+                        partial_alerts.append((o.id, (
+                            f"🟡 <b>Часткова оплата послуги</b> — заявка #{o.id} ({KIND_LABELS.get(o.kind, o.kind)})\n"
+                            f"Отримано {float(bal):g} з {o.price_usdt:g} USDT, строк оплати минув.\n"
+                            f"Адреса: <code>{o.escrow_wallet_address}</code>\nРішення — за адміністратором.")))
         stats["expired"] = await expire_tops(db, now)
         await db.commit()
+    if partial_alerts:
+        from app.services.alerts import send_admin_alert
+        for oid, text in partial_alerts:
+            try:
+                await send_admin_alert(text, alert_key=f"svc_partial_{oid}")
+                stats["partial_alerts"] += 1
+            except Exception as e:  # never re-sent: the order is already marked
+                logger.error(f"[SERVICES] partial alert #{oid} failed: {e}")
     return stats
 
 

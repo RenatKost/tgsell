@@ -6,7 +6,7 @@ module never moves funds.
 """
 from datetime import datetime
 
-from sqlalchemy import DateTime, Float, ForeignKey, Integer, String, Text, func
+from sqlalchemy import BigInteger, DateTime, Float, ForeignKey, Integer, String, Text, func
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.database import Base
@@ -42,3 +42,17 @@ class PaidServiceOrder(Base):
     handled_by_id: Mapped[int | None] = mapped_column(Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
     updated_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+
+    # Fee sweep to TREASURY_ADDRESS (migration 0052; app.services.fee_sweep).
+    # NULL → queued → processing → broadcast → done | failed; pending_sweep (< min) / empty (0).
+    sweep_status: Mapped[str | None] = mapped_column(String(20), nullable=True, index=True)
+    sweep_tx_hash: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    sweep_amount_units: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
+    sweep_gas_tx_hash: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    sweep_energy_order_id: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    sweep_attempts: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
+    sweep_broadcast_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    sweep_finalized_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    sweep_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # One-shot admin alert about a partial payment after the deadline.
+    partial_alerted_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)

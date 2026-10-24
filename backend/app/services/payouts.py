@@ -678,3 +678,28 @@ async def reconcile_pending_transfers(db, now=None) -> int:
             )
     await db.commit()
     return done
+
+
+# ── paid-service fee sweep (orders are not deals; state lives on paid_service_orders) ──
+# The on-chain part stays here so money leaves escrow only through this module.
+# Same gas/energy handling as deal jobs in process_queued().
+
+def prepare_service_sweep(enc_key: str, treasury: str, amount_units: int, *, order_id: int,
+                          prior_gas_tx: str | None = None, prior_energy_order: str | None = None) -> dict:
+    """Blocking: build + sign the treasury transfer (gas top-up / CatFee energy as for deals)."""
+    from app.services import fee_sweep
+
+    if treasury != fee_sweep.treasury_address():
+        raise PayoutError("SWEEP_FORBIDDEN", "Service fee sweep дозволено лише на TREASURY_ADDRESS")
+    kw = {"allow_master": False}
+    if prior_gas_tx:
+        kw["prior_gas_tx"] = prior_gas_tx
+    if catfee.enabled():
+        kw["energy_key"] = f"tgsell-svc{order_id}"
+        if prior_energy_order:
+            kw["prior_energy_order"] = prior_energy_order
+    return escrow_svc.prepare_usdt_transfer(enc_key, treasury, int(amount_units), **kw)
+
+
+def broadcast_service_sweep(prepared: dict) -> str:
+    return escrow_svc.broadcast_prepared(prepared)
