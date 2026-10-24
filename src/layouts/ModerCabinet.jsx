@@ -571,28 +571,28 @@ const ModerCabinet = () => {
 	};
 
 	return (
-		<section className='pt-20 pb-10 flex min-h-screen'>
-			<aside className={`fixed top-20 left-0 bottom-0 z-40 bg-white dark:bg-slate-900 border-r border-gray-200 dark:border-slate-700 transition-all duration-300 ${sidebarOpen ? 'w-64' : 'w-16'} flex flex-col`}>
-				<div className='p-3 flex items-center justify-between border-b border-gray-100 dark:border-slate-700'>
+		<section className='pt-20 pb-10 flex flex-col md:flex-row min-h-screen'>
+			<aside className={`relative w-full md:fixed md:top-20 md:left-0 md:bottom-0 z-40 bg-white dark:bg-slate-900 border-b md:border-b-0 md:border-r border-gray-200 dark:border-slate-700 transition-all duration-300 ${sidebarOpen ? 'md:w-64' : 'md:w-16'} flex flex-col`}>
+				<div className='hidden md:flex p-3 items-center justify-between border-b border-gray-100 dark:border-slate-700'>
 					{sidebarOpen && <span className='text-sm font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider'>Адмін</span>}
 					<button onClick={() => setSidebarOpen(!sidebarOpen)} className='p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-slate-800 text-gray-400 duration-200'>
 						<FontAwesomeIcon icon={sidebarOpen ? faChevronLeft : faBars} />
 					</button>
 				</div>
-				<nav className='flex-1 py-2 overflow-y-auto'>
+				<nav className='flex md:flex-col md:flex-1 md:py-2 overflow-x-auto no-scrollbar md:overflow-x-hidden md:overflow-y-auto'>
 					{SECTIONS.filter(s => isAdmin || !s.adminOnly).map(s => (
 						<button
 							key={s.id}
 							onClick={() => setSection(s.id)}
-							className={`w-full flex items-center gap-3 px-4 py-3 text-sm font-medium duration-200 ${
+							className={`shrink-0 md:w-full flex items-center gap-2 md:gap-3 px-3 md:px-4 py-2.5 md:py-3 text-sm font-medium whitespace-nowrap duration-200 ${
 								section === s.id
-									? 'bg-blue-50 dark:bg-blue-900/20 text-[#3498db] border-r-2 border-[#3498db]'
+									? 'bg-blue-50 dark:bg-blue-900/20 text-[#3498db] border-b-2 md:border-b-0 md:border-r-2 border-[#3498db]'
 									: 'text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-slate-800 hover:text-gray-800 dark:hover:text-gray-200'
 							}`}
 							title={s.label}
 						>
 							<FontAwesomeIcon icon={s.icon} className='w-5 text-center' />
-							{sidebarOpen && <span>{s.label}</span>}
+							<span className={sidebarOpen ? '' : 'md:hidden'}>{s.label}</span>
 							{sidebarOpen && s.id === 'pending' && (pendingChannels.length + pendingBundles.length) > 0 && (
 								<span className='ml-auto bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-400 text-xs px-2 py-0.5 rounded-full'>
 									{pendingChannels.length + pendingBundles.length}
@@ -608,7 +608,7 @@ const ModerCabinet = () => {
 				</nav>
 			</aside>
 
-			<main className={`flex-1 transition-all duration-300 ${sidebarOpen ? 'ml-64' : 'ml-16'} px-6 lg:px-10`}>
+			<main className={`flex-1 min-w-0 transition-all duration-300 ${sidebarOpen ? 'md:ml-64' : 'md:ml-16'} px-3 pt-4 md:pt-0 md:px-6 lg:px-10`}>
 
 				{section === 'dashboard' && (
 					<div>
@@ -1036,7 +1036,7 @@ const ModerCabinet = () => {
 								{allChannels.map(channel => (
 									<div key={channel.id} className='bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-gray-100 dark:border-slate-700 p-5 hover:shadow-md duration-300'>
 										<div className='flex flex-col md:flex-row md:items-center justify-between gap-3 mb-3'>
-											<div className='flex items-center gap-3'>
+											<div className='flex items-center gap-3 min-w-0'>
 												{channel.avatar_url ? (
 													<img className='w-12 h-12 rounded-full object-cover ring-2 ring-gray-100 dark:ring-slate-600' src={channel.avatar_url} alt='' />
 												) : (
@@ -1056,7 +1056,7 @@ const ModerCabinet = () => {
 													</a>
 												</div>
 											</div>
-											<div className='flex items-center gap-2'>
+											<div className='flex flex-wrap items-center gap-2'>
 												<span className={`text-xs px-3 py-1 rounded-full font-semibold ${STATUS_COLORS[channel.status] || 'bg-gray-100 dark:bg-gray-700'}`}>
 													{STATUS_LABELS[channel.status] || channel.status}
 												</span>

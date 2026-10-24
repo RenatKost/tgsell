@@ -103,7 +103,7 @@ const HeroCard = () => (
     </div>
     <motion.div
       animate={{ y: [-3, 3, -3] }} transition={{ repeat: Infinity, duration: 3 }}
-      className="absolute -top-3 right-1 sm:-right-4 bg-white dark:bg-card border border-gray-100 dark:border-card-border rounded-xl px-2.5 sm:px-3 py-1.5 sm:py-2 shadow-lg"
+      className="absolute -top-3 right-1 sm:right-2 bg-white dark:bg-card border border-gray-100 dark:border-card-border rounded-xl px-2.5 sm:px-3 py-1.5 sm:py-2 shadow-lg"
     >
       <div className="flex items-center gap-1.5">
         <span className="w-1.5 h-1.5 rounded-full bg-accent animate-pulse" />
