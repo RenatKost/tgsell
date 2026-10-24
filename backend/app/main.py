@@ -18,6 +18,7 @@ from app.routers import user_activity as user_activity_router
 from app.routers import saved_searches as saved_searches_router
 from app.routers import chat as chat_router
 from app.routers import wanted as wanted_router
+from app.routers import external_escrow as external_escrow_router
 from app.tasks.payment_checker import run_payment_checker
 from app.tasks.payout_worker import run_payout_worker
 from app.tasks.stats_collector import run_stats_collector, run_view_tracker
@@ -157,6 +158,7 @@ app.include_router(favorites.router, prefix="/api")
 app.include_router(auctions.router, prefix="/api")
 app.include_router(activity.router, prefix="/api")
 app.include_router(bundles_router.router, prefix="/api")
+app.include_router(external_escrow_router.router, prefix="/api")
 app.include_router(media.router, prefix="/api")
 app.include_router(support.router, prefix="/api")
 app.include_router(user_activity_router.router, prefix="/api")
@@ -207,11 +209,13 @@ if STATIC_DIR.exists():
         "kupyty-telegram-kanal",
         "prodaty-telegram-kanal",
         "skilky-koshtuye-telegram-kanal",
+        "escrow",
     }
     SPA_PREFIXES = (
         "channel/",
         "bundle/",
         "deal/",
+        "escrow/",  # private buyer invite (noindex, never cached by path)
     )
 
     _NOT_FOUND_HTML = """<!DOCTYPE html>
@@ -278,7 +282,10 @@ h1{font-size:4rem;margin:0;color:#334155}h2{margin:.5rem 0;font-size:1.5rem}p{co
             from app.utils.spa_meta import render_index, channel_id_from_path, channel_meta
             override = None
             ch_id = channel_id_from_path(full_path)
-            if ch_id is not None:
+            if full_path.strip("/").startswith("escrow/"):
+                from app.utils.spa_meta import ESCROW_INVITE_META
+                override = dict(ESCROW_INVITE_META)  # dynamic branch → secret token never enters lru_cache
+            elif ch_id is not None:
                 override = await _channel_page_meta(ch_id)
             else:
                 from app.utils.spa_meta import bundle_id_from_path

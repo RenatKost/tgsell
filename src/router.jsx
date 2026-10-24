@@ -22,6 +22,7 @@ import BuyChannelLanding from './layouts/BuyChannelLanding';
 import SellChannelLanding from './layouts/SellChannelLanding';
 import ChannelPriceCalculatorPage from './layouts/ChannelPriceCalculatorPage';
 import WantedPage from './layouts/WantedPage';
+import EscrowPage from './layouts/EscrowPage';
 
 export const router = createBrowserRouter([
 	{
@@ -48,6 +49,14 @@ export const router = createBrowserRouter([
 			{
 				path: '/wanted',
 				element: <WantedPage />,
+			},
+			{
+				path: '/escrow',
+				element: <EscrowPage />,
+			},
+			{
+				path: '/escrow/:token',
+				element: <EscrowPage />,
 			},
 			{
 				path: '/auction',

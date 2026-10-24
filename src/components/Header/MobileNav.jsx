@@ -5,6 +5,7 @@ const ITEMS = [
 	{ to: '/catalog', label: 'Каталог каналів', active: 'bg-blue-500/10 text-blue-500 dark:bg-blue-500/20 dark:text-blue-400' },
 	{ to: '/auction', label: '🔥 Аукціон', active: 'bg-orange-500/10 text-orange-500 dark:bg-orange-500/20 dark:text-orange-400' },
 	{ to: '/wanted', label: 'Шукаю канал', active: 'bg-emerald-500/10 text-emerald-500 dark:bg-emerald-500/20 dark:text-emerald-400' },
+	{ to: '/escrow', label: 'Гарант', active: 'bg-violet-500/10 text-violet-500 dark:bg-violet-500/20 dark:text-violet-400' },
 	{ to: '/contacts', label: 'Контакти', active: 'bg-cyan-500/10 text-cyan-500 dark:bg-cyan-500/20 dark:text-cyan-400' },
 ];
 const itemCls = (active) => ({ isActive }) =>

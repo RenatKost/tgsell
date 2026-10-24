@@ -54,8 +54,19 @@ def _set_canonical(html: str, url: str) -> str:
     return html.replace("</head>", f"  {tag}\n</head>", 1)
 
 
+ESCROW_INVITE_META = {
+    "title": "Запрошення до угоди — TgSell",
+    "description": "Приватна угода через гарант TgSell.",
+    "noindex": True,
+}
+
 # Task 33: static meta for /catalog (not an SEO landing: no no-JS h1 fallback).
 EXTRA_ROUTE_META: dict[str, dict[str, str]] = {
+    "/escrow": {
+        "title": "Гарант для угод з Telegram-каналами — безпечний ескроу USDT | TgSell",
+        "description": ("Домовились про продаж каналу поза каталогом? Проведіть угоду через гарант TgSell: "
+                        "покупець оплачує USDT TRC-20 на депозит, продавець отримує кошти після передачі каналу."),
+    },
     "/catalog": {
         "title": "Каталог Telegram-каналів на продаж — TgSell",
         "description": ("Каталог Telegram-каналів на продаж: фільтри за тематикою, ціною, "
@@ -160,10 +171,15 @@ def _set_robots(html: str, value: str) -> str:
 def inject_meta(html: str, full_path: str, override: dict | None = None) -> str:
     path = normalize_path(full_path)
     canon_path = CANONICAL_ALIASES.get(path, path)
+    private_invite = path.startswith("/escrow/")
+    if private_invite:  # secret buyer link: never index, never leak the token into canonical/og:url
+        canon_path = "/escrow"
     url = SITE_URL + ("/" if canon_path == "/" else canon_path)
     html = _set_canonical(html, url)
     html = _set_meta(html, "property", "og:url", url)
     meta = override or route_meta().get(path) or EXTRA_ROUTE_META.get(path)
+    if private_invite:
+        meta = ESCROW_INVITE_META
     if not meta:
         return html
     if meta.get("noindex"):

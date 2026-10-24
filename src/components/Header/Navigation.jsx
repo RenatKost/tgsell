@@ -60,6 +60,20 @@ const Navigation = () => {
 					</li>
 					<li>
 						<NavLink
+							to='/escrow'
+							className={({ isActive }) =>
+								`px-4 py-2 rounded-xl text-sm font-semibold transition-all duration-200 ${
+									isActive
+										? 'bg-violet-500/10 text-violet-500 dark:bg-violet-500/20 dark:text-violet-400'
+										: 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-white/5'
+								}`
+							}
+						>
+							Гарант
+						</NavLink>
+					</li>
+					<li>
+						<NavLink
 							to='/contacts'
 							className={({ isActive }) =>
 								`px-4 py-2 rounded-xl text-sm font-semibold transition-all duration-200 ${
