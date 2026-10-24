@@ -2,7 +2,12 @@
 .esc-page { --esc-accent: #00ff88; --esc-accent-rgb: 0, 255, 136; --esc-teal-rgb: 20, 184, 166; }
 
 /* ---------- Фон ---------- */
-.esc-bg { position: absolute; inset: 0; overflow: hidden; pointer-events: none; z-index: 0; }
+/* Фон на всю ширину viewport (не обмежений max-width/padding контейнера Layout).
+   position: fixed — тому не залежить від overflow-x: clip батьків; з viewport-fit=cover заходить під safe-area. */
+.esc-bg {
+	position: fixed; inset: 0; height: 100vh; height: 100lvh;
+	overflow: hidden; pointer-events: none; z-index: 0;
+}
 .esc-grid {
 	position: absolute; inset: -1px;
 	background-image:
@@ -16,7 +21,7 @@
 .esc-blob { position: absolute; border-radius: 9999px; filter: blur(70px); opacity: 0.35; will-change: transform; }
 .esc-blob-1 { width: 420px; height: 420px; top: 40px; left: 50%; margin-left: -380px; background: radial-gradient(circle, rgba(var(--esc-accent-rgb), 0.45), transparent 65%); animation: esc-float-a 18s ease-in-out infinite; }
 .esc-blob-2 { width: 360px; height: 360px; top: 160px; left: 50%; margin-left: 40px; background: radial-gradient(circle, rgba(var(--esc-teal-rgb), 0.45), transparent 65%); animation: esc-float-b 22s ease-in-out infinite; }
-.esc-blob-3 { width: 300px; height: 300px; top: 900px; left: 50%; margin-left: -150px; background: radial-gradient(circle, rgba(var(--esc-accent-rgb), 0.25), transparent 65%); animation: esc-float-a 26s ease-in-out infinite reverse; }
+.esc-blob-3 { width: 300px; height: 300px; top: auto; bottom: -60px; left: 50%; margin-left: -150px; background: radial-gradient(circle, rgba(var(--esc-accent-rgb), 0.25), transparent 65%); animation: esc-float-a 26s ease-in-out infinite reverse; }
 html:not(.dark) .esc-blob { opacity: 0.18; }
 @keyframes esc-grid-pan { to { transform: translateY(44px); } }
 @keyframes esc-float-a { 0%,100% { transform: translate3d(0,0,0) scale(1); } 50% { transform: translate3d(60px,40px,0) scale(1.08); } }

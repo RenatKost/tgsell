@@ -139,3 +139,6 @@ img, svg, video, canvas {
 	pre, code { white-space: pre-wrap; word-break: break-word; }
 	p, li, td, h1, h2, h3, h4, h5 { overflow-wrap: anywhere; }
 }
+
+/* viewport-fit=cover: фон .esc-bg іде під safe-area, а контент лишається в безпечній зоні (landscape iPhone) */
+body { padding-left: env(safe-area-inset-left); padding-right: env(safe-area-inset-right); }
