@@ -72,11 +72,11 @@ const WantedPanel = () => {
 							<span className='text-xs px-2 py-0.5 rounded-full bg-gray-100 dark:bg-slate-700'>{r.status}</span>
 						</div>
 						{r.comment && <p className='mt-2 break-words'>{r.comment}</p>}
-						{r.auto_check && <p className='mt-2 text-red-500'>⚠ Автоперевірка: {r.auto_check}</p>}
+						{r.auto_flags?.length > 0 && <p className='mt-2 text-red-500 font-semibold'>⚠ Автоперевірка: {r.auto_flags.join(', ')}</p>}
 						{r.rejection_reason && <p className='mt-2 text-red-500'>Причина: {r.rejection_reason}</p>}
 						{r.status === 'pending' && (
 							<div className='mt-3 flex gap-2'>
-								<button disabled={busy === r.id || !!r.auto_check} onClick={() => act(r.id, () => wantedAPI.approve(r.id))}
+								<button disabled={busy === r.id} onClick={() => act(r.id, () => wantedAPI.approve(r.id))}
 									className='bg-green-600 text-white px-3 py-1.5 rounded-lg disabled:opacity-50'>Схвалити</button>
 								<button disabled={busy === r.id} onClick={() => reject(r.id)}
 									className='bg-red-600 text-white px-3 py-1.5 rounded-lg disabled:opacity-50'>Відхилити</button>

@@ -6,7 +6,8 @@ const Header = () => {
 	const [scrolling, setScrolling] = useState(false);
 
 	const handleScroll = () => {
-		if (window.scrollY > 50) {
+		const y = Math.max(window.scrollY || 0, document.documentElement.scrollTop || 0, document.body.scrollTop || 0);
+		if (y > 50) {
 			setScrolling(true);
 		} else {
 			setScrolling(false);
@@ -14,17 +15,19 @@ const Header = () => {
 	};
 
 	useEffect(() => {
-		window.addEventListener('scroll', handleScroll);
+		// capture: also catches scroll of <body>/inner containers (scroll events don't bubble)
+		document.addEventListener('scroll', handleScroll, { capture: true, passive: true });
+		handleScroll();
 		return () => {
-			window.removeEventListener('scroll', handleScroll);
+			document.removeEventListener('scroll', handleScroll, { capture: true });
 		};
 	}, []);
 
 	return (
 		<header
-			className={`fixed w-full top-0 left-0 z-50 transition-all duration-500 ${
+			className={`fixed w-full top-0 left-0 z-[60] transition-all duration-500 ${
 				scrolling
-					? 'py-2 bg-white/80 dark:bg-slate-900/80 backdrop-blur-xl shadow-lg shadow-black/5 dark:shadow-black/20'
+					? 'py-2 bg-white dark:bg-slate-900 shadow-lg shadow-black/5 dark:shadow-black/20 border-b border-gray-100 dark:border-white/5'
 					: 'py-4 bg-transparent'
 			} md:px-8 px-4`}
 		>

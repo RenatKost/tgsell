@@ -41,10 +41,18 @@ def test_validate_rules():
         {"category": "Спорт", "language": "ua", "budget_min": 10, "budget_max": 5},
         {"category": "Спорт", "language": "ua"},
         {"category": "Спорт", "language": "ua", "budget_max": 1, "comment": "x" * 301},
-        {"category": "Спорт", "language": "ua", "budget_max": 1, "comment": "@contact_me"},
+        {"category": "Вульгарні", "language": "ua", "budget_max": 1},
     ]:
         with pytest.raises(ValueError):
             validate(bad)
+    # contacts/18+/betting no longer block — they become moderator flags
+    assert validate({"category": "Спорт", "language": "ua", "budget_max": 1, "comment": "@contact_me"})["comment"]
+
+
+def test_check_reasons_flags():
+    from app.services.wanted import check_reasons
+    assert check_reasons("казино 18+ пишіть @contact_me") == ["18+", "ставки/казино", "контакти/посилання в тексті"]
+    assert check_reasons("звичайний текст") == [] and check_reasons(None) == []
 
 
 def test_categories_mirror_catalog_without_adult():
@@ -53,7 +61,8 @@ def test_categories_mirror_catalog_without_adult():
     from app.services.wanted import CATEGORIES
     js = (Path(__file__).resolve().parents[2] / "src/components/Main/Calculator.jsx").read_text(encoding="utf-8")
     labels = re.findall(r"label: '([^']+)'", js.split("export const options", 1)[1].split("];", 1)[0])
-    assert CATEGORIES == [l for l in labels if "18+" not in l]
+    assert "Вульгарні" in labels  # catalog list itself is untouched
+    assert CATEGORIES == [l for l in labels if "18+" not in l and l != "Вульгарні"]
 
 
 def test_channel_matches_budget_tolerance():
@@ -157,17 +166,22 @@ async def test_full_flow(orm, monkeypatch):
         assert (await cl.post("/api/wanted", json=BODY)).status_code == 401
 
         cur.user = buyer
-        r = await cl.post("/api/wanted", json=BODY | {"comment": "пишіть @buyer_secret"})
-        assert r.status_code == 400 and "контакт" in r.json()["detail"]
+        r = await cl.post("/api/wanted", json=BODY | {"comment": "казино, пишіть @buyer_secret"})
+        assert r.status_code == 201 and r.json()["status"] == "pending"
+        flagged = r.json()["id"]
+        assert "auto_flags" not in r.json() and "Автоперевір" not in r.text  # never shown to the user
+        assert "Автоперевірка" in admin_alerts[0] and "ставки/казино" in admin_alerts[0]
         r = await cl.post("/api/wanted", json=BODY)
         assert r.status_code == 201 and r.json()["status"] == "pending"
         rid = r.json()["id"]
-        assert len(admin_alerts) == 1 and f"#{rid}" in admin_alerts[0] and "модерац" in admin_alerts[0]
+        assert len(admin_alerts) == 2 and f"#{rid}" in admin_alerts[1] and "модерац" in admin_alerts[1]
+        assert "Автоперевірка" not in admin_alerts[1]
+        assert "auto_flags" not in str((await cl.get("/api/wanted/mine")).json())
         # pending is not public
         assert (await cl.get("/api/wanted")).json()["items"] == []
         assert (await cl.get(f"/api/wanted/{rid}")).status_code == 404
         # limit 3 active
-        for _ in range(2):
+        for _ in range(1):
             assert (await cl.post("/api/wanted", json=BODY)).status_code == 201
         r = await cl.post("/api/wanted", json=BODY)
         assert r.status_code == 400 and "3" in r.json()["detail"]
@@ -176,22 +190,26 @@ async def test_full_flow(orm, monkeypatch):
         # non-admin cannot moderate
         assert (await cl.post(f"/api/admin/wanted/{rid}/approve")).status_code == 403
         # buyer closes one -> slot frees up
-        extra = mine["items"][0]["id"]
+        extra = [i["id"] for i in mine["items"] if i["id"] not in (rid, flagged)][0]
         assert (await cl.delete(f"/api/wanted/{extra}")).status_code == 200
         assert (await cl.get("/api/wanted/mine")).json()["active"] == 2
 
         cur.user = admin
         pend = (await cl.get("/api/admin/wanted?status=pending")).json()["items"]
-        assert {p["id"] for p in pend} >= {rid}
+        assert {p["id"] for p in pend} >= {rid, flagged}
+        fl = [p for p in pend if p["id"] == flagged][0]
+        assert fl["auto_flags"] == ["ставки/казино", "контакти/посилання в тексті"]
+        assert [p for p in pend if p["id"] == rid][0]["auto_flags"] == []
         assert (await cl.post(f"/api/admin/wanted/{rid}/approve")).status_code == 200
         assert (await cl.post(f"/api/admin/wanted/{rid}/approve")).status_code == 400
-        other = [p["id"] for p in pend if p["id"] != rid][0]
+        other = flagged
         r = await cl.post(f"/api/admin/wanted/{other}/reject", json={"reason": "Дубль"})
         assert r.json()["status"] == "rejected" and r.json()["rejection_reason"] == "Дубль"
 
         # public list: approved only, no buyer data
         items = (await cl.get("/api/wanted")).json()["items"]
         assert [i["id"] for i in items] == [rid]
+        assert "auto_flags" not in str(items)
         raw = str(items)
         assert "buyer_secret" not in raw and "user_id" not in raw and "501" not in raw
         card = (await cl.get(f"/api/wanted/{rid}")).json()
@@ -281,7 +299,29 @@ def test_sitemap_and_spa_route():
     assert "/wanted" in spa_meta.EXTRA_ROUTE_META
 
 
-def test_migration_0048_chain():
+def test_migration_chain():
     from pathlib import Path
-    src = (Path(__file__).resolve().parents[1] / "alembic/versions/0048_wanted_requests.py").read_text()
+    v = Path(__file__).resolve().parents[1] / "alembic/versions"
+    src = (v / "0048_wanted_requests.py").read_text()
     assert 'revision = "0048"' in src and 'down_revision = "0047"' in src
+    src = (v / "0049_wanted_auto_flags.py").read_text()
+    assert 'revision = "0049"' in src and 'down_revision = "0048"' in src and "auto_flags" in src
+
+
+@pytest.mark.asyncio
+async def test_flagged_request_can_be_approved(orm, monkeypatch):
+    client, cur, admin_alerts = await _setup(orm, monkeypatch)
+    buyer, seller, mute, admin = await _users(orm)
+    async with client as cl:
+        cur.user = buyer
+        r = await cl.post("/api/wanted", json=BODY | {"comment": "канал 18+, t.me/abc"})
+        assert r.status_code == 201
+        rid = r.json()["id"]
+        cur.user = admin
+        r = await cl.post(f"/api/admin/wanted/{rid}/approve")
+        assert r.status_code == 200 and r.json()["status"] == "approved"
+        assert "auto_flags" not in r.json()
+        cur.user = None
+        assert [i["id"] for i in (await cl.get("/api/wanted")).json()["items"]] == [rid]
+        meta = (await cl.get("/api/wanted/meta")).json()
+        assert "Вульгарні" not in meta["categories"] and "Новини 18+" not in meta["categories"]

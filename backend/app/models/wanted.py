@@ -1,7 +1,7 @@
 """«Шукаю канал»: buyer requests (migration 0048)."""
 from datetime import datetime
 
-from sqlalchemy import DateTime, Float, ForeignKey, Integer, String, Text, UniqueConstraint, func
+from sqlalchemy import JSON, DateTime, Float, ForeignKey, Integer, String, Text, UniqueConstraint, func
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.database import Base
@@ -22,6 +22,8 @@ class WantedRequest(Base):
     # pending -> approved / rejected; closed = withdrawn by the buyer
     status: Mapped[str] = mapped_column(String(16), default="pending", server_default="pending", index=True)
     rejection_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # Auto-check flags for moderators only (migration 0049); never exposed to the user.
+    auto_flags: Mapped[list | None] = mapped_column(JSON, nullable=True)
     moderator_id: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
     moderated_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
