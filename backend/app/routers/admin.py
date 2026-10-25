@@ -1497,6 +1497,30 @@ async def update_activity_config(
     return _activity_config
 
 
+@router.get("/counts")
+async def admin_counts(
+    admin: User = Depends(get_admin_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Lightweight sidebar badge counters (COUNT only); same semantics as the section lists."""
+    from app.models.bundle import BundleStatus, ChannelBundle
+    pending_channels = (await db.execute(
+        select(func.count(Channel.id)).where(Channel.status == ChannelStatus.pending, ~_bundle_member_exists())
+    )).scalar() or 0
+    pending_bundles = (await db.execute(
+        select(func.count(ChannelBundle.id)).where(ChannelBundle.status == BundleStatus.pending)
+    )).scalar() or 0
+    disputes = (await db.execute(
+        select(func.count(Deal.id)).where(Deal.status == DealStatus.disputed)
+    )).scalar() or 0
+    return {
+        "pending_channels": int(pending_channels),
+        "pending_bundles": int(pending_bundles),
+        "pending": int(pending_channels) + int(pending_bundles),
+        "disputes": int(disputes),
+    }
+
+
 @router.get("/dashboard-stats")
 async def admin_dashboard_stats(
     admin: User = Depends(get_admin_user),

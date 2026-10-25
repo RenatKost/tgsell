@@ -1,7 +1,7 @@
 import { fmtUsdt, fmtNum, MAX_PRICE_USDT, MAX_PRICE_HINT } from '../utils/money';
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { NavLink, useNavigate } from 'react-router-dom';
-import { channelsAPI, favoritesAPI, dealsAPI, auctionsAPI, bundlesAPI } from '../services/api';
+import { channelsAPI, favoritesAPI, dealsAPI, auctionsAPI, bundlesAPI, meAPI } from '../services/api';
 import { useAuth } from '../context/AppContext';
 import CabinetCard from '../components/Cards/CabinetCard';
 import CatalogCard from '../components/Cards/CatalogCard';
@@ -53,7 +53,7 @@ const DEAL_FILTERS = [
 ];
 
 const CabinetPage = () => {
-	const { user } = useAuth();
+	const { user, favoriteIds } = useAuth();
 	const navigate = useNavigate();
 	const [unread, setUnread] = useState({});
 	useReveal();
@@ -69,6 +69,23 @@ const CabinetPage = () => {
 	const [loading, setLoading] = useState(true);
 	const [loadError, setLoadError] = useState(false);
 	const [reloadKey, setReloadKey] = useState(0);
+	// Tab counters: loaded once on open via GET /api/me/counts, refreshed after actions.
+	// null = still loading (skeleton). Zero rule: every tab shows «0» explicitly.
+	const [tabCounts, setTabCounts] = useState(null);
+	const refreshCounts = useCallback(() => {
+		if (!user?.id) return;
+		meAPI.counts().then(({ data }) => setTabCounts(data)).catch(() => {
+			setTabCounts(prev => prev || {});
+		});
+	}, [user?.id]);
+
+	// On open, on every tab switch, and when favourites change anywhere (♡ toggle).
+	useEffect(() => { refreshCounts(); }, [refreshCounts, activeTab, favoriteIds]);
+	useEffect(() => {
+		const onFocus = () => { if (document.visibilityState === 'visible') refreshCounts(); };
+		document.addEventListener('visibilitychange', onFocus);
+		return () => document.removeEventListener('visibilitychange', onFocus);
+	}, [refreshCounts]);
 
 	// Auction creation modal
 	const [showAuctionModal, setShowAuctionModal] = useState(false);
@@ -105,7 +122,7 @@ const CabinetPage = () => {
 					setDeals(Array.isArray(data) ? data : []);
 					dealsAPI.chatUnread().then(r => setUnread(r.data.unread || {})).catch(() => {});
 				} else if (activeTab.value === 'saved') {
-					// loaded by <SavedSearches />
+					// loaded by <SavedSearches onChange={refreshCounts} />
 				} else {
 					const { data } = await favoritesAPI.getAll();
 					setFavorites(data);
@@ -125,6 +142,7 @@ const CabinetPage = () => {
 		try {
 			await channelsAPI.delete(channelId);
 			setChannels(prev => prev.filter(c => c.id !== channelId));
+			refreshCounts();
 		} catch (err) {
 			alert(err.response?.data?.detail || 'Помилка видалення');
 		}
@@ -161,6 +179,7 @@ const CabinetPage = () => {
 			// Refresh auctions
 			const { data } = await auctionsAPI.getAll({ seller_id: user?.id });
 			setMyAuctions(data.items || []);
+			refreshCounts();
 		} catch (err) {
 			setAuctionError(err.response?.data?.detail || 'Помилка створення аукціону');
 		} finally {
@@ -194,9 +213,13 @@ const CabinetPage = () => {
 		all: deals.length,
 	};
 
-	const tabCount = (v) => (
-		v === 'auctions' ? myAuctions.length : v === 'deals' ? deals.length : v === 'favorites' ? favorites.length : 0
-	);
+	const COUNT_KEY = { my: 'listings', bundles: 'bundles', auctions: 'auctions', deals: 'deals', favorites: 'favorites', saved: 'saved_searches' };
+	// null → skeleton; number → shown (0 included). Unknown (request failed) → hidden.
+	const tabCount = (v) => {
+		if (tabCounts === null) return null;
+		const n = tabCounts[COUNT_KEY[v]];
+		return typeof n === 'number' ? n : undefined;
+	};
 
 	const renderBody = (empty, list) => (loading ? <Spinner /> : loadError ? <ErrorState onRetry={() => setReloadKey(k => k + 1)} /> : empty ? empty : list);
 
@@ -242,8 +265,14 @@ const CabinetPage = () => {
 						>
 							<FontAwesomeIcon icon={tab.icon} className='text-sm' />
 							<span>{tab.text}</span>
-							{n > 0 && (
-								<span className='absolute top-1 right-1 md:static min-w-[20px] h-5 px-1.5 inline-flex items-center justify-center rounded-full bg-gray-100 dark:bg-white/10 text-[11px] font-bold text-gray-700 dark:text-gray-200 tabular-nums'>
+							{n === null ? (
+								<span data-testid='tab-count-skeleton' aria-hidden='true'
+									className='absolute top-1 right-1 md:static w-6 h-5 rounded-full bg-gray-200 dark:bg-white/10 animate-pulse' />
+							) : typeof n === 'number' && (
+								<span data-testid='tab-count' aria-label={`${n}`}
+									className={`absolute top-1 right-1 md:static min-w-[20px] h-5 px-1.5 inline-flex items-center justify-center rounded-full text-[11px] font-bold tabular-nums ${
+										n > 0 ? 'bg-gray-100 dark:bg-white/10 text-gray-700 dark:text-gray-200' : 'bg-gray-50 dark:bg-white/5 text-gray-400 dark:text-gray-500'
+									}`}>
 									{n}
 								</span>
 							)}
@@ -323,7 +352,7 @@ const CabinetPage = () => {
 											{b.status === 'pending' && (
 												<button type='button' onClick={async () => {
 													if (!confirm('Видалити сітку?')) return;
-													try { await bundlesAPI.delete(b.id); setMyBundles(prev => prev.filter(x => x.id !== b.id)); }
+													try { await bundlesAPI.delete(b.id); setMyBundles(prev => prev.filter(x => x.id !== b.id)); refreshCounts(); }
 													catch { alert('Помилка видалення'); }
 												}} className={btnDanger}>
 													Видалити

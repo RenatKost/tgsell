@@ -9,7 +9,7 @@ const STATUS = {
 	failed: { text: 'Не доставлено: помилка надсилання', cls: 'text-red-500' },
 };
 
-const SavedSearches = () => {
+const SavedSearches = ({ onChange }) => {
 	const [items, setItems] = useState([]);
 	const [max, setMax] = useState(10);
 	const [loading, setLoading] = useState(true);
@@ -29,6 +29,7 @@ const SavedSearches = () => {
 		try {
 			await savedSearchesAPI.remove(id);
 			setItems(items.filter(i => i.id !== id));
+			onChange?.();
 		} catch {
 			setError('Не вдалося видалити пошук');
 		}
