@@ -46,6 +46,11 @@ import {
 	faToggleOff,
 } from '@fortawesome/free-solid-svg-icons';
 
+const NAV_BADGE = {
+	pending: { key: 'pending', cls: 'bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-400' },
+	disputes: { key: 'disputes', cls: 'bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400' },
+};
+
 const SECTIONS = [
 	{ id: 'dashboard', label: 'Дашборд', icon: faTachometerAlt },
 	{ id: 'pending', label: 'На модерації', icon: faClipboardCheck },
@@ -250,6 +255,17 @@ const ModerCabinet = () => {
 	useEffect(() => {
 		loadData();
 	}, [section, statusFilter, dealStatusFilter, auctionFilter]);
+
+	// Sidebar badges: loaded on open via GET /api/admin/counts (not only after visiting a section),
+	// refreshed on section switch and whenever moderation/dispute lists change after an action.
+	// null = loading (skeleton). Zero rule (same as /cabinet): «0» is shown explicitly.
+	const [navCounts, setNavCounts] = useState(null);
+	useEffect(() => {
+		let alive = true;
+		adminAPI.getCounts().then(({ data }) => { if (alive) setNavCounts(data); })
+			.catch(() => { if (alive) setNavCounts(prev => prev || {}); });
+		return () => { alive = false; };
+	}, [section, pendingChannels.length, pendingBundles.length, disputes.length, allDeals]);
 
 	// "Оновити" on the escrow page: bypass the 60s server cache once.
 	useEffect(() => {
@@ -597,16 +613,19 @@ const ModerCabinet = () => {
 						>
 							<FontAwesomeIcon icon={s.icon} className='w-5 text-center' />
 							<span className={sidebarOpen ? '' : 'md:hidden'}>{s.label}</span>
-							{sidebarOpen && s.id === 'pending' && (pendingChannels.length + pendingBundles.length) > 0 && (
-								<span className='ml-auto bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-400 text-xs px-2 py-0.5 rounded-full'>
-									{pendingChannels.length + pendingBundles.length}
-								</span>
-							)}
-							{sidebarOpen && s.id === 'disputes' && disputes.length > 0 && (
-								<span className='ml-auto bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400 text-xs px-2 py-0.5 rounded-full'>
-									{disputes.length}
-								</span>
-							)}
+							{sidebarOpen && NAV_BADGE[s.id] && (() => {
+								const nb = NAV_BADGE[s.id];
+								if (navCounts === null) {
+									return <span data-testid='nav-count-skeleton' aria-hidden='true' className='ml-auto w-7 h-5 rounded-full bg-gray-200 dark:bg-slate-700 animate-pulse' />;
+								}
+								const n = navCounts[nb.key];
+								if (typeof n !== 'number') return null;
+								return (
+									<span data-testid='nav-count' className={`ml-auto text-xs px-2 py-0.5 rounded-full tabular-nums ${n > 0 ? nb.cls : 'bg-gray-100 dark:bg-slate-800 text-gray-400 dark:text-gray-500'}`}>
+										{n}
+									</span>
+								);
+							})()}
 						</button>
 					))}
 				</nav>

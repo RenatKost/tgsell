@@ -16,6 +16,7 @@ from app.routers import bundles as bundles_router
 from app.routers import admin_money
 from app.routers import user_activity as user_activity_router
 from app.routers import saved_searches as saved_searches_router
+from app.routers import me as me_router
 from app.routers import chat as chat_router
 from app.routers import wanted as wanted_router
 from app.routers import external_escrow as external_escrow_router
@@ -163,6 +164,7 @@ app.include_router(admin_money.router, prefix="/api")
 from app.routers import admin_broadcast as admin_broadcast_router  # noqa: E402
 app.include_router(admin_broadcast_router.router, prefix="/api")
 app.include_router(users.router, prefix="/api")
+app.include_router(me_router.router, prefix="/api")
 app.include_router(favorites.router, prefix="/api")
 app.include_router(auctions.router, prefix="/api")
 app.include_router(activity.router, prefix="/api")

@@ -214,6 +214,10 @@ export const adminAPI = {
 	getPendingChannels: () =>
 		api.get('/admin/channels/pending'),
 
+	// Sidebar badge counters (COUNT-only)
+	getCounts: () =>
+		api.get('/admin/counts'),
+
 	getAllChannels: (params = {}) =>
 		api.get('/admin/channels', { params }),
 
@@ -366,6 +370,11 @@ export const wantedAPI = {
 	adminStats: () => api.get('/admin/wanted/stats'),
 	approve: (id) => api.post(`/admin/wanted/${id}/approve`),
 	reject: (id, reason) => api.post(`/admin/wanted/${id}/reject`, { reason }),
+};
+
+// ===== Cabinet tab counters (COUNT-only, current user) =====
+export const meAPI = {
+	counts: () => api.get('/me/counts'),
 };
 
 // ===== Favorites =====
