@@ -251,7 +251,10 @@ async def test_daily_summary_once_after_9_local(env):
         await db.execute(AdminAuditLog.__table__.delete().where(AdminAuditLog.action == g.SUMMARY_ACTION))
         await db.commit()
     now_local_day = g.to_local(datetime.utcnow()).date()
-    before9 = datetime.combine(now_local_day, datetime.min.time()) + timedelta(hours=5)  # 08:00 local (UTC+3)
+    # 08:00 local regardless of DST (Chisinau is UTC+3 in summer, UTC+2 in winter)
+    before9 = datetime.combine(now_local_day, datetime.min.time()) + timedelta(hours=5)
+    while g.to_local(before9).hour != 8:
+        before9 += timedelta(hours=1 if g.to_local(before9).hour < 8 else -1)
     assert await g.maybe_send_daily_summary(env.orm.session, before9, send=send) is False
     at9 = before9 + timedelta(hours=1, minutes=1)
     assert await g.maybe_send_daily_summary(env.orm.session, at9, send=send) is True
