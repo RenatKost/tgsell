@@ -114,6 +114,10 @@ class Channel(Base):
     # «Перевірено TgSell» badge (set by admin after a manual audit).
     top_until: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     tgsell_verified: Mapped[bool] = mapped_column(Boolean, server_default="false", default=False)
+    # Migration 0054: first moderation approval (promo idempotency) + who granted the current Top
+    # ("paid" / "promo"). Lots approved before the promo deploy are backfilled → never eligible.
+    first_approved_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    top_source: Mapped[str | None] = mapped_column(String(20), nullable=True)
 
     @property
     def is_top(self) -> bool:

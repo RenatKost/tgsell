@@ -1,0 +1,34 @@
+.promo-banner {
+	position: relative; overflow: hidden; display: flex; align-items: center; gap: 0.9rem;
+	padding: 0.95rem 1.15rem; border-radius: 1.1rem; text-align: left;
+	border: 1px solid rgba(var(--esc-accent-rgb, 16, 185, 129), 0.4);
+	background: linear-gradient(135deg, rgba(var(--esc-accent-rgb, 16, 185, 129), 0.16), rgba(8, 14, 14, 0.86) 62%);
+	box-shadow: 0 0 0 1px rgba(var(--esc-accent-rgb, 16, 185, 129), 0.06), 0 18px 50px -24px rgba(var(--esc-accent-rgb, 16, 185, 129), 0.55);
+	-webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px);
+}
+html:not(.dark) .promo-banner { background: linear-gradient(135deg, rgba(16, 185, 129, 0.14), #fff 65%); }
+.promo-banner__glow {
+	position: absolute; inset: -40% auto auto -10%; width: 55%; height: 180%; pointer-events: none;
+	background: linear-gradient(100deg, transparent, rgba(255, 255, 255, 0.10), transparent);
+	animation: promo-shine 5s ease-in-out infinite;
+}
+@keyframes promo-shine { 0%, 55% { transform: translateX(-120%) skewX(-18deg); } 100% { transform: translateX(320%) skewX(-18deg); } }
+.promo-banner__icon {
+	flex: none; display: grid; place-items: center; width: 2.6rem; height: 2.6rem; border-radius: 0.85rem; font-size: 1.35rem;
+	background: rgba(var(--esc-accent-rgb, 16, 185, 129), 0.18);
+	box-shadow: inset 0 0 0 1px rgba(var(--esc-accent-rgb, 16, 185, 129), 0.35), 0 0 22px rgba(var(--esc-accent-rgb, 16, 185, 129), 0.35);
+}
+.promo-banner__body { position: relative; min-width: 0; }
+.promo-banner__tag {
+	display: inline-block; margin-bottom: 0.2rem; font-size: 0.68rem; font-weight: 800; letter-spacing: 0.08em; text-transform: uppercase;
+	color: var(--esc-accent, #10b981);
+}
+html:not(.dark) .promo-banner__tag { color: #059669; }
+.promo-banner__text { margin: 0; font-size: 0.95rem; font-weight: 600; line-height: 1.4; color: #f3f4f6; overflow-wrap: anywhere; }
+html:not(.dark) .promo-banner__text { color: #111827; }
+@media (max-width: 640px) {
+	.promo-banner { padding: 0.8rem 0.9rem; gap: 0.7rem; -webkit-backdrop-filter: none; backdrop-filter: none; }
+	.promo-banner__icon { width: 2.2rem; height: 2.2rem; font-size: 1.1rem; }
+	.promo-banner__text { font-size: 0.875rem; }
+}
+@media (prefers-reduced-motion: reduce) { .promo-banner__glow { animation: none; display: none; } }

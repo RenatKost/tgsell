@@ -6,6 +6,7 @@ import { useAuth } from '../context/AppContext';
 import CabinetCard from '../components/Cards/CabinetCard';
 import CatalogCard from '../components/Cards/CatalogCard';
 import AlertBotHint from '../components/Services/AlertBotHint';
+import PromoBanner from '../components/Services/PromoBanner';
 import SavedSearches from '../components/Cabinet/SavedSearches';
 import BundleBalanceEditor from '../components/Balance/BundleBalanceEditor';
 import BalanceBadges from '../components/Balance/BalanceBadges';
@@ -242,6 +243,7 @@ const CabinetPage = () => {
 				</NavLink>
 			</div>
 
+			<PromoBanner className='mb-4' />
 			<div className='esc-reveal' style={{ '--d': '80ms' }}><AlertBotHint className='mb-6' /></div>
 
 			{/* Tabs: 3×2 grid on phones (all visible, no hidden scroll), underline row from md */}

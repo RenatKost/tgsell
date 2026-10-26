@@ -785,7 +785,7 @@ async def notify_admin_called(bot: Bot, deal_id: int, channel_name: str, caller_
     await bot.send_message(settings.admin_group_id, telegram_html_safe(text), parse_mode=ParseMode.HTML)
 
 
-async def notify_bundle_approved(bot: Bot, bundle, seller: User):
+async def notify_bundle_approved(bot: Bot, bundle, seller: User, promo_top: bool = False):
     """Notify seller that their bundle was approved."""
     if not seller or not seller.telegram_id:
         return
@@ -794,7 +794,8 @@ async def notify_bundle_approved(bot: Bot, bundle, seller: User):
         f"✅ <b>Вашу сітку схвалено!</b>\n\n"
         f"📡 «{bundle.name}» тепер доступна в каталозі.\n"
         f"💰 Ціна: <b>{bundle.price} USDT</b>\n\n"
-        f"<a href='{frontend_url}/bundle/{bundle.id}'>Переглянути сітку →</a>"
+        + (f"🎁 Акція: ваш лот отримав «Топ» на {settings.promo_top_days} днів безкоштовно.\n\n" if promo_top else "")
+        + f"<a href='{frontend_url}/bundle/{bundle.id}'>Переглянути сітку →</a>"
     )
     try:
         await bot.send_message(seller.telegram_id, text, parse_mode=ParseMode.HTML)

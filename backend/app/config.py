@@ -77,6 +77,12 @@ class Settings(BaseSettings):
     # Railway container can fully exit (healthcheckTimeout=120s). Non-blocking.
     telethon_startup_delay_sec: int = 150
 
+    # Seller promo: every lot approved by moderation for the FIRST time before this
+    # local moment (Europe/Chisinau) gets a free «Топ» for promo_top_days. Env PROMO_TOP_UNTIL.
+    promo_top_until: str = "2026-11-01T23:59:00"
+    promo_top_tz: str = "Europe/Chisinau"
+    promo_top_days: int = 7
+
     model_config = {"env_file": ".env", "extra": "ignore"}
 
 

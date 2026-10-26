@@ -152,6 +152,7 @@ async def mark_paid(db, order: PaidServiceOrder, received: float, now: datetime)
         order.status = ST_ACTIVE
         if ch is not None:
             ch.top_until = order.active_until
+            ch.top_source = "paid"
     else:
         order.status = ST_PAID
 

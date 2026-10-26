@@ -112,7 +112,9 @@ async def approve_channel(
         channel.status = ChannelStatus.approved
         channel.moderator_id = admin.id
         channel.moderated_at = datetime.utcnow()
-        audit(db, admin, "channel.approve", "channel", channel.id)
+        from app.services.promo_top import on_first_approval
+        promo = on_first_approval(channel, channel.moderated_at)
+        audit(db, admin, "channel.approve", "channel", channel.id, **({"promo_top": True} if promo else {}))
         await db.commit()
         await db.refresh(channel)
 
@@ -1931,11 +1933,16 @@ async def approve_bundle(
     bundle.moderator_id = admin.id
     bundle.moderated_at = datetime.utcnow()
     audit(db, admin, "bundle.approve", "bundle", bundle.id)
+    promo_granted = False
     for ch in await _pending_bundle_channels(db, bundle.id):
         ch.status = ChannelStatus.approved
         ch.moderator_id = admin.id
         ch.moderated_at = bundle.moderated_at
-        audit(db, admin, "channel.approve", "channel", ch.id, via_bundle=bundle.id)
+        from app.services.promo_top import on_first_approval
+        promo = on_first_approval(ch, bundle.moderated_at)
+        promo_granted = promo_granted or promo
+        audit(db, admin, "channel.approve", "channel", ch.id, via_bundle=bundle.id,
+              **({"promo_top": True} if promo else {}))
     member_ids = list((await db.execute(
         select(BundleChannel.channel_id).where(BundleChannel.bundle_id == bundle.id)
     )).scalars().all())
@@ -1957,7 +1964,7 @@ async def approve_bundle(
         seller_result = await db.execute(select(User).where(User.id == bundle.seller_id))
         seller = seller_result.scalar_one_or_none()
         bot = Bot(token=settings.bot_token_alerts)
-        await notify_bundle_approved(bot, bundle, seller)
+        await notify_bundle_approved(bot, bundle, seller, promo_top=promo_granted)
         await bot.session.close()
     except Exception as e:
         logger.warning(f"[ADMIN] Bundle #{bundle_id} approved but notification failed: {e}")

@@ -40,6 +40,13 @@ class OrderIn(BaseModel):
     kind: str = Field(..., max_length=20)
 
 
+@router.get("/promo")
+async def services_promo():
+    """Public, DB-free: seller promo «Топ у подарунок» state (banner on /sell and cabinet)."""
+    from app.services.promo_top import promo_info
+    return promo_info()
+
+
 @router.get("/catalog")
 async def services_catalog(db: AsyncSession = Depends(get_db)):
     from app.utils.timeutil import utcnow_naive

@@ -1,3 +1,4 @@
+import PromoBanner from '../components/Services/PromoBanner';
 import { useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import SellForm from '../components/SellForm';
@@ -109,6 +110,8 @@ const SellPage = () => {
 						Оберіть тип оголошення — і заповніть зручну форму
 					</p>
 				</div>
+
+				<PromoBanner className="mb-6" />
 
 				{/* Cards */}
 				<div className="grid sm:grid-cols-2 gap-5">
