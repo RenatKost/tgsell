@@ -94,9 +94,21 @@ def public_catalog(cfg: dict) -> list[dict]:
              "refundable": k != KIND_VERIFIED} for k in KINDS]
 
 
+def top_rank_expr(now: datetime):
+    """ORDER BY key: 0 = active paid Top, 1 = active promo Top, 2 = everything else."""
+    from sqlalchemy import case
+    return case(
+        ((Channel.top_until > now) & (func.coalesce(Channel.top_source, "paid") != "promo"), 0),
+        ((Channel.top_until > now), 1),
+        else_=2,
+    )
+
+
 async def top_slots_taken(db, now: datetime) -> int:
     """Active Top lots + unexpired awaiting-payment Top orders (slot is reserved at order time)."""
-    active = (await db.execute(select(func.count(Channel.id)).where(Channel.top_until > now))).scalar() or 0
+    # Only PAID Tops occupy slots; promo Tops (top_source="promo") never block a paid purchase.
+    active = (await db.execute(select(func.count(Channel.id)).where(
+        Channel.top_until > now, func.coalesce(Channel.top_source, "paid") != "promo"))).scalar() or 0
     pending = (await db.execute(select(func.count(PaidServiceOrder.id)).where(
         PaidServiceOrder.kind == KIND_TOP, PaidServiceOrder.status == ST_AWAITING,
         (PaidServiceOrder.payment_deadline_at.is_(None)) | (PaidServiceOrder.payment_deadline_at > now),
@@ -124,7 +136,7 @@ async def create_order(db, *, seller_id: int, channel: Channel, kind: str, now: 
     if kind == KIND_VERIFIED and channel.tgsell_verified:
         raise ServiceError("Лот уже має значок «Перевірено TgSell»")
     if kind == KIND_TOP:
-        if channel.is_top:
+        if channel.is_top and channel.top_source != "promo":
             raise ServiceError("Лот уже в Топі")
         if await top_slots_taken(db, now) >= int(cfg["service_top_max_slots"]):
             raise ServiceError("Усі місця в Топі зайняті. Спробуйте пізніше")
@@ -147,8 +159,12 @@ async def mark_paid(db, order: PaidServiceOrder, received: float, now: datetime)
     if order.kind == KIND_TOP:
         cfg = await get_settings(db)
         ch = await db.get(Channel, order.channel_id)
-        start = max(now, ch.top_until) if ch and ch.top_until else now
-        order.active_until = start + timedelta(days=float(cfg["service_top_days"]))
+        days = timedelta(days=float(cfg["service_top_days"]))
+        if ch is not None and ch.top_source == "promo" and ch.top_until and ch.top_until > now:
+            order.active_until = max(ch.top_until, now + days)  # promo → paid upgrade: longer of the two
+        else:
+            start = max(now, ch.top_until) if ch and ch.top_until else now
+            order.active_until = start + days
         order.status = ST_ACTIVE
         if ch is not None:
             ch.top_until = order.active_until

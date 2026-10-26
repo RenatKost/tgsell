@@ -120,6 +120,7 @@ class ChannelResponse(BaseModel):
     buyer_warning: str | None = None
     # Paid services (migration 0051)
     is_top: bool = False
+    top_source: str | None = None
     tgsell_verified: bool = False
 
     @model_validator(mode="after")
