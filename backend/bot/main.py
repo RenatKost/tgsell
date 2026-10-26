@@ -785,6 +785,28 @@ async def notify_admin_called(bot: Bot, deal_id: int, channel_name: str, caller_
     await bot.send_message(settings.admin_group_id, telegram_html_safe(text), parse_mode=ParseMode.HTML)
 
 
+def channel_approved_text(channel, promo_top: bool = False) -> str:
+    frontend_url = settings.frontend_url.rstrip("/")
+    return (
+        f"✅ <b>Ваш лот схвалено!</b>\n\n"
+        f"📡 «{html.escape(channel.channel_name or '')}» тепер доступний у каталозі.\n"
+        f"<a href='{frontend_url}/channel/{channel.id}'>Переглянути лот →</a>\n\n"
+        + (f"🎁 Акція: ваш лот отримав «Топ» на {settings.promo_top_days} днів безкоштовно\n\n" if promo_top else "")
+        + f"🚀 Хочете більше переглядів? Платні послуги (Топ, пост у каналі, «Перевірено TgSell») — "
+        f"<a href='{frontend_url}/cabinet'>у кабінеті</a>."
+    )
+
+
+async def notify_channel_approved(bot: Bot, channel, seller: User, promo_top: bool = False):
+    """Notify seller that their single lot was approved (alerts bot, same channel as bundles)."""
+    if not seller or not seller.telegram_id:
+        return
+    try:
+        await bot.send_message(seller.telegram_id, channel_approved_text(channel, promo_top), parse_mode=ParseMode.HTML)
+    except Exception as e:
+        logger.warning(f"[NOTIFY] Cannot notify seller {seller.telegram_id} about channel approval: {e}")
+
+
 async def notify_bundle_approved(bot: Bot, bundle, seller: User, promo_top: bool = False):
     """Notify seller that their bundle was approved."""
     if not seller or not seller.telegram_id:

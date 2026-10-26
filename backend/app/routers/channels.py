@@ -116,11 +116,11 @@ async def list_channels(
     pps_expr = Channel.price / Channel.subscribers_count
     priceable = (Channel.subscribers_count > 0) & (Channel.price > 0) & Channel.is_closed.is_(False)
 
-    # Paid «Топ каталогу»: active Top lots first in the PUBLIC listing (any sort).
+    # «Топ каталогу» in the PUBLIC listing (any sort): paid Top → promo Top → the rest.
     if not seller_id:
-        from sqlalchemy import case as _case
+        from app.services.paid_services import top_rank_expr
         from app.utils.timeutil import utcnow_naive as _now
-        query = query.order_by(_case((Channel.top_until > _now(), 0), else_=1))
+        query = query.order_by(top_rank_expr(_now()))
 
     # Sorting
     if sort == "quality_desc":

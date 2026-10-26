@@ -92,6 +92,22 @@ async def get_pending_channels(
     return out
 
 
+async def _notify_seller_channel_approved(db, channel, promo: bool) -> None:
+    """One bot message per approval; any failure is logged and never breaks the approval."""
+    try:
+        from bot.main import notify_channel_approved
+        from aiogram import Bot
+        from app.config import settings
+        seller = (await db.execute(select(User).where(User.id == channel.seller_id))).scalar_one_or_none()
+        bot = Bot(token=settings.bot_token_alerts)
+        try:
+            await notify_channel_approved(bot, channel, seller, promo_top=promo)
+        finally:
+            await bot.session.close()
+    except Exception as e:
+        logger.warning(f"[ADMIN] Channel #{channel.id} approved but notification failed: {type(e).__name__}")
+
+
 @router.post("/channels/{channel_id}/approve", response_model=ChannelResponse)
 async def approve_channel(
     channel_id: int,
@@ -117,6 +133,7 @@ async def approve_channel(
         audit(db, admin, "channel.approve", "channel", channel.id, **({"promo_top": True} if promo else {}))
         await db.commit()
         await db.refresh(channel)
+        await _notify_seller_channel_approved(db, channel, promo)
 
         # Refresh stats from Telegram on approve
         try:

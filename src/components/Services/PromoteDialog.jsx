@@ -18,7 +18,7 @@ const errText = (ex) => { const d = ex?.response?.data?.detail; return typeof d 
 
 /** Items still available for this lot (hide Top if already in Top, Verified if already verified). */
 export const availableServices = (cat, channel) => (cat?.items || []).filter(
-	(i) => !(i.kind === 'top' && channel?.is_top) && !(i.kind === 'verified' && channel?.tgsell_verified));
+	(i) => !(i.kind === 'top' && channel?.is_top && channel?.top_source !== 'promo') && !(i.kind === 'verified' && channel?.tgsell_verified));
 
 /**
  * Service picker + existing order flow (POST /services/orders → USDT TRC-20 address).
