@@ -346,6 +346,7 @@ export const escrowAPI = {
 
 export const servicesAPI = {
 	catalog: () => api.get('/services/catalog'),
+	promo: () => api.get('/services/promo'),
 	order: (body) => api.post('/services/orders', body),
 	mine: () => api.get('/services/orders/my'),
 	adminOrders: (params) => api.get('/admin/services/orders', { params }),
