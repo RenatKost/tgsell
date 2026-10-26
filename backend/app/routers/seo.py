@@ -10,7 +10,9 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
+from app.models.bundle import BundleChannel, ChannelBundle
 from app.models.channel import Channel, ChannelStatus
+from app.services.listing_visibility import PUBLIC_BUNDLE_STATUSES
 from app.services.moderation import not_blocked_seller
 
 logger = logging.getLogger(__name__)
@@ -71,6 +73,16 @@ def build_sitemap(channels: list[tuple[int, object]]) -> str:
     return "\n".join(out) + "\n"
 
 
+def non_public_bundle_channel_ids():
+    """Channel ids that sit in at least one bundle whose status is not public."""
+    return (
+        select(BundleChannel.channel_id)
+        .join(ChannelBundle, ChannelBundle.id == BundleChannel.bundle_id)
+        .where(ChannelBundle.status.notin_(PUBLIC_BUNDLE_STATUSES))
+        .scalar_subquery()
+    )
+
+
 @router.get("/sitemap.xml", include_in_schema=False)
 async def sitemap_xml(db: AsyncSession = Depends(get_db)):
     channels: list[tuple[int, object]] = []
@@ -79,6 +91,9 @@ async def sitemap_xml(db: AsyncSession = Depends(get_db)):
             select(Channel.id, Channel.created_at)
             .where(Channel.status == ChannelStatus.approved)
             .where(not_blocked_seller(Channel.seller_id))  # blocked seller's lot → 404, keep out of sitemap
+            # A lot that belongs to an unpublished bundle (rejected/pending/removed) is not public
+            # content even if the channel row itself is still `approved` — keep it out of the sitemap.
+            .where(~Channel.id.in_(non_public_bundle_channel_ids()))
             .order_by(Channel.id.desc())
             .limit(MAX_CHANNEL_URLS)
         )
