@@ -376,6 +376,7 @@ export const wantedAPI = {
 // ===== Cabinet tab counters (COUNT-only, current user) =====
 export const meAPI = {
 	counts: () => api.get('/me/counts'),
+	referral: () => api.get('/me/referral'),
 };
 
 // ===== Favorites =====

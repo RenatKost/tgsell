@@ -567,6 +567,11 @@ async def create_channel(
             wr = await db.get(WantedRequest, body.wanted_request_id)
             if wr is not None and wr.status == "approved" and wr.user_id != user.id:
                 channel.wanted_request_id = wr.id
+        try:
+            from app.services.referral import bind_on_submit
+            await bind_on_submit(db, user, channel, body.ref_code)
+        except Exception as e:  # referral must never block a submission
+            logger.warning(f"[REFERRAL] bind failed: {type(e).__name__}")
         db.add(channel)
         await db.commit()
         await db.refresh(channel)

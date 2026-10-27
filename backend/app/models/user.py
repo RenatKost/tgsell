@@ -37,6 +37,9 @@ class User(Base):
         Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True
     )
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+    # «Приведи продавця» (migration 0055): own referral code; who referred this user (first bind wins)
+    ref_code: Mapped[str | None] = mapped_column(String(16), unique=True, index=True, nullable=True)
+    referred_by_id: Mapped[int | None] = mapped_column(Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
 
     # Relationships
     channels = relationship("Channel", back_populates="seller", foreign_keys="Channel.seller_id")

@@ -36,3 +36,10 @@ async def my_counts(user: User = Depends(get_current_user), db: AsyncSession = D
             Favorite.user_id == uid, Channel.status == ChannelStatus.approved)),
         "saved_searches": await _count(db, select(func.count(SavedSearch.id)).where(SavedSearch.user_id == uid)),
     }
+
+
+@router.get("/referral")
+async def my_referral(user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+    """«Приведи продавця»: own referral link + reward counters."""
+    from app.services.referral import summary
+    return await summary(db, user)
