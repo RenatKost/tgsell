@@ -61,6 +61,66 @@ async def segment_active_sellers(db, exclude_channel_ids=(), exclude_bundle_ids=
     return list((await db.execute(q)).scalars().all())
 
 
+# ---- Campaign relist_top7_2026_10_27: sellers of lots that left the catalog ----
+RELIST_SEGMENT = "relist_top7"
+RELIST_KEY = "relist_top7_2026_10_27"
+RELIST_TEXT = ("Вітаємо! До 1 листопада на TgSell діє акція: кожен новий лот, який схвалить модерація, "
+               "отримує «Топ» на 7 днів безкоштовно (зазвичай це 10 USDT). Якщо ваш канал ще продається, "
+               "виставте його знову: https://tgsell.me/sell. Розміщення безкоштовне, комісія 3% береться лише після угоди.")
+RELIST_EXCLUDE_CHANNEL_IDS = (61, 94, 95, 96, 15, 16, 17, 18)
+RELIST_EXCLUDE_BUNDLE_IDS = (1,)
+LOT_STATUS_LABELS = {"removed": "знятий", "sold": "проданий", "rejected": "знятий з публікації", "inactive": "неактивний"}
+
+
+def _subscribed(u: User) -> bool:
+    return bool(u.telegram_id and u.tg_bot_started_at and not u.tg_bot_unreachable_at)
+
+
+async def segment_relist(db, exclude_channel_ids=(), exclude_bundle_ids=()) -> dict:
+    """Lots that are now removed / sold / unpublished-after-publication (rejected with first_approved_at)
+    / inactive (approved but unreachable). Grouped per seller → {"recipients": [...], "no_bot": [...]}.
+    Lots whose channel is already listed again (another pending/approved row, same link) are skipped."""
+    from app.models.bundle import BundleChannel
+    from app.services.promo_top import link_key
+    ex_ch = set(RELIST_EXCLUDE_CHANNEL_IDS) | set(exclude_channel_ids or ())
+    ex_b = list(set(RELIST_EXCLUDE_BUNDLE_IDS) | set(exclude_bundle_ids or ()))
+    ex_ch |= set((await db.execute(select(BundleChannel.channel_id).where(BundleChannel.bundle_id.in_(ex_b)))).scalars())
+    gone = or_(
+        Channel.status.in_([ChannelStatus.removed, ChannelStatus.sold]),
+        (Channel.status == ChannelStatus.rejected) & Channel.first_approved_at.isnot(None),
+        (Channel.status == ChannelStatus.approved) & Channel.inactive_since.isnot(None),
+    )
+    lots = (await db.execute(select(Channel).where(gone).order_by(Channel.id))).scalars().all()
+    live = (await db.execute(select(Channel.telegram_link).where(
+        Channel.status.in_([ChannelStatus.pending, ChannelStatus.approved]), Channel.inactive_since.is_(None)))).scalars().all()
+    live_keys = {link_key(x) for x in live}
+    per: dict[int, list[Channel]] = {}
+    for c in lots:
+        if c.id in ex_ch or link_key(c.telegram_link) in live_keys:
+            continue
+        per.setdefault(c.seller_id, []).append(c)
+    users = (await db.execute(select(User).where(User.id.in_(list(per))).order_by(User.id))).scalars().all() if per else []
+    rec, no_bot = [], []
+    for u in users:
+        if u.is_blocked or not u.is_active or (u.username or "").lower() in ALWAYS_EXCLUDED_USERNAMES:
+            continue
+        item = {"user_id": u.id, "username": u.username, "lots": [
+            {"id": c.id, "channel": c.channel_name, "link": c.telegram_link,
+             "status": "inactive" if c.status == ChannelStatus.approved else c.status.value,
+             "status_label": LOT_STATUS_LABELS["inactive" if c.status == ChannelStatus.approved else c.status.value]}
+            for c in per[u.id]]}
+        (rec if _subscribed(u) else no_bot).append((u, item))
+    return {"recipients": rec, "no_bot": no_bot}
+
+
+async def errors(db, key: str) -> list[dict]:
+    rows = (await db.execute(select(BroadcastLog.user_id, User.username, BroadcastLog.error)
+                             .join(User, User.id == BroadcastLog.user_id)
+                             .where(BroadcastLog.campaign_key == key, BroadcastLog.status == "failed")
+                             .order_by(BroadcastLog.id))).all()
+    return [{"user_id": uid, "username": un, "error": err} for uid, un, err in rows]
+
+
 async def stats(db, key: str) -> dict:
     rows = dict((await db.execute(select(BroadcastLog.status, func.count(BroadcastLog.id))
                                   .where(BroadcastLog.campaign_key == key).group_by(BroadcastLog.status))).all())
@@ -68,7 +128,7 @@ async def stats(db, key: str) -> dict:
     pending = rows.get("pending", 0) + rows.get("sending", 0)
     task = _tasks.get(key)
     return {"campaign_key": key, "total": sent + failed + pending, "sent": sent, "failed": failed,
-            "pending": pending, "running": bool(task and not task.done())}
+            "pending": pending, "running": bool(task and not task.done()), "errors": await errors(db, key)}
 
 
 async def prepare(db, key: str, users: list[User]) -> dict:
