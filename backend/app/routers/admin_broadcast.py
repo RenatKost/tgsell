@@ -29,9 +29,18 @@ async def broadcast(body: BroadcastIn, admin: User = Depends(get_superadmin_user
         key = svc.validate_key(body.campaign_key)
     except svc.BroadcastError as e:
         raise HTTPException(status_code=422, detail=str(e))
-    if body.segment != "active_sellers":
+    extra: dict = {}
+    if body.segment == svc.RELIST_SEGMENT:
+        if key != svc.RELIST_KEY:
+            raise HTTPException(status_code=422, detail=f"Для цього сегмента campaign_key = {svc.RELIST_KEY}")
+        seg = await svc.segment_relist(db, body.exclude_channel_ids, body.exclude_bundle_ids)
+        users = [u for u, _ in seg["recipients"]]
+        extra = {"segment": body.segment, "default_text": svc.RELIST_TEXT,
+                 "recipients_list": [i for _, i in seg["recipients"]], "no_bot": [i for _, i in seg["no_bot"]]}
+    elif body.segment == "active_sellers":
+        users = await svc.segment_active_sellers(db, body.exclude_channel_ids, body.exclude_bundle_ids)
+    else:
         raise HTTPException(status_code=422, detail="Невідомий сегмент")
-    users = await svc.segment_active_sellers(db, body.exclude_channel_ids, body.exclude_bundle_ids)
     st = await svc.stats(db, key)
     from sqlalchemy import select
     from app.models.broadcast import BroadcastLog
@@ -40,7 +49,7 @@ async def broadcast(body: BroadcastIn, admin: User = Depends(get_superadmin_user
     to_send = [u for u in users if u.id not in done_ids]
     out = {"campaign_key": key, "dry_run": body.dry_run, "recipients": len(users),
            "already_processed": len(users) - len(to_send), "to_send": len(to_send),
-           "limit": svc.MAX_RECIPIENTS, "stats": st}
+           "limit": svc.MAX_RECIPIENTS, "stats": st, **extra}
     if len(users) > svc.MAX_RECIPIENTS:
         if body.dry_run:
             return out | {"over_limit": True}
@@ -48,6 +57,8 @@ async def broadcast(body: BroadcastIn, admin: User = Depends(get_superadmin_user
     if body.dry_run:
         return out
     text = body.text.strip()
+    if body.segment == svc.RELIST_SEGMENT:
+        text = svc.RELIST_TEXT  # campaign text is fixed (verbatim)
     if not text:
         raise HTTPException(status_code=422, detail="Порожній текст")
     if svc._tasks.get(key) and not svc._tasks[key].done():

@@ -124,7 +124,9 @@ async def test_send_idempotent_and_forbidden_logged(orm, monkeypatch):
         assert r["started"] and r["to_send"] == 4
         await svc._tasks["promo-2"]
         st = (await client.get("/api/admin/broadcast/promo-2")).json()
+        errs = st.pop("errors")
         assert st == {"campaign_key": "promo-2", "total": 4, "sent": 3, "failed": 1, "pending": 0, "running": False}
+        assert len(errs) == 1 and "blocked" in errs[0]["error"] and errs[0]["username"] == "seller_blocked_bot"
         assert sorted(c for c, _ in bot.sent) == [101, 102, 103]
         # re-run: nobody gets it twice (failed is not retried either)
         r = (await client.post("/api/admin/broadcast", json=body)).json()
