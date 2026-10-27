@@ -45,14 +45,56 @@ def promo_info(now: datetime | None = None) -> dict:
     return out
 
 
-def on_first_approval(channel, now: datetime | None = None) -> bool:
+def link_key(telegram_link: str | None) -> str:
+    try:
+        from app.services.channel_stats import parse_telegram_link
+        ident, _ = parse_telegram_link(telegram_link or "")
+    except Exception:
+        ident = ""
+    return (ident or telegram_link or "").strip().lower()
+
+
+async def promo_live_for_same_channel(db, channel, now: datetime | None = None) -> bool:
+    """Anti-farm: True if the SAME Telegram channel (by link) already has a promo Top that is still
+    running — on another lot row, or granted within the last promo_top_days to a lot that was since
+    deleted (audit ``promo.top_granted``). A genuine relist after the previous promo ran out is fine."""
+    from sqlalchemy import select
+    from app.models.channel import Channel
+    from app.models.user import AdminAuditLog
+    now = now or utcnow_naive()
+    key = link_key(channel.telegram_link)
+    if not key:
+        return False
+    rows = (await db.execute(select(Channel.id, Channel.telegram_link).where(
+        Channel.id != channel.id, Channel.top_source == PROMO_SOURCE, Channel.top_until > now))).all()
+    if any(link_key(link) == key for _, link in rows):
+        return True
+    since = now - timedelta(days=int(settings.promo_top_days))
+    logs = (await db.execute(select(AdminAuditLog.target_id, AdminAuditLog.details).where(
+        AdminAuditLog.action == "promo.top_granted", AdminAuditLog.created_at > since))).all()
+    return any(tid != channel.id and (d or {}).get("link") == key for tid, d in logs)
+
+
+async def approve_with_promo(db, channel, admin, now: datetime) -> bool:
+    """Moderation approval hook: first approval of THIS lot row + anti-farm check. Returns granted."""
+    from app.models.user import AdminAuditLog
+    blocked = channel.first_approved_at is None and promo_active(now) and await promo_live_for_same_channel(db, channel, now)
+    granted = on_first_approval(channel, now, blocked=blocked)
+    if granted:
+        db.add(AdminAuditLog(actor_id=getattr(admin, "id", None), action="promo.top_granted", target_type="channel",
+                             target_id=channel.id, created_at=now,
+                             details={"link": link_key(channel.telegram_link), "until": channel.top_until.isoformat()}))
+    return granted
+
+
+def on_first_approval(channel, now: datetime | None = None, blocked: bool = False) -> bool:
     """Call when moderation approves ``channel``. Marks first approval; grants the promo Top
     once. Returns True if a promo Top was granted. Never shortens an existing Top."""
     now = now or utcnow_naive()
     if channel.first_approved_at is not None:
         return False
     channel.first_approved_at = now
-    if not promo_active(now):
+    if blocked or not promo_active(now):
         return False
     target = now + timedelta(days=int(settings.promo_top_days))
     if channel.top_until and channel.top_until >= target:
