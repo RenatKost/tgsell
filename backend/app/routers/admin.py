@@ -128,8 +128,8 @@ async def approve_channel(
         channel.status = ChannelStatus.approved
         channel.moderator_id = admin.id
         channel.moderated_at = datetime.utcnow()
-        from app.services.promo_top import on_first_approval
-        promo = on_first_approval(channel, channel.moderated_at)
+        from app.services.promo_top import approve_with_promo
+        promo = await approve_with_promo(db, channel, admin, channel.moderated_at)
         audit(db, admin, "channel.approve", "channel", channel.id, **({"promo_top": True} if promo else {}))
         await db.commit()
         await db.refresh(channel)
@@ -1955,8 +1955,8 @@ async def approve_bundle(
         ch.status = ChannelStatus.approved
         ch.moderator_id = admin.id
         ch.moderated_at = bundle.moderated_at
-        from app.services.promo_top import on_first_approval
-        promo = on_first_approval(ch, bundle.moderated_at)
+        from app.services.promo_top import approve_with_promo
+        promo = await approve_with_promo(db, ch, admin, bundle.moderated_at)
         promo_granted = promo_granted or promo
         audit(db, admin, "channel.approve", "channel", ch.id, via_bundle=bundle.id,
               **({"promo_top": True} if promo else {}))
