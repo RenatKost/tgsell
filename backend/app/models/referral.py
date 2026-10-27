@@ -16,6 +16,6 @@ class ReferralReward(Base):
     referred_user_id: Mapped[int] = mapped_column(Integer, ForeignKey("users.id", ondelete="CASCADE"))
     source_channel_id: Mapped[int | None] = mapped_column(Integer, ForeignKey("channels.id", ondelete="SET NULL"), nullable=True)
     awarded_channel_id: Mapped[int | None] = mapped_column(Integer, ForeignKey("channels.id", ondelete="SET NULL"), nullable=True)
-    status: Mapped[str] = mapped_column(String(16))  # "applied" (badge set) | "credit" (waits for referrer's next lot)
+    status: Mapped[str] = mapped_column(String(16))  # "applied" (free 7-day Top given) | "credit" (waits for referrer's next lot) | "revoked"
     created_at: Mapped[datetime] = mapped_column(DateTime)
     applied_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)

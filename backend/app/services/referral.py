@@ -1,4 +1,4 @@
-"""«Приведи продавця»: referral links, binding, and the free «Перевірено TgSell» reward.
+"""«Приведи продавця»: referral links, binding, and the free 7-day «Топ» reward.
 
 Rules (simple and auditable):
 * every user gets a stable ``ref_code``; link = {frontend}/?ref=<code>; the site keeps it
@@ -6,22 +6,26 @@ Rules (simple and auditable):
 * binding: the referred user's FIRST valid referrer wins (``users.referred_by_id``) and the new lot
   records ``channels.referrer_id``; self-referral is refused — same user, same telegram_id, or the
   referrer already has (had) a lot of the same Telegram channel;
-* reward: when a referred lot is approved by moderation for the FIRST time, the referrer gets the
-  «Перевірено TgSell» badge for free (same flag as the paid service, no payment row) on their approved
-  lot with most subscribers that has no badge yet. If none → a «credit» row that is applied to the
-  referrer's next lot on its first approval. ONE reward per referred seller (UNIQUE referred_user_id).
+* reward: when a referred lot is approved by moderation for the FIRST time, the referrer gets a free
+  7-day «Топ» (promo Top: ``top_source="promo"``, outside the paid 3-slot limit, no payment row) on
+  their ACTIVE (approved) lot with most subscribers. A longer existing Top is never shortened. If the
+  referrer has no active lot → a «credit» row applied to the referrer's next lot on its first approval.
+  ONE reward per referred seller (UNIQUE referred_user_id).
+* the free «Перевірено TgSell» badge is NOT a referral reward (CEO decision; migration 0056 revoked
+  the badges granted earlier and turned unused badge credits into Top credits).
 """
 from __future__ import annotations
 
 import logging
 import secrets
-from datetime import datetime
+from datetime import datetime, timedelta
 
 from sqlalchemy import select
 
 from app.utils.timeutil import utcnow_naive
 
 logger = logging.getLogger(__name__)
+REFERRAL_TOP_DAYS = 7
 ALPHABET = "abcdefghjkmnpqrstuvwxyz23456789"
 
 
@@ -77,13 +81,21 @@ async def bind_on_submit(db, user, channel, ref_code: str | None) -> None:
     channel.referrer_id = referrer.id
 
 
-async def _best_unbadged_lot(db, referrer_id: int, exclude_id: int | None = None):
+async def _best_active_lot(db, referrer_id: int):
     from app.models.channel import Channel, ChannelStatus
-    q = select(Channel).where(Channel.seller_id == referrer_id, Channel.status == ChannelStatus.approved,
-                              Channel.tgsell_verified.is_(False))
-    if exclude_id:
-        q = q.where(Channel.id != exclude_id)
+    q = select(Channel).where(Channel.seller_id == referrer_id, Channel.status == ChannelStatus.approved)
     return (await db.execute(q.order_by(Channel.subscribers_count.desc().nulls_last(), Channel.id))).scalars().first()
+
+
+def grant_top(channel, now: datetime) -> bool:
+    """Free promo Top for REFERRAL_TOP_DAYS. Never shortens a longer Top (paid or promo). True if changed."""
+    from app.services.promo_top import PROMO_SOURCE
+    target = now + timedelta(days=REFERRAL_TOP_DAYS)
+    if channel.top_until and channel.top_until >= target:
+        return False
+    channel.top_until = target
+    channel.top_source = PROMO_SOURCE
+    return True
 
 
 async def on_moderation_approve(db, channel, first_approval: bool, now: datetime | None = None) -> dict:
@@ -94,15 +106,14 @@ async def on_moderation_approve(db, channel, first_approval: bool, now: datetime
     out = {"reward": None, "credit_applied": False}
     if not first_approval:
         return out
-    # 1) the approved lot's seller had an unused credit → badge on this lot
-    if not channel.tgsell_verified:
-        credit = (await db.execute(select(ReferralReward).where(
-            ReferralReward.referrer_id == channel.seller_id, ReferralReward.status == "credit")
-            .order_by(ReferralReward.id).limit(1))).scalar_one_or_none()
-        if credit is not None:
-            channel.tgsell_verified = True
-            credit.status, credit.awarded_channel_id, credit.applied_at = "applied", channel.id, now
-            out["credit_applied"] = True
+    # 1) the approved lot's seller had an unused credit → free 7-day Top on this lot
+    credit = (await db.execute(select(ReferralReward).where(
+        ReferralReward.referrer_id == channel.seller_id, ReferralReward.status == "credit")
+        .order_by(ReferralReward.id).limit(1))).scalar_one_or_none()
+    if credit is not None:
+        grant_top(channel, now)
+        credit.status, credit.awarded_channel_id, credit.applied_at = "applied", channel.id, now
+        out["credit_applied"] = True
     # 2) the lot came by referral → reward the referrer once per referred seller
     if channel.referrer_id:
         exists = (await db.execute(select(ReferralReward.id).where(
@@ -111,11 +122,11 @@ async def on_moderation_approve(db, channel, first_approval: bool, now: datetime
         seller = await db.get(User, channel.seller_id)
         if exists is None and referrer is not None and seller is not None \
                 and not await is_self_referral(db, referrer, seller, channel.telegram_link):
-            lot = await _best_unbadged_lot(db, referrer.id)
+            lot = await _best_active_lot(db, referrer.id)
             r = ReferralReward(referrer_id=referrer.id, referred_user_id=seller.id, source_channel_id=channel.id,
                                created_at=now, status="credit")
             if lot is not None:
-                lot.tgsell_verified = True
+                grant_top(lot, now)
                 r.status, r.awarded_channel_id, r.applied_at = "applied", lot.id, now
             db.add(r)
             out["reward"] = r.status

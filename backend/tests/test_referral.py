@@ -1,4 +1,4 @@
-"""«Приведи продавця»: binding, self-referral guard, free «Перевірено TgSell», credit, one reward per seller."""
+"""«Приведи продавця»: binding, self-referral guard, free 7-day promo Top (no badge), credit, one reward per seller."""
 from __future__ import annotations
 
 import importlib
@@ -61,24 +61,66 @@ async def _env(orm, monkeypatch):
     return await _setup(orm, monkeypatch)
 
 
-async def test_reward_goes_to_biggest_unbadged_lot(orm, monkeypatch, frozen):  # noqa: F811
+from datetime import datetime, timedelta  # noqa: E402
+
+NOW = datetime(2026, 10, 27, 10, 0)
+TOP7 = NOW + timedelta(days=7)
+
+
+def _has_ref_top(ch) -> bool:
+    return ch.top_source == "promo" and ch.top_until is not None and ch.top_until >= TOP7 - timedelta(minutes=1)
+
+
+async def test_reward_is_7d_promo_top_on_biggest_active_lot(orm, monkeypatch, frozen):  # noqa: F811
     from app.models.channel import Channel
     from app.models.user import User
     client, cur = await _env(orm, monkeypatch)
     u = await _users(orm)
     small = await _lot(orm, u["ref"], "https://t.me/r_small", subs=100)
-    big_badged = await _lot(orm, u["ref"], "https://t.me/r_bigb", subs=9000, tgsell_verified=True)
+    big_sold = await _lot(orm, u["ref"], "https://t.me/r_bigs", subs=9000, status="sold")
     big = await _lot(orm, u["ref"], "https://t.me/r_big", subs=5000)
     cid = await _submit(client, cur, u["new"], "https://t.me/new_one")
     assert (await _get(orm, Channel, cid)).referrer_id == u["ref"].id
     assert (await _get(orm, User, u["new"].id)).referred_by_id == u["ref"].id
     await _approve(client, cur, u["adm"], cid)
-    assert (await _get(orm, Channel, big)).tgsell_verified is True
-    assert (await _get(orm, Channel, small)).tgsell_verified is False
-    assert (await _get(orm, Channel, big_badged)).tgsell_verified is True
+    b = await _get(orm, Channel, big)
+    assert _has_ref_top(b) and b.tgsell_verified is False  # NO free «Перевірено» badge
+    assert (await _get(orm, Channel, small)).top_until is None
+    assert (await _get(orm, Channel, big_sold)).top_until is None
     from app.models.paid_service import PaidServiceOrder
     async with orm.session() as db:
         assert (await db.execute(select(func.count(PaidServiceOrder.id)))).scalar() == 0  # free, no payment row
+        n = (await db.execute(select(func.count(Channel.id)).where(Channel.tgsell_verified.is_(True)))).scalar()
+        assert n == 0
+
+
+async def test_referral_top_outside_paid_slot_limit(orm, monkeypatch, frozen):  # noqa: F811
+    from app.models.channel import Channel
+    from app.models.user import User
+    client, cur = await _env(orm, monkeypatch)
+    u = await _users(orm)
+    async with orm.session() as db:  # 3 paid Tops already occupy all slots
+        o = User(first_name="O", username="o", telegram_id=777)
+        db.add(o)
+        await db.commit()
+        oid = o.id
+    for i in range(3):
+        await _lot(orm, await _get(orm, User, oid), f"https://t.me/paid_{i}", top_until=TOP7 + timedelta(days=1),
+                   top_source="paid")
+    mine = await _lot(orm, u["ref"], "https://t.me/r_one")
+    await _approve(client, cur, u["adm"], await _submit(client, cur, u["new"], "https://t.me/n_s"))
+    assert _has_ref_top(await _get(orm, Channel, mine))
+
+
+async def test_longer_existing_top_is_kept(orm, monkeypatch, frozen):  # noqa: F811
+    from app.models.channel import Channel
+    client, cur = await _env(orm, monkeypatch)
+    u = await _users(orm)
+    longer = TOP7 + timedelta(days=10)
+    mine = await _lot(orm, u["ref"], "https://t.me/r_long", top_until=longer, top_source="paid")
+    await _approve(client, cur, u["adm"], await _submit(client, cur, u["new"], "https://t.me/n_l"))
+    ch = await _get(orm, Channel, mine)
+    assert ch.top_until == longer and ch.top_source == "paid"
 
 
 async def test_one_reward_per_referred_seller_first_approval_only(orm, monkeypatch, frozen):  # noqa: F811
@@ -98,16 +140,16 @@ async def test_one_reward_per_referred_seller_first_approval_only(orm, monkeypat
     await _approve(client, cur, u["adm"], c2)
     async with orm.session() as db:
         assert (await db.execute(select(func.count(ReferralReward.id)))).scalar() == 1
-    assert (await _get(orm, Channel, b)).tgsell_verified is True
-    assert (await _get(orm, Channel, a)).tgsell_verified is False
+    assert _has_ref_top(await _get(orm, Channel, b))
+    assert (await _get(orm, Channel, a)).top_until is None
 
 
-async def test_credit_when_no_unbadged_lot_then_applied_to_next_lot(orm, monkeypatch, frozen):  # noqa: F811
+async def test_credit_when_no_active_lot_then_top_on_next_lot(orm, monkeypatch, frozen):  # noqa: F811
     from app.models.channel import Channel
     from app.models.referral import ReferralReward
     client, cur = await _env(orm, monkeypatch)
     u = await _users(orm)
-    await _lot(orm, u["ref"], "https://t.me/r_done", tgsell_verified=True)
+    await _lot(orm, u["ref"], "https://t.me/r_done", status="sold")
     cid = await _submit(client, cur, u["new"], "https://t.me/n_x")
     await _approve(client, cur, u["adm"], cid)
     async with orm.session() as db:
@@ -115,7 +157,8 @@ async def test_credit_when_no_unbadged_lot_then_applied_to_next_lot(orm, monkeyp
         assert r.status == "credit" and r.awarded_channel_id is None
     own = await _submit(client, cur, u["ref"], "https://t.me/r_next", ref=None)
     await _approve(client, cur, u["adm"], own)
-    assert (await _get(orm, Channel, own)).tgsell_verified is True
+    ch = await _get(orm, Channel, own)
+    assert _has_ref_top(ch) and ch.tgsell_verified is False
     async with orm.session() as db:
         r = (await db.execute(select(ReferralReward))).scalar_one()
         assert r.status == "applied" and r.awarded_channel_id == own
@@ -202,3 +245,47 @@ async def test_my_referral_link(orm, monkeypatch):
         j1 = (await c.get("/api/me/referral")).json()
         j2 = (await c.get("/api/me/referral")).json()
     assert j1["code"] == j2["code"] and len(j1["code"]) == 8 and j1["link"].endswith(f"/?ref={j1['code']}")
+
+
+async def test_migration_0056_revokes_only_referral_badges(orm):
+    """0056 data step on the test DB: referral-granted badge removed, paid / unrelated badges kept,
+    reward rows become Top credits."""
+    import importlib.util
+    import pathlib
+    from alembic.migration import MigrationContext
+    from alembic.operations import Operations
+    from app.models.channel import Channel, ChannelStatus
+    from app.models.paid_service import PaidServiceOrder
+    from app.models.referral import ReferralReward
+    u = await _users(orm)
+    async with orm.session() as db:
+        mk = lambda link: Channel(seller_id=u["ref"].id, telegram_link=link, channel_name="x", category="Спорт",  # noqa: E731
+                                  subscribers_count=1, price=10, status=ChannelStatus.approved, tgsell_verified=True)
+        ref_lot, paid_lot, other = mk("https://t.me/m_1"), mk("https://t.me/m_2"), mk("https://t.me/m_3")
+        db.add_all([ref_lot, paid_lot, other])
+        await db.flush()
+        db.add(PaidServiceOrder(kind="verified", channel_id=paid_lot.id, seller_id=u["ref"].id, price_usdt=20,
+                                status="verified", escrow_wallet_address="T", escrow_private_key_encrypted="x"))
+        db.add_all([
+            ReferralReward(referrer_id=u["ref"].id, referred_user_id=u["new"].id, awarded_channel_id=ref_lot.id,
+                           status="applied", created_at=NOW, applied_at=NOW),
+            ReferralReward(referrer_id=u["ref"].id, referred_user_id=u["new2"].id, awarded_channel_id=paid_lot.id,
+                           status="applied", created_at=NOW, applied_at=NOW)])
+        await db.commit()
+        ids = ref_lot.id, paid_lot.id, other.id
+    path = pathlib.Path(__file__).parents[1] / "alembic" / "versions" / "0056_referral_badge_to_top.py"
+    spec = importlib.util.spec_from_file_location("m0056", path)
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    async with orm.session() as db:
+        def run(sync_conn):
+            with Operations.context(MigrationContext.configure(sync_conn)):
+                mod.upgrade()
+        conn = await db.connection()
+        await conn.run_sync(run)
+        await db.commit()
+    assert (await _get(orm, Channel, ids[0])).tgsell_verified is False
+    assert (await _get(orm, Channel, ids[1])).tgsell_verified is True  # paid badge kept
+    assert (await _get(orm, Channel, ids[2])).tgsell_verified is True  # not a referral reward
+    async with orm.session() as db:
+        assert set((await db.execute(select(ReferralReward.status))).scalars().all()) == {"credit"}
