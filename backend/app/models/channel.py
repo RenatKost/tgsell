@@ -118,6 +118,8 @@ class Channel(Base):
     # ("paid" / "promo"). Lots approved before the promo deploy are backfilled → never eligible.
     first_approved_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     top_source: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    # «Приведи продавця» (migration 0055): referrer credited when this lot is first approved
+    referrer_id: Mapped[int | None] = mapped_column(Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
 
     @property
     def is_top(self) -> bool:

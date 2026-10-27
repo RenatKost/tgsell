@@ -1,3 +1,4 @@
+import { getRef, clearRef } from '../utils/referral';
 import { MAX_PRICE_USDT, MAX_PRICE_HINT, fmtNum } from '../utils/money';
 import { useFormik } from 'formik';
 import { useState, useEffect } from 'react';
@@ -217,7 +218,10 @@ const SellForm = ({ onBack, wantedId = null }) => {
 					if (vals.er) payload.er = parseFloat(vals.er);
 				}
 				if (wanted?.id) payload.wanted_request_id = wanted.id;
+				const ref = getRef();
+				if (ref) payload.ref_code = ref;
 				const created = await channelsAPI.create(payload);
+				if (ref) clearRef();
 				setCreatedChannel(created?.data || null);
 				setSubmittedListingType(vals.listing_type);
 				resetForm();
