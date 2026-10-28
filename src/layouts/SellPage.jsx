@@ -1,4 +1,5 @@
 import PromoBanner from '../components/Services/PromoBanner';
+import PromoTop7Banner from '../components/Services/PromoTop7Banner';
 import { useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import SellForm from '../components/SellForm';
@@ -111,6 +112,7 @@ const SellPage = () => {
 					</p>
 				</div>
 
+				<PromoTop7Banner className="mb-4" onCta={(e) => { e.preventDefault(); setMode('channel'); }} />
 				<PromoBanner className="mb-6" />
 
 				{/* Cards */}

@@ -212,6 +212,11 @@ async def create_bundle(
         resources=body.resources,
         status=BundleStatus.pending,
     )
+    try:
+        from app.services.utm import apply as utm_apply
+        utm_apply(bundle, body)
+    except Exception:  # attribution must never block a submission
+        pass
     db.add(bundle)
     await db.flush()  # get bundle.id
 

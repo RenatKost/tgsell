@@ -41,6 +41,10 @@ class ChannelBundle(Base):
     ai_cache_updated_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
 
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+    # UTM first-touch attribution (migration 0057)
+    utm_source: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    utm_campaign: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    utm_content: Mapped[str | None] = mapped_column(String(64), nullable=True)
     moderated_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
 
     # Relationships

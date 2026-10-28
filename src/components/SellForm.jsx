@@ -1,4 +1,5 @@
 import { getRef, clearRef } from '../utils/referral';
+import { utmPayload } from '../utils/utm';
 import { MAX_PRICE_USDT, MAX_PRICE_HINT, fmtNum } from '../utils/money';
 import { useFormik } from 'formik';
 import { useState, useEffect } from 'react';
@@ -220,6 +221,7 @@ const SellForm = ({ onBack, wantedId = null }) => {
 				if (wanted?.id) payload.wanted_request_id = wanted.id;
 				const ref = getRef();
 				if (ref) payload.ref_code = ref;
+				Object.assign(payload, utmPayload());
 				const created = await channelsAPI.create(payload);
 				if (ref) clearRef();
 				setCreatedChannel(created?.data || null);

@@ -50,6 +50,9 @@ class BundleCreate(BaseModel):
     monthly_income: float | None = None
     resources: str | None = None
     channel_links: list[str]
+    utm_source: str | None = None  # UTM first-touch attribution
+    utm_campaign: str | None = None
+    utm_content: str | None = None
     # Task 31: optional, aligned with channel_links by index
     channel_balances: list[ChannelBalanceIn | None] | None = None
     # Optional seller-stated subscriber counts, aligned with channel_links by index.

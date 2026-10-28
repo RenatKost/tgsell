@@ -29,6 +29,14 @@ from app.services.moderation import ensure_login_allowed
 router = APIRouter(prefix="/auth", tags=["auth"])
 
 
+def _utm_apply(user, src) -> None:
+    try:
+        from app.services.utm import apply
+        apply(user, src)
+    except Exception:  # attribution must never block a login
+        pass
+
+
 async def _track_login(db, user_id: int) -> None:
     from app.services.user_activity import record_event_detached
     await record_event_detached("login", user_id=user_id)
@@ -40,7 +48,7 @@ async def telegram_login(data: TelegramAuthData, db: AsyncSession = Depends(get_
     import logging
     logger = logging.getLogger(__name__)
 
-    auth_dict = data.model_dump()
+    auth_dict = data.model_dump(exclude={"utm_source", "utm_campaign", "utm_content"})
     # Demo login bypasses Telegram signature verification — it exists only
     # for local frontend development (see the import.meta.env.DEV-gated
     # button in AuthModal.jsx, which always sends this fixed id). It must
@@ -83,6 +91,7 @@ async def telegram_login(data: TelegramAuthData, db: AsyncSession = Depends(get_
             first_name=data.first_name,
             avatar_url=data.photo_url,
         )
+        _utm_apply(user, data)
         db.add(user)
         await db.commit()
         await db.refresh(user)
@@ -185,7 +194,7 @@ async def link_telegram(
     import logging
     logger = logging.getLogger(__name__)
 
-    auth_dict = data.model_dump()
+    auth_dict = data.model_dump(exclude={"utm_source", "utm_campaign", "utm_content"})
     if not verify_telegram_auth(auth_dict):
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid Telegram auth data")
 
@@ -221,7 +230,8 @@ async def create_bot_auth_token():
 
 
 @router.get("/bot-check")
-async def check_bot_auth(token: str, db: AsyncSession = Depends(get_db)):
+async def check_bot_auth(token: str, utm_source: str | None = None, utm_campaign: str | None = None,
+                         utm_content: str | None = None, db: AsyncSession = Depends(get_db)):
     """Poll this endpoint to check if bot auth completed."""
     from app.utils.auth_tokens import check_auth_token, consume_auth_token
 
@@ -246,6 +256,7 @@ async def check_bot_auth(token: str, db: AsyncSession = Depends(get_db)):
             first_name=user_data.get("first_name", "User"),
             avatar_url=None,
         )
+        _utm_apply(user, {"utm_source": utm_source, "utm_campaign": utm_campaign, "utm_content": utm_content})
         db.add(user)
         await db.commit()
         await db.refresh(user)

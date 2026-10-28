@@ -2,6 +2,7 @@ import { MAX_PRICE_USDT, MAX_PRICE_HINT, fmtNum } from '../utils/money';
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { bundlesAPI } from '../services/api';
+import { utmPayload } from '../utils/utm';
 
 const CATEGORIES = [
   'Криптовалюти', 'Фінанси', 'Новини', 'Бізнес', 'Розваги',
@@ -145,7 +146,7 @@ export default function BundleSellPage() {
             };
           }),
       };
-      const res = await bundlesAPI.create(payload);
+      const res = await bundlesAPI.create({ ...payload, ...utmPayload() });
       navigate('/cabinet', { state: { tab: 'bundles', bundleCreated: res.data.id } });
     } catch (e) {
       const detail = e.response?.data?.detail;

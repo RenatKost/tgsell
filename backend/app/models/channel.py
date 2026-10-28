@@ -120,6 +120,10 @@ class Channel(Base):
     top_source: Mapped[str | None] = mapped_column(String(20), nullable=True)
     # «Приведи продавця» (migration 0055): referrer credited when this lot is first approved
     referrer_id: Mapped[int | None] = mapped_column(Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+    # UTM first-touch attribution (migration 0057)
+    utm_source: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    utm_campaign: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    utm_content: Mapped[str | None] = mapped_column(String(64), nullable=True)
 
     @property
     def is_top(self) -> bool:

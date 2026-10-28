@@ -74,8 +74,8 @@ export const authAPI = {
 	createBotToken: () =>
 		api.post('/auth/bot-token'),
 
-	checkBotAuth: (token) =>
-		api.get('/auth/bot-check', { params: { token } }),
+	checkBotAuth: (token, utm = {}) =>
+		api.get('/auth/bot-check', { params: { token, ...utm } }),
 
 	getMe: () =>
 		api.get('/auth/me'),
@@ -374,6 +374,10 @@ export const wantedAPI = {
 };
 
 // ===== Cabinet tab counters (COUNT-only, current user) =====
+export const utmAPI = {
+	campaigns: (params) => api.get('/admin/utm/campaigns', { params }),
+};
+
 export const meAPI = {
 	counts: () => api.get('/me/counts'),
 	referral: () => api.get('/me/referral'),
@@ -462,6 +466,7 @@ export const usersAPI = {
 export const trackingAPI = {
 	event: (body) => api.post('/track/event', body),
 	heartbeat: (body) => api.post('/track/heartbeat', body),
+	utm: (body) => api.post('/track/utm', body),
 };
 
 export const userActivityAPI = {
