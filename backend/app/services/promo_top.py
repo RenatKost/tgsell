@@ -72,7 +72,9 @@ async def promo_live_for_same_channel(db, channel, now: datetime | None = None) 
     since = now - timedelta(days=int(settings.promo_top_days))
     logs = (await db.execute(select(AdminAuditLog.target_id, AdminAuditLog.details).where(
         AdminAuditLog.action == "promo.top_granted", AdminAuditLog.created_at > since))).all()
-    return any(tid != channel.id and (d or {}).get("link") == key for tid, d in logs)
+    # No id exclusion: this row has never been approved (first_approved_at is None), so any grant for
+    # the link belongs to another lot — even if the DB reused the deleted row's id (SQLite does).
+    return any((d or {}).get("link") == key for _tid, d in logs)
 
 
 async def approve_with_promo(db, channel, admin, now: datetime) -> bool:

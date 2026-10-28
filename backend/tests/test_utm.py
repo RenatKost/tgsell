@@ -151,3 +151,39 @@ def test_telegram_hash_ignores_utm_fields():
     d = TelegramAuthData(id=1, first_name="a", auth_date=1, hash="h", **UTM)
     dumped = d.model_dump(exclude={"utm_source", "utm_campaign", "utm_content"})
     assert "utm_source" not in dumped and d.utm_campaign == "promo_top7"
+
+
+def test_client_ip_uses_rightmost_xff_hop():
+    from types import SimpleNamespace
+    from app.utils.client_ip import client_ip
+    req = lambda h, host="10.0.0.1": SimpleNamespace(headers=h, client=SimpleNamespace(host=host))  # noqa: E731
+    assert client_ip(req({"x-forwarded-for": "6.6.6.6, 1.2.3.4"})) == "1.2.3.4"
+    assert client_ip(req({"x-forwarded-for": " 1.2.3.4 "})) == "1.2.3.4"
+    assert client_ip(req({})) == "10.0.0.1"
+    assert client_ip(SimpleNamespace(headers={}, client=None)) == ""
+
+
+@pytest.mark.asyncio
+async def test_spoofed_xff_does_not_bypass_ip_limit(orm, monkeypatch):
+    from sqlalchemy import func, select
+    from app.models.utm import UtmVisit
+    client, _ = await _app(orm, monkeypatch)
+    codes = [(await client.post("/api/track/utm", json={"anon": f"a{i}", "path": "/", **UTM},
+                                headers={"x-forwarded-for": f"9.9.{i}.1, 5.5.5.5"})).status_code for i in range(70)]
+    assert codes.count(204) == 60 and codes.count(429) == 10  # same real (rightmost) IP
+    async with orm.session() as db:
+        assert (await db.execute(select(func.count(UtmVisit.id)))).scalar() == 60
+
+
+@pytest.mark.asyncio
+async def test_global_limit_caps_flood_from_many_ips(orm, monkeypatch):
+    from sqlalchemy import func, select
+    from app.models.utm import UtmVisit
+    utm = importlib.import_module("app.routers.utm")
+    monkeypatch.setattr(utm, "GLOBAL_PER_MINUTE", 20)
+    client, _ = await _app(orm, monkeypatch)
+    codes = [(await client.post("/api/track/utm", json={"anon": f"g{i}", "path": "/", **UTM},
+                                headers={"x-forwarded-for": f"7.7.{i}.{i}"})).status_code for i in range(30)]
+    assert codes.count(204) == 20 and codes.count(429) == 10
+    async with orm.session() as db:
+        assert (await db.execute(select(func.count(UtmVisit.id)))).scalar() == 20

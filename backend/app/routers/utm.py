@@ -18,6 +18,7 @@ from app.utils.timeutil import utcnow_naive
 router = APIRouter(tags=["utm"])
 PER_ANON_PER_MINUTE = 10
 PER_CLIENT_PER_MINUTE = 60
+GLOBAL_PER_MINUTE = 600  # endpoint-wide cap: floods from many IPs never reach the DB
 
 
 class UtmVisitIn(BaseModel):
@@ -29,8 +30,8 @@ class UtmVisitIn(BaseModel):
 
 
 def _client_key(request: Request) -> str:
-    fwd = (request.headers.get("x-forwarded-for") or "").split(",")[0].strip()
-    raw = fwd or (request.client.host if request.client else "")
+    from app.utils.client_ip import client_ip
+    raw = client_ip(request)  # rightmost XFF hop (added by Railway edge), not the spoofable first
     return hashlib.sha256(("tgsell-utm:" + raw).encode()).hexdigest()[:24]  # in-memory only, never stored
 
 
@@ -40,6 +41,8 @@ async def track_utm(body: UtmVisitIn, request: Request, db: AsyncSession = Depen
     if not d:
         return None
     anon = hash_id(body.anon)
+    if not limiter.per_minute("utm:global", GLOBAL_PER_MINUTE):
+        raise HTTPException(status_code=429, detail="Забагато запитів")
     if not limiter.per_minute("utm:c:" + _client_key(request), PER_CLIENT_PER_MINUTE) or \
             (anon and not limiter.per_minute("utm:a:" + anon, PER_ANON_PER_MINUTE)):
         raise HTTPException(status_code=429, detail="Забагато запитів")
