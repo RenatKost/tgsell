@@ -572,6 +572,11 @@ async def create_channel(
             await bind_on_submit(db, user, channel, body.ref_code)
         except Exception as e:  # referral must never block a submission
             logger.warning(f"[REFERRAL] bind failed: {type(e).__name__}")
+        try:
+            from app.services.utm import apply as utm_apply
+            utm_apply(channel, body)
+        except Exception:  # attribution must never block a submission
+            pass
         db.add(channel)
         await db.commit()
         await db.refresh(channel)

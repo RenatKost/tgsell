@@ -11,6 +11,9 @@ class TelegramAuthData(BaseModel):
     photo_url: str | None = None
     auth_date: int
     hash: str
+    utm_source: str | None = None  # UTM first-touch kept by the site (not part of the Telegram hash)
+    utm_campaign: str | None = None
+    utm_content: str | None = None
 
 
 class GoogleAuthData(BaseModel):

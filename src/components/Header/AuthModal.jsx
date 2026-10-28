@@ -5,6 +5,7 @@ import { useEffect, useRef, useState, useCallback } from 'react';
 import { authAPI } from '../../services/api';
 import { useAuth } from '../../context/AppContext';
 import { isInAppBrowser } from '../../utils/inAppBrowser';
+import { utmPayload } from '../../utils/utm';
 import InAppBrowserBanner from '../InAppBrowserBanner';
 
 const GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID || '';
@@ -88,7 +89,7 @@ const AuthModal = ({ show, setShow }) => {
 				return;
 			}
 			try {
-				const { data: result } = await authAPI.checkBotAuth(token);
+				const { data: result } = await authAPI.checkBotAuth(token, utmPayload());
 				if (result.status === 'ok') {
 					stopPolling();
 					clearPending();
@@ -313,6 +314,7 @@ const AuthModal = ({ show, setShow }) => {
 											photo_url: '',
 											auth_date: Math.floor(Date.now() / 1000),
 											hash: 'demo',
+											...utmPayload(),
 										});
 										login(data.user, {
 											access_token: data.access_token,

@@ -8,6 +8,9 @@ from app.utils.limits import check_max_price
 class ChannelCreate(BaseModel):
     telegram_link: str
     ref_code: str | None = None  # «Приведи продавця» (?ref=…) kept by the site until submission
+    utm_source: str | None = None  # UTM first-touch attribution
+    utm_campaign: str | None = None
+    utm_content: str | None = None
     channel_name: str = ""
     seller_telegram: str | None = None
     category: str

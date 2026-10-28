@@ -7,6 +7,7 @@ import CatalogCard from '../components/Cards/CatalogCard';
 import { channelsAPI, bundlesAPI, savedSearchesAPI } from '../services/api';
 import { useAuth } from '../context/AppContext';
 import BundleCard from '../components/Cards/BundleCard';
+import PromoTop7Banner from '../components/Services/PromoTop7Banner';
 import { options as categoryOptions } from '../components/Main/Calculator';
 import useReveal from '../hooks/useReveal';
 import './escrow.css';
@@ -441,6 +442,8 @@ const CatalogPage = () => {
 					/>
 				</div>
 			</div>
+
+			<PromoTop7Banner className='relative mb-3 md:mb-5' />
 
 			{/* ── Mobile toolbar: «Фільтри» + compact sort ── */}
 			<div className='flex md:hidden items-center gap-2 mb-3'>

@@ -15,6 +15,7 @@ from app.routers import auth, channels, deals, admin, users, favorites, auctions
 from app.routers import bundles as bundles_router
 from app.routers import admin_money
 from app.routers import user_activity as user_activity_router
+from app.routers import utm as utm_router
 from app.routers import saved_searches as saved_searches_router
 from app.routers import me as me_router
 from app.routers import chat as chat_router
@@ -175,6 +176,7 @@ app.include_router(paid_services_router.admin_router, prefix="/api")
 app.include_router(media.router, prefix="/api")
 app.include_router(support.router, prefix="/api")
 app.include_router(user_activity_router.router, prefix="/api")
+app.include_router(utm_router.router, prefix="/api")
 app.include_router(saved_searches_router.router, prefix="/api")
 app.include_router(wanted_router.router, prefix="/api")
 app.include_router(wanted_router.admin_router, prefix="/api")
