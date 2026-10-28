@@ -74,13 +74,16 @@ async def _pay_all(orm, now=None, amount=None):
     from app.utils.timeutil import utcnow_naive
     from app.models.paid_service import PaidServiceOrder
 
+    # Prices are read up-front: opening a second session inside the checker's transaction shares the
+    # single in-memory SQLite connection and its close() rolls back the checker's flushed changes.
+    from sqlalchemy import select
+    async with orm.session() as db:
+        prices = {o.escrow_wallet_address: o.price_usdt for o in (await db.execute(select(PaidServiceOrder))).scalars()}
+
     async def fetch(addr):
         if amount is not None:
             return amount
-        async with orm.session() as db:
-            from sqlalchemy import select
-            o = (await db.execute(select(PaidServiceOrder).where(PaidServiceOrder.escrow_wallet_address == addr))).scalar_one()
-            return o.price_usdt
+        return prices[addr]
     return await svc.check_orders_once(orm.session, now=now or utcnow_naive(), fetch_balance=fetch)
 
 
