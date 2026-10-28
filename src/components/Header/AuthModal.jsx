@@ -28,9 +28,27 @@ const readPending = () => {
 	return null;
 };
 
+// P0: POST /auth/bot-token can be slow on the server (event-loop stalls), so the token is
+// prefetched once per page (idle, while the modal is still closed) and reused when the modal
+// opens — the t.me link is ready before the first tap. One shared in-flight promise; a cached
+// token is reused only while fresh and never after it was handed to Telegram (single-use).
+let _tokenCache = null; // { token, bot_link, at }
+let _tokenPromise = null;
+const takeFreshCached = () => (_tokenCache && Date.now() - _tokenCache.at < TOKEN_REFRESH_MS ? _tokenCache : null);
+export const prefetchBotToken = () => {
+	const fresh = takeFreshCached();
+	if (fresh) return Promise.resolve(fresh);
+	if (_tokenPromise) return _tokenPromise;
+	_tokenPromise = authAPI.createBotToken()
+		.then(({ data }) => { _tokenCache = { token: data.token, bot_link: data.bot_link, at: Date.now() }; return _tokenCache; })
+		.finally(() => { _tokenPromise = null; });
+	return _tokenPromise;
+};
+const invalidateBotToken = (token) => { if (!token || _tokenCache?.token === token) _tokenCache = null; };
+
 const AuthModal = ({ show, setShow }) => {
 	const googleBtnRef = useRef(null);
-	const { login } = useAuth();
+	const { login, user, loading: authLoading } = useAuth();
 	const [botAuth, setBotAuth] = useState({ status: 'idle' }); // idle | loading | waiting | error
 	const [authError, setAuthError] = useState('');
 	const pollRef = useRef(null);
@@ -66,10 +84,16 @@ const AuthModal = ({ show, setShow }) => {
 	}, []);
 
 	const prepareToken = useCallback(async () => {
+		const cached = takeFreshCached();
+		if (cached) { // prefetched — link is ready instantly, no spinner
+			setBotLink((prev) => (pollRef.current && prev ? prev : cached));
+			setBotAuth((st) => (pollRef.current ? st : { status: 'idle' }));
+			return;
+		}
 		setBotAuth({ status: 'loading' });
 		try {
-			const { data } = await authAPI.createBotToken();
-			setBotLink((prev) => (pollRef.current && prev ? prev : { token: data.token, bot_link: data.bot_link, at: Date.now() }));
+			const data = await prefetchBotToken();
+			setBotLink((prev) => (pollRef.current && prev ? prev : data));
 			// returning from Telegram resumes polling meanwhile — keep the «waiting» state
 			setBotAuth((st) => (pollRef.current ? st : { status: 'idle' }));
 		} catch {
@@ -77,6 +101,15 @@ const AuthModal = ({ show, setShow }) => {
 			setBotAuth({ status: 'error' });
 		}
 	}, []);
+
+	// Idle prefetch while the modal is still closed (only for guests — logged-in users never need it).
+	useEffect(() => {
+		if (show || user || authLoading) return undefined;
+		const run = () => { prefetchBotToken().catch(() => { /* modal will retry on open */ }); };
+		const ric = typeof window !== 'undefined' && window.requestIdleCallback;
+		const h = ric ? ric(run, { timeout: 3000 }) : setTimeout(run, 1500);
+		return () => (ric ? window.cancelIdleCallback(h) : clearTimeout(h));
+	}, [show, user, authLoading]);
 
 	const startPolling = useCallback((token, startedAt = Date.now()) => {
 		stopPolling();
@@ -127,7 +160,7 @@ const AuthModal = ({ show, setShow }) => {
 	// Refresh a pre-created token before it expires (server TTL 5 min) while the user hesitates.
 	useEffect(() => {
 		if (!show || !botLink || botAuth.status !== 'idle') return undefined;
-		const t = setTimeout(prepareToken, Math.max(0, TOKEN_REFRESH_MS - (Date.now() - botLink.at)));
+		const t = setTimeout(() => { invalidateBotToken(botLink.token); prepareToken(); }, Math.max(0, TOKEN_REFRESH_MS - (Date.now() - botLink.at)));
 		return () => clearTimeout(t);
 	}, [show, botLink, botAuth.status, prepareToken]);
 
@@ -145,6 +178,7 @@ const AuthModal = ({ show, setShow }) => {
 	const handleBotLinkClick = () => {
 		if (!botLink) return;
 		setAuthError('');
+		invalidateBotToken(botLink.token); // single-use: next modal open gets a new one
 		savePending(botLink.token, botLink.at, botLink.bot_link);
 		startPolling(botLink.token, botLink.at);
 	};

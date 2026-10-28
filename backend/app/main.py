@@ -86,8 +86,19 @@ async def lifespan(app: FastAPI):
 
     await _scrub_leaked_avatar_urls()
 
+    # Warm the DB pool so the first real request doesn't pay connect/TLS (cold start).
+    try:
+        from sqlalchemy import text as _text
+        from app.database import async_session
+        async with async_session() as _db:
+            await _db.execute(_text("SELECT 1"))
+    except Exception as e:  # never block startup on warmup
+        logger.warning("DB pool warmup failed: %s", type(e).__name__)
+
     logger.info("Starting background tasks…")
     loop = asyncio.get_event_loop()
+    from app.tasks.loop_watchdog import run_loop_watchdog
+    background_tasks.append(loop.create_task(run_loop_watchdog()))
     # Delay first Telethon connect past Railway healthcheck so old container is gone
     from app.services.channel_stats import delayed_telethon_startup
     background_tasks.append(loop.create_task(delayed_telethon_startup()))
@@ -197,6 +208,7 @@ async def health():
     return {
         "status": "ok",
         "telethon": get_telethon_health(),
+        "loop": __import__("app.tasks.loop_watchdog", fromlist=["x"]).loop_lag_snapshot(),
     }
 
 
