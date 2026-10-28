@@ -13,8 +13,8 @@ const TOKEN_TTL_MS = 5 * 60 * 1000; // matches backend auth_tokens._TTL
 const TOKEN_REFRESH_MS = 4 * 60 * 1000;
 const PENDING_KEY = 'tg_bot_auth_pending';
 
-const savePending = (token, at) => {
-	try { sessionStorage.setItem(PENDING_KEY, JSON.stringify({ token, at })); } catch { /* ignore */ }
+const savePending = (token, at, bot_link) => {
+	try { sessionStorage.setItem(PENDING_KEY, JSON.stringify({ token, at, bot_link })); } catch { /* ignore */ }
 };
 const clearPending = () => {
 	try { sessionStorage.removeItem(PENDING_KEY); } catch { /* ignore */ }
@@ -69,8 +69,9 @@ const AuthModal = ({ show, setShow }) => {
 		setBotAuth({ status: 'loading' });
 		try {
 			const { data } = await authAPI.createBotToken();
-			setBotLink({ token: data.token, bot_link: data.bot_link, at: Date.now() });
-			setBotAuth({ status: 'idle' });
+			setBotLink((prev) => (pollRef.current && prev ? prev : { token: data.token, bot_link: data.bot_link, at: Date.now() }));
+			// returning from Telegram resumes polling meanwhile — keep the «waiting» state
+			setBotAuth((st) => (pollRef.current ? st : { status: 'idle' }));
 		} catch {
 			setBotLink(null);
 			setBotAuth({ status: 'error' });
@@ -133,7 +134,10 @@ const AuthModal = ({ show, setShow }) => {
 	// If the WebView navigated away to t.me and came back (page reloaded), resume polling.
 	useEffect(() => {
 		const pending = readPending();
-		if (pending && !pollRef.current) startPolling(pending.token, pending.at);
+		if (pending && !pollRef.current) {
+			if (pending.bot_link) setBotLink({ token: pending.token, bot_link: pending.bot_link, at: pending.at });
+			startPolling(pending.token, pending.at);
+		}
 		// eslint-disable-next-line react-hooks/exhaustive-deps
 	}, []);
 
@@ -141,7 +145,7 @@ const AuthModal = ({ show, setShow }) => {
 	const handleBotLinkClick = () => {
 		if (!botLink) return;
 		setAuthError('');
-		savePending(botLink.token, botLink.at);
+		savePending(botLink.token, botLink.at, botLink.bot_link);
 		startPolling(botLink.token, botLink.at);
 	};
 
@@ -237,11 +241,14 @@ const AuthModal = ({ show, setShow }) => {
 					<div className='flex flex-col items-center gap-4'>
 						{/* Primary: Telegram Bot Auth — real link, followed synchronously on tap */}
 						<a
-							href={botLink && !isWaiting ? botLink.bot_link : undefined}
+							// href must stay set while the click is processed: React re-renders before the browser's
+							// default action, so dropping href on «waiting» used to cancel the navigation to Telegram.
+							href={botLink ? botLink.bot_link : undefined}
 							target={inApp ? undefined : '_blank'}
 							rel='noopener noreferrer'
 							onClick={(e) => {
-								if (!botLink || isWaiting || isLoading) { e.preventDefault(); return; }
+								if (!botLink || isLoading) { e.preventDefault(); return; }
+								if (isWaiting) return; // re-open the bot, polling already runs
 								handleBotLinkClick();
 							}}
 							aria-disabled={!botLink || isLoading || isWaiting}
