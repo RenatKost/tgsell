@@ -187,3 +187,67 @@ async def test_global_limit_caps_flood_from_many_ips(orm, monkeypatch):
     assert codes.count(204) == 20 and codes.count(429) == 10
     async with orm.session() as db:
         assert (await db.execute(select(func.count(UtmVisit.id)))).scalar() == 20
+
+
+@pytest.mark.asyncio
+async def test_bot_confirm_registers_with_utm_without_return_to_site(orm, monkeypatch):
+    """Bug repro: the IG visitor confirms in @tgsell_auth_bot but never returns to the same in-app browser
+    (the site never polls bot-check). Before the fix no user was created at all → «Реєстрації» = 0.
+    Now the token carries the visitor's UTM and the user is created on confirm, attributed to the campaign."""
+    from sqlalchemy import select
+
+    from app.models.user import User, UserRole
+    from app.services.bot_auth import finalize_bot_auth
+    client, cur = await _app(orm, monkeypatch)
+    ig = {"utm_source": "ig", "utm_campaign": "promo_top_image", "utm_content": "120249534942620366"}
+    await client.post("/api/track/utm", json={"anon": "ig-1", "path": "/sell", **ig}, headers={"user-agent": IG_UA})
+    r = await client.post("/api/auth/bot-token", json={"anon": "ig-1", **ig})
+    assert r.status_code == 200
+    tok = r.json()["token"]
+    assert (await client.post("/api/auth/bot-token")).status_code == 200  # old clients: no body still works
+    for ev in ("form_start", "form_submit_attempt", "login_click", "login_click"):
+        assert (await client.post("/api/track/funnel", json={"anon": "ig-1", "event": ev, **ig})).status_code == 204
+    assert (await client.post("/api/track/funnel", json={"anon": "ig-1", "event": "bot_start", **ig})).status_code == 204
+    assert (await client.post("/api/track/funnel", json={"anon": "x", "event": "login_click"})).status_code == 204
+
+    from app.services.utm import record_event_detached
+    from app.utils.auth_tokens import get_meta
+    meta = get_meta(tok)
+    assert meta["utm_campaign"] == "promo_top_image" and meta["anon_hash"] and meta["anon_hash"] != "ig-1"
+    await record_event_detached("bot_start", meta["anon_hash"], meta)  # what the bot /start handler does
+    assert await finalize_bot_auth(tok, {"id": 8101, "username": "igu", "first_name": "I"})
+    async with orm.session() as db:
+        u = (await db.execute(select(User).where(User.telegram_id == 8101))).scalar_one()
+        assert (u.utm_source, u.utm_campaign) == ("ig", "promo_top_image")
+        adm = User(first_name="A", telegram_id=8999, role=UserRole.admin)
+        db.add(adm)
+        await db.commit()
+
+    # returning later (no utm in a fresh browser) logs in the same user and records login_success
+    r = await client.get("/api/auth/bot-check", params={"token": tok})
+    assert r.status_code == 200 and r.json()["status"] == "ok", r.text
+    async with orm.session() as db:
+        assert len((await db.execute(select(User).where(User.telegram_id == 8101))).scalars().all()) == 1
+
+    cur.user = adm
+    rows = {i["utm_campaign"]: i for i in (await client.get("/api/admin/utm/campaigns")).json()["items"]}
+    p = rows["promo_top_image"]
+    assert (p["visits"], p["registrations"]) == (1, 1)
+    assert (p["form_start"], p["form_submit_attempt"], p["login_click"], p["bot_start"], p["login_success"]) == (1, 1, 1, 1, 1)
+
+
+@pytest.mark.asyncio
+async def test_bot_check_uses_token_utm_when_site_storage_lost(orm, monkeypatch):
+    """Visitor returns to a different browser (storage lost): bot-check falls back to the token-bound UTM."""
+    from sqlalchemy import select
+
+    from app.models.user import User
+    client, _ = await _app(orm, monkeypatch)
+    auth_tokens = importlib.import_module("app.utils.auth_tokens")
+    tok = (await client.post("/api/auth/bot-token", json={"utm_source": "ig", "utm_campaign": "promo_top_image"})).json()["token"]
+    assert auth_tokens.complete_auth_token(tok, {"id": 8202, "username": "u2", "first_name": "U"})
+    r = await client.get("/api/auth/bot-check", params={"token": tok})
+    assert r.json()["status"] == "ok"
+    async with orm.session() as db:
+        u = (await db.execute(select(User).where(User.telegram_id == 8202))).scalar_one()
+    assert u.utm_campaign == "promo_top_image"

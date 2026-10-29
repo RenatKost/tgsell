@@ -1074,6 +1074,14 @@ async def auth_cmd_start(message: Message):
             "first_name": user.first_name or "User",
             "username": user.username,
         }
+        try:  # funnel: the ad visitor reached the bot (no PII in logs)
+            from app.services.utm import record_event_detached
+            from app.utils.auth_tokens import get_meta, is_known
+            meta = get_meta(token)
+            logger.info(f"[auth] bot start campaign={meta.get('utm_campaign') or '-'} known_token={is_known(token)}")
+            await record_event_detached("bot_start", meta.get("anon_hash"), meta)
+        except Exception:
+            pass
 
         # Show confirmation like Telemetr
         keyboard = InlineKeyboardMarkup(inline_keyboard=[
@@ -1108,9 +1116,9 @@ async def auth_confirm_callback(callback: CallbackQuery):
         await callback.message.edit_text("❌ Сесія авторизації закінчилась.")
         return
 
-    from app.utils.auth_tokens import complete_auth_token
+    from app.services.bot_auth import finalize_bot_auth
 
-    if complete_auth_token(token, user_data):
+    if await finalize_bot_auth(token, user_data):
         await callback.message.edit_text(
             "✅ Авторизація успішна! Поверніться на сайт — вхід виконається автоматично."
         )

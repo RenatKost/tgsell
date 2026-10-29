@@ -58,6 +58,34 @@ def apply(obj, src) -> bool:
     return True
 
 
+FUNNEL_EVENTS = ("login_click", "form_start", "form_submit_attempt", "bot_start", "login_success")
+CLIENT_EVENTS = ("login_click", "form_start", "form_submit_attempt")
+
+
+def log_event(event: str, d: dict) -> None:
+    logger.info(f"[utm] funnel event={event} source={d.get('utm_source') or '-'} "
+                f"campaign={d.get('utm_campaign') or '-'} content={d.get('utm_content') or '-'}")
+
+
+async def record_event_detached(event: str, anon_hash: str | None, src) -> bool:
+    """Server-side funnel step (bot_start / login_success) in its own session; never raises."""
+    d = fields(src or {})
+    if not d or event not in FUNNEL_EVENTS:
+        return False
+    try:
+        from app.database import async_session
+        from app.models.utm import UtmEvent
+        from app.utils.timeutil import utcnow_naive
+        log_event(event, d)
+        async with async_session() as db:
+            db.add(UtmEvent(anon_hash=anon_hash, event=event, created_at=utcnow_naive(), **d))
+            await db.commit()
+        return True
+    except Exception as e:  # attribution must never block a login
+        logger.warning("utm event %s not recorded: %s", event, type(e).__name__)
+        return False
+
+
 def log_visit(d: dict, path: str | None, ua: str) -> None:
     logger.info(f"[utm] visit source={d.get('utm_source') or '-'} campaign={d.get('utm_campaign') or '-'} "
                 f"content={d.get('utm_content') or '-'} path={path or '-'} ua={ua}")
@@ -84,14 +112,15 @@ async def report(db, date_from: date | None = None, date_to: date | None = None)
     from app.models.bundle import BundleChannel, BundleStatus, ChannelBundle
     from app.models.channel import Channel, ChannelStatus
     from app.models.user import User
-    from app.models.utm import UtmVisit
+    from app.models.utm import UtmEvent, UtmVisit
 
     start, end = _range(date_from, date_to)
     rows: dict[tuple, dict] = {}
 
     def row(k):
         return rows.setdefault(tuple(x or "" for x in k), {
-            "visits": 0, "visitors": 0, "registrations": 0, "lots_submitted": 0, "lots_approved": 0})
+            "visits": 0, "visitors": 0, "registrations": 0, "lots_submitted": 0, "lots_approved": 0,
+            **{e: 0 for e in FUNNEL_EVENTS}})
 
     def key(m):
         return (m.utm_source, m.utm_campaign, m.utm_content)
@@ -103,6 +132,14 @@ async def report(db, date_from: date | None = None, date_to: date | None = None)
          .group_by(UtmVisit.utm_source, UtmVisit.utm_campaign, UtmVisit.utm_content))
     for s, c, ct, n, u in (await db.execute(q)).all():
         r = row((s, c, ct)); r["visits"] += n; r["visitors"] += u
+
+    # funnel steps: unique visitors per step (events without an anon id count individually)
+    uniq = func.count(func.distinct(UtmEvent.anon_hash)) + func.count(UtmEvent.id).filter(UtmEvent.anon_hash.is_(None))
+    q = (select(UtmEvent.utm_source, UtmEvent.utm_campaign, UtmEvent.utm_content, UtmEvent.event, uniq)
+         .where(_win(UtmEvent.created_at, start, end), UtmEvent.event.in_(FUNNEL_EVENTS))
+         .group_by(UtmEvent.utm_source, UtmEvent.utm_campaign, UtmEvent.utm_content, UtmEvent.event))
+    for s, c, ct, ev, n in (await db.execute(q)).all():
+        row((s, c, ct))[ev] += n
 
     has_utm = lambda m: or_(m.utm_source.isnot(None), m.utm_campaign.isnot(None))  # noqa: E731
     q = (select(User.utm_source, User.utm_campaign, User.utm_content, func.count(User.id))
@@ -131,7 +168,7 @@ async def report(db, date_from: date | None = None, date_to: date | None = None)
 
     items = [{"utm_source": k[0], "utm_campaign": k[1], "utm_content": k[2], **v} for k, v in rows.items()]
     items.sort(key=lambda x: (-x["visits"], -x["registrations"], x["utm_campaign"], x["utm_source"]))
-    totals = {f: sum(i[f] for i in items) for f in ("visits", "visitors", "registrations", "lots_submitted", "lots_approved")}
-    return {"items": items, "totals": totals,
+    totals = {f: sum(i[f] for i in items) for f in ("visits", "visitors", "registrations", "lots_submitted", "lots_approved", *FUNNEL_EVENTS)}
+    return {"items": items, "totals": totals, "funnel_events": list(FUNNEL_EVENTS),
             "date_from": date_from.isoformat() if date_from else None,
             "date_to": date_to.isoformat() if date_to else None}

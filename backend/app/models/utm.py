@@ -18,3 +18,17 @@ class UtmVisit(Base):
     path: Mapped[str | None] = mapped_column(String(128), nullable=True)
     ua_class: Mapped[str | None] = mapped_column(String(16), nullable=True)  # ig_inapp | fb_inapp | tg_inapp | mobile | desktop | bot
     created_at: Mapped[datetime] = mapped_column(DateTime, index=True)
+
+
+class UtmEvent(Base):
+    """Funnel step of a UTM visitor (migration 0058): login_click, form_start, form_submit_attempt,
+    bot_start, login_success. No PII — hashed anon id + first-touch utm_* only."""
+    __tablename__ = "utm_events"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    anon_hash: Mapped[str | None] = mapped_column(String(32), nullable=True, index=True)
+    event: Mapped[str] = mapped_column(String(32), index=True)
+    utm_source: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    utm_campaign: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)
+    utm_content: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, index=True)

@@ -1,8 +1,9 @@
 import { getRef, clearRef } from '../utils/referral';
-import { utmPayload } from '../utils/utm';
+import { trackFunnel, utmPayload } from '../utils/utm';
+import AuthModal from './Header/AuthModal';
 import { MAX_PRICE_USDT, MAX_PRICE_HINT, fmtNum } from '../utils/money';
 import { useFormik } from 'formik';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import * as Yup from 'yup';
 import { channelsAPI, wantedAPI } from '../services/api';
 import { useAuth } from '../context/AppContext';
@@ -102,6 +103,52 @@ const InputField = ({ label, error, touched, children }) => (
 	</div>
 );
 
+const EMPTY_VALUES = {
+	telegram_link: '',
+	seller_telegram: '',
+	category: '',
+	price: '',
+	monthly_income: '',
+	description: '',
+	resource1: '',
+	resource2: '',
+	listing_type: 'sale',
+	auction_start_price: '',
+	auction_bid_step: '',
+	auction_duration_hours: '48',
+	is_closed: false,
+	subscribers_count: '',
+	avg_views: '',
+	er: '',
+	stars_balance: '',
+	ton_balance: '',
+};
+
+// Guest flow: the form works without login; the draft lives in localStorage and login is asked only on
+// submit. After Telegram login (same page or after a reload) the draft is restored and submit continues.
+export const SELL_DRAFT_KEY = 'tgsell_sell_draft';
+export const SELL_PENDING_KEY = 'tgsell_sell_submit_pending';
+const DRAFT_TTL_MS = 7 * 24 * 3600 * 1000;
+const readDraft = () => {
+	try {
+		const d = JSON.parse(localStorage.getItem(SELL_DRAFT_KEY) || 'null');
+		if (d?.values && Date.now() - (d.at || 0) < DRAFT_TTL_MS) return d.values;
+	} catch { /* storage unavailable */ }
+	return null;
+};
+const saveDraft = (values) => {
+	try { localStorage.setItem(SELL_DRAFT_KEY, JSON.stringify({ values, at: Date.now() })); } catch { /* ignore */ }
+};
+const clearDraft = () => {
+	try { localStorage.removeItem(SELL_DRAFT_KEY); localStorage.removeItem(SELL_PENDING_KEY); } catch { /* ignore */ }
+};
+const setPendingSubmit = (on) => {
+	try { if (on) localStorage.setItem(SELL_PENDING_KEY, String(Date.now())); else localStorage.removeItem(SELL_PENDING_KEY); } catch { /* ignore */ }
+};
+export const hasPendingSellSubmit = () => {
+	try { return Date.now() - Number(localStorage.getItem(SELL_PENDING_KEY) || 0) < DRAFT_TTL_MS; } catch { return false; }
+};
+
 const inputClass = 'w-full bg-card-inner border border-card-border rounded-lg px-4 py-2.5 text-white placeholder-gray-600 focus:outline-none focus:border-accent/50 text-sm transition-colors';
 
 const SellForm = ({ onBack, wantedId = null }) => {
@@ -112,6 +159,8 @@ const SellForm = ({ onBack, wantedId = null }) => {
 	const [showModal, setShowModal] = useState(false);
 	const [submittedListingType, setSubmittedListingType] = useState('sale');
 	const [createdChannel, setCreatedChannel] = useState(null);
+	const [showAuth, setShowAuth] = useState(false);
+	const formStarted = useRef(false);
 
 	const {
 		handleSubmit,
@@ -122,27 +171,11 @@ const SellForm = ({ onBack, wantedId = null }) => {
 		touched,
 		isSubmitting,
 		setFieldValue,
+		submitForm,
+		dirty,
 	} = useFormik({
-		initialValues: {
-			telegram_link: '',
-			seller_telegram: '',
-			category: '',
-			price: '',
-			monthly_income: '',
-			description: '',
-			resource1: '',
-			resource2: '',
-			listing_type: 'sale',
-			auction_start_price: '',
-			auction_bid_step: '',
-			auction_duration_hours: '48',
-			is_closed: false,
-			subscribers_count: '',
-			avg_views: '',
-			er: '',
-			stars_balance: '',
-			ton_balance: '',
-		},
+		initialValues: { ...EMPTY_VALUES, ...(readDraft() || {}) },
+
 		validationSchema: Yup.object({
 			telegram_link: Yup.string()
 				.matches(/^\S*$/, 'Не повинен містити пробілів')
@@ -189,9 +222,13 @@ const SellForm = ({ onBack, wantedId = null }) => {
 		}),
 		onSubmit: async (vals, { resetForm }) => {
 			if (!isAuthenticated) {
-				setSubmitError('Увійдіть для подання заявки');
+				saveDraft(vals);
+				setPendingSubmit(true);
+				setSubmitError('');
+				setShowAuth(true);
 				return;
 			}
+			setPendingSubmit(false);
 			setSubmitError('');
 			try {
 				const resources = [vals.resource1, vals.resource2].filter(Boolean).join('\n');
@@ -226,13 +263,36 @@ const SellForm = ({ onBack, wantedId = null }) => {
 				if (ref) clearRef();
 				setCreatedChannel(created?.data || null);
 				setSubmittedListingType(vals.listing_type);
-				resetForm();
+				clearDraft();
+				resetForm({ values: EMPTY_VALUES });
 				setShowModal(true);
 			} catch (err) {
 				setSubmitError(err.response?.data?.detail || 'Помилка створення заявки');
 			}
 		},
 	});
+
+	// Draft autosave + funnel «form_start» on the first edit.
+	useEffect(() => {
+		if (!dirty) return undefined;
+		if (!formStarted.current) { formStarted.current = true; trackFunnel('form_start'); }
+		const t = setTimeout(() => saveDraft(values), 400);
+		return () => clearTimeout(t);
+	}, [values, dirty]);
+
+	// Back from Telegram login: continue the submit that was waiting for it.
+	useEffect(() => {
+		if (!isAuthenticated || !hasPendingSellSubmit()) return;
+		setShowAuth(false);
+		setPendingSubmit(false);
+		submitForm();
+		// eslint-disable-next-line react-hooks/exhaustive-deps
+	}, [isAuthenticated]);
+
+	const onFormSubmit = (e) => {
+		trackFunnel('form_submit_attempt');
+		handleSubmit(e);
+	};
 
 	// «Шукаю канал»: prefill category from the buyer request (?wanted=<id>)
 	useEffect(() => {
@@ -282,7 +342,7 @@ const SellForm = ({ onBack, wantedId = null }) => {
 					{/* Form Card */}
 					<form
 						className='bg-card border border-card-border rounded-xl shadow-neon overflow-hidden'
-						onSubmit={handleSubmit}
+						onSubmit={onFormSubmit}
 					>
 						{/* Required Fields Section */}
 						<div className='p-6 pb-0'>
@@ -618,6 +678,11 @@ const SellForm = ({ onBack, wantedId = null }) => {
 									{submitError}
 								</div>
 							)}
+							{!isAuthenticated && (
+								<p className='text-xs text-gray-400 mb-3' data-guest-submit-hint>
+									Для подання заявки потрібен вхід через Telegram (кілька секунд). Чернетка збережеться — після входу заявка надішлеться автоматично.
+								</p>
+							)}
 							<div className='flex items-center gap-3'>
 								{onBack && (
 									<button
@@ -655,6 +720,8 @@ const SellForm = ({ onBack, wantedId = null }) => {
 					</form>
 				</div>
 			</section>
+
+			{!isAuthenticated && <AuthModal show={showAuth} setShow={setShowAuth} />}
 
 			{showModal && (
 				<SuccessModal

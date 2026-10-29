@@ -6,10 +6,11 @@ _pending: dict[str, dict] = {}
 _TTL = 300  # 5 minutes
 
 
-def create_auth_token() -> str:
-    """Generate a random token and store it as pending."""
+def create_auth_token(meta: dict | None = None) -> str:
+    """Generate a random token and store it as pending. `meta` = {anon_hash, utm_*} of the site visitor
+    (carried server-side across the Telegram deep-link roundtrip; no PII)."""
     token = secrets.token_urlsafe(32)
-    _pending[token] = {"created": time.time(), "user": None}
+    _pending[token] = {"created": time.time(), "user": None, "meta": meta or {}}
     _cleanup()
     return token
 
@@ -24,6 +25,19 @@ def complete_auth_token(token: str, user_data: dict) -> bool:
         return False
     entry["user"] = user_data
     return True
+
+
+def get_meta(token: str) -> dict:
+    """Visitor meta bound to a still-valid token ({} when unknown/expired)."""
+    entry = _pending.get(token)
+    if not entry or time.time() - entry["created"] > _TTL:
+        return {}
+    return dict(entry.get("meta") or {})
+
+
+def is_known(token: str) -> bool:
+    entry = _pending.get(token)
+    return bool(entry) and time.time() - entry["created"] <= _TTL
 
 
 def check_auth_token(token: str) -> dict | None:

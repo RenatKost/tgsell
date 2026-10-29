@@ -1,6 +1,7 @@
 import os
 
 from fastapi import APIRouter, Depends, HTTPException, status
+from pydantic import BaseModel, Field
 from sqlalchemy import select, or_
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -217,11 +218,24 @@ async def link_telegram(
 
 # ── Bot-based auth (for switching Telegram accounts) ─────────────────
 
+class BotTokenIn(BaseModel):
+    anon: str | None = Field(None, max_length=128)
+    utm_source: str | None = Field(None, max_length=200)
+    utm_campaign: str | None = Field(None, max_length=200)
+    utm_content: str | None = Field(None, max_length=200)
+
+
 @router.post("/bot-token")
-async def create_bot_auth_token():
-    """Generate a one-time token for bot-based login."""
+async def create_bot_auth_token(body: BotTokenIn | None = None):
+    """Generate a one-time token for bot-based login. The visitor's anon id + first-touch UTM (optional)
+    are bound to the token so registration is attributed even if the visitor never returns from Telegram."""
+    from app.services.utm import fields
+    from app.utils.activity_ids import hash_id
     from app.utils.auth_tokens import create_auth_token
-    token = create_auth_token()
+    meta = {}
+    if body is not None:
+        meta = {**fields(body), "anon_hash": hash_id(body.anon)}
+    token = create_auth_token(meta)
     bot_name = "tgsell_auth_bot"
     return {
         "token": token,
@@ -231,40 +245,29 @@ async def create_bot_auth_token():
 
 @router.get("/bot-check")
 async def check_bot_auth(token: str, utm_source: str | None = None, utm_campaign: str | None = None,
-                         utm_content: str | None = None, db: AsyncSession = Depends(get_db)):
+                         utm_content: str | None = None, anon: str | None = None,
+                         db: AsyncSession = Depends(get_db)):
     """Poll this endpoint to check if bot auth completed."""
-    from app.utils.auth_tokens import check_auth_token, consume_auth_token
+    from app.services.bot_auth import ensure_bot_user
+    from app.services.utm import fields, record_event_detached
+    from app.utils.activity_ids import hash_id
+    from app.utils.auth_tokens import check_auth_token, consume_auth_token, get_meta
 
     # Non-destructive check first (polling every 2s)
     user_data = check_auth_token(token)
     if not user_data:
         return {"status": "pending"}
 
+    meta = get_meta(token)
     # Auth completed — now consume (remove) the token
     user_data = consume_auth_token(token)
     if not user_data:
         return {"status": "pending"}
 
-    # Find or create user
-    result = await db.execute(select(User).where(User.telegram_id == user_data["id"]))
-    user = result.scalar_one_or_none()
-
-    if not user:
-        user = User(
-            telegram_id=user_data["id"],
-            username=user_data.get("username"),
-            first_name=user_data.get("first_name", "User"),
-            avatar_url=None,
-        )
-        _utm_apply(user, {"utm_source": utm_source, "utm_campaign": utm_campaign, "utm_content": utm_content})
-        db.add(user)
-        await db.commit()
-        await db.refresh(user)
-    else:
-        user.username = user_data.get("username") or user.username
-        user.first_name = user_data.get("first_name") or user.first_name
-        await db.commit()
-        await db.refresh(user)
+    q_utm = {"utm_source": utm_source, "utm_campaign": utm_campaign, "utm_content": utm_content}
+    utm_src = q_utm if fields(q_utm) else meta  # site storage first, token-bound UTM as fallback
+    user, _created = await ensure_bot_user(db, user_data, utm_src)
+    await record_event_detached("login_success", hash_id(anon) or meta.get("anon_hash"), utm_src)
 
     await ensure_login_allowed(db, user)
     await _track_login(db, user.id)

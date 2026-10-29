@@ -2,7 +2,7 @@ import PromoBanner from '../components/Services/PromoBanner';
 import PromoTop7Banner from '../components/Services/PromoTop7Banner';
 import { useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import SellForm from '../components/SellForm';
+import SellForm, { hasPendingSellSubmit } from '../components/SellForm';
 import './escrow.css';
 import './premium.css';
 import './public.css';
@@ -90,7 +90,7 @@ const ChoiceCard = ({ imgSrc, imgAlt, title, desc, cta, onClick, color = 'teal' 
 const SellPage = () => {
 	const [params] = useSearchParams();
 	const wantedId = params.get('wanted');
-	const [mode, setMode] = useState(wantedId ? 'channel' : null);
+	const [mode, setMode] = useState(wantedId || hasPendingSellSubmit() ? 'channel' : null);
 	const navigate = useNavigate();
 
 	if (mode === 'channel') {

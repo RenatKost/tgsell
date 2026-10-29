@@ -5,7 +5,8 @@ import { useEffect, useRef, useState, useCallback } from 'react';
 import { authAPI } from '../../services/api';
 import { useAuth } from '../../context/AppContext';
 import { isInAppBrowser } from '../../utils/inAppBrowser';
-import { utmPayload } from '../../utils/utm';
+import { trackFunnel, utmPayload } from '../../utils/utm';
+import { anonId } from '../../utils/tracking';
 import InAppBrowserBanner from '../InAppBrowserBanner';
 
 const GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID || '';
@@ -39,7 +40,8 @@ export const prefetchBotToken = () => {
 	const fresh = takeFreshCached();
 	if (fresh) return Promise.resolve(fresh);
 	if (_tokenPromise) return _tokenPromise;
-	_tokenPromise = authAPI.createBotToken()
+	// visitor anon id + first-touch UTM ride on the token, so attribution survives the Telegram roundtrip
+	_tokenPromise = authAPI.createBotToken({ anon: anonId(), ...utmPayload() })
 		.then(({ data }) => { _tokenCache = { token: data.token, bot_link: data.bot_link, at: Date.now() }; return _tokenCache; })
 		.finally(() => { _tokenPromise = null; });
 	return _tokenPromise;
@@ -123,7 +125,7 @@ const AuthModal = ({ show, setShow }) => {
 				return;
 			}
 			try {
-				const { data: result } = await authAPI.checkBotAuth(token, utmPayload());
+				const { data: result } = await authAPI.checkBotAuth(token, { ...utmPayload(), anon: anonId() });
 				if (result.status === 'ok') {
 					stopPolling();
 					clearPending();
@@ -176,6 +178,7 @@ const AuthModal = ({ show, setShow }) => {
 
 	// Called synchronously from the <a> click — the browser itself follows href, no window.open.
 	const handleBotLinkClick = () => {
+		trackFunnel('login_click');
 		if (!botLink) return;
 		setAuthError('');
 		invalidateBotToken(botLink.token); // single-use: next modal open gets a new one
