@@ -58,4 +58,17 @@ export function captureUtm(loc = window.location) {
 	} catch { /* noop */ }
 }
 
+/** Funnel step of a UTM visitor (login_click / form_start / form_submit_attempt): once per tab session
+ *  per step, only for visitors that came from a campaign. Never throws. */
+export function trackFunnel(event) {
+	try {
+		const utm = utmPayload();
+		if (!utm.utm_source && !utm.utm_campaign) return;
+		const k = `tgsell_funnel_sent:${event}`;
+		if (sessionStorage.getItem(k)) return;
+		sessionStorage.setItem(k, '1');
+		trackingAPI.funnel({ anon: anonId(), event, ...utm }).catch(() => {});
+	} catch { /* noop */ }
+}
+
 export const isPromoTop7 = () => getUtm()?.utm_campaign === 'promo_top7';

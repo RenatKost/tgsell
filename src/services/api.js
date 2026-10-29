@@ -71,8 +71,8 @@ export const authAPI = {
 	linkTelegram: (telegramData) =>
 		api.post('/auth/link/telegram', telegramData),
 
-	createBotToken: () =>
-		api.post('/auth/bot-token'),
+	createBotToken: (body = {}) =>
+		api.post('/auth/bot-token', body),
 
 	checkBotAuth: (token, utm = {}) =>
 		api.get('/auth/bot-check', { params: { token, ...utm } }),
@@ -467,6 +467,7 @@ export const trackingAPI = {
 	event: (body) => api.post('/track/event', body),
 	heartbeat: (body) => api.post('/track/heartbeat', body),
 	utm: (body) => api.post('/track/utm', body),
+	funnel: (body) => api.post('/track/funnel', body),
 };
 
 export const userActivityAPI = {

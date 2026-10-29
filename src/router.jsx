@@ -36,11 +36,8 @@ export const router = createBrowserRouter([
 			},
 			{
 				path: '/sell',
-				element: (
-					<PrivateRoute>
-						<SellPage />
-					</PrivateRoute>
-				),
+				// Guests fill the form first (draft kept in localStorage); login is asked only on submit.
+				element: <SellPage />,
 			},
 			{
 				path: '/catalog',
