@@ -74,11 +74,11 @@ def build_sitemap(channels: list[tuple[int, object]]) -> str:
 
 
 def non_public_bundle_channel_ids():
-    """Channel ids that sit in at least one bundle whose status is not public."""
+    """Channel ids that sit in at least one bundle that is not an active (approved) listing."""
     return (
         select(BundleChannel.channel_id)
         .join(ChannelBundle, ChannelBundle.id == BundleChannel.bundle_id)
-        .where(ChannelBundle.status.notin_(PUBLIC_BUNDLE_STATUSES))
+        .where(ChannelBundle.status != "approved")  # pending/rejected/sold bundles are not active lots
         .scalar_subquery()
     )
 

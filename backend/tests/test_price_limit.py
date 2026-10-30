@@ -111,7 +111,7 @@ async def test_handler_returns_flat_ukrainian_422_and_keeps_default():
         r = await c.put("/x", json={"price": 9_999_999.99})
         assert r.status_code == 200
         r = await c.put("/y", json={"n": "abc"})
-        assert r.status_code == 422 and isinstance(r.json()["detail"], list)
+        assert r.status_code == 422 and r.json()["detail"] == "Некоректні дані запиту"
 
 
 def test_main_app_installs_handler():
