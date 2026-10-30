@@ -5,7 +5,7 @@ const box = 'bg-white dark:bg-slate-800 rounded-2xl border border-gray-100 dark:
 const input = 'rounded-xl border border-gray-200 dark:border-slate-600 bg-white dark:bg-slate-900 px-3 py-2 text-sm text-gray-800 dark:text-gray-100';
 const pct = (a, b) => (b ? `${Math.round((a / b) * 1000) / 10}%` : '—');
 const COLS = [
-	['visits', 'Візити'], ['visitors', 'Унікальні'],
+	['visits', 'Візити'], ['visitors', 'Унікальні'], ['sell_open', 'Відкрили форму'],
 	['form_start', 'Почали форму'], ['form_submit_attempt', 'Спроба подати'], ['login_click', 'Тап «Увійти»'],
 	['bot_start', 'Старт бота'], ['login_success', 'Вхід успішний'],
 	['registrations', 'Реєстрації'], ['lots_submitted', 'Лоти подано'], ['lots_approved', 'Лоти схвалено'],
@@ -31,7 +31,7 @@ const CampaignsPanel = () => {
 		<div className='space-y-4'>
 			<div className={box}>
 				<h2 className='text-lg font-bold text-gray-800 dark:text-white mb-1'>Кампанії (UTM)</h2>
-				<p className='text-xs text-gray-500 dark:text-gray-400 mb-3'>Перший дотик: utm_source / utm_campaign / utm_content. Лоти = окремі канали + сітки. Дати — за датою візиту/реєстрації/подання. Воронка (почали форму → тап «Увійти» → старт бота → вхід) — унікальні відвідувачі на кожному кроці; дані з 29.10.</p>
+				<p className='text-xs text-gray-500 dark:text-gray-400 mb-3'>Перший дотик: utm_source / utm_campaign / utm_content. Лоти = окремі канали + сітки. Дати — за датою візиту/реєстрації/подання. Воронка (відкрили форму → почали форму → тап «Увійти» → старт бота → вхід) — унікальні відвідувачі на кожному кроці; дані з 29.10.</p>
 				<div className='flex flex-wrap items-end gap-2'>
 					<label className='text-xs text-gray-500'>Від<br /><input type='date' className={input} value={from} onChange={(e) => setFrom(e.target.value)} /></label>
 					<label className='text-xs text-gray-500'>До<br /><input type='date' className={input} value={to} onChange={(e) => setTo(e.target.value)} /></label>

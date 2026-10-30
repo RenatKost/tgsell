@@ -3,6 +3,7 @@ import PromoTop7Banner from '../components/Services/PromoTop7Banner';
 import { useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import SellForm, { hasPendingSellSubmit } from '../components/SellForm';
+import { trackFunnel } from '../utils/utm';
 import './escrow.css';
 import './premium.css';
 import './public.css';
@@ -92,6 +93,8 @@ const SellPage = () => {
 	const wantedId = params.get('wanted');
 	const [mode, setMode] = useState(wantedId || hasPendingSellSubmit() ? 'channel' : null);
 	const navigate = useNavigate();
+	// Funnel «sell_open»: the visitor left the type chooser for a form (before any typing).
+	const openChannel = () => { trackFunnel('sell_open'); setMode('channel'); };
 
 	if (mode === 'channel') {
 		return <SellForm onBack={() => setMode(null)} wantedId={wantedId} />;
@@ -112,7 +115,7 @@ const SellPage = () => {
 					</p>
 				</div>
 
-				<PromoTop7Banner className="mb-4" onCta={(e) => { e.preventDefault(); setMode('channel'); }} />
+				<PromoTop7Banner className="mb-4" onCta={(e) => { e.preventDefault(); openChannel(); }} />
 				<PromoBanner className="mb-6" />
 
 				{/* Cards */}
@@ -123,7 +126,7 @@ const SellPage = () => {
 						title="Один канал"
 						desc="Розмістіть окреме оголошення для одного Telegram-каналу з фіксованою ціною або аукціоном."
 						cta="Оформити оголошення"
-						onClick={() => setMode('channel')}
+						onClick={() => openChannel()}
 						color="pink"
 					/>
 					<ChoiceCard
@@ -132,7 +135,7 @@ const SellPage = () => {
 						title="Сітка каналів"
 						desc="Об'єднайте кілька каналів в одну пропозицію. Покупець придбає всю сітку одразу."
 						cta="Об'єднати та продати"
-						onClick={() => navigate('/sell-bundle')}
+						onClick={() => { trackFunnel('sell_open'); navigate('/sell-bundle'); }}
 						color="teal"
 					/>
 				</div>

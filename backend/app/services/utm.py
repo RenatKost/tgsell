@@ -58,8 +58,8 @@ def apply(obj, src) -> bool:
     return True
 
 
-FUNNEL_EVENTS = ("login_click", "form_start", "form_submit_attempt", "bot_start", "login_success")
-CLIENT_EVENTS = ("login_click", "form_start", "form_submit_attempt")
+FUNNEL_EVENTS = ("sell_open", "login_click", "form_start", "form_submit_attempt", "bot_start", "login_success")
+CLIENT_EVENTS = ("sell_open", "login_click", "form_start", "form_submit_attempt")
 
 
 def log_event(event: str, d: dict) -> None:

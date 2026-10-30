@@ -343,6 +343,7 @@ const SellForm = ({ onBack, wantedId = null }) => {
 					<form
 						className='bg-card border border-card-border rounded-xl shadow-neon overflow-hidden'
 						onSubmit={onFormSubmit}
+						onFocusCapture={() => { if (!formStarted.current) { formStarted.current = true; trackFunnel('form_start'); } }}
 					>
 						{/* Required Fields Section */}
 						<div className='p-6 pb-0'>

@@ -61,7 +61,7 @@ async def track_utm(body: UtmVisitIn, request: Request, db: AsyncSession = Depen
 
 @router.post("/track/funnel", status_code=status.HTTP_204_NO_CONTENT)
 async def track_funnel(body: UtmEventIn, request: Request, db: AsyncSession = Depends(get_db)):
-    """Client funnel step of a UTM visitor (login_click / form_start / form_submit_attempt)."""
+    """Client funnel step of a UTM visitor (sell_open / login_click / form_start / form_submit_attempt)."""
     d = svc.fields(body)
     if not d or body.event not in svc.CLIENT_EVENTS:
         return None
