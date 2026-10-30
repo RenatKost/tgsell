@@ -205,7 +205,7 @@ async def test_bot_confirm_registers_with_utm_without_return_to_site(orm, monkey
     assert r.status_code == 200
     tok = r.json()["token"]
     assert (await client.post("/api/auth/bot-token")).status_code == 200  # old clients: no body still works
-    for ev in ("form_start", "form_submit_attempt", "login_click", "login_click"):
+    for ev in ("sell_open", "sell_open", "form_start", "form_submit_attempt", "login_click", "login_click"):
         assert (await client.post("/api/track/funnel", json={"anon": "ig-1", "event": ev, **ig})).status_code == 204
     assert (await client.post("/api/track/funnel", json={"anon": "ig-1", "event": "bot_start", **ig})).status_code == 204
     assert (await client.post("/api/track/funnel", json={"anon": "x", "event": "login_click"})).status_code == 204
@@ -233,6 +233,7 @@ async def test_bot_confirm_registers_with_utm_without_return_to_site(orm, monkey
     rows = {i["utm_campaign"]: i for i in (await client.get("/api/admin/utm/campaigns")).json()["items"]}
     p = rows["promo_top_image"]
     assert (p["visits"], p["registrations"]) == (1, 1)
+    assert p["sell_open"] == 1
     assert (p["form_start"], p["form_submit_attempt"], p["login_click"], p["bot_start"], p["login_success"]) == (1, 1, 1, 1, 1)
 
 
