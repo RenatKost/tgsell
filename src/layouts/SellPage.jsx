@@ -1,9 +1,10 @@
 import PromoBanner from '../components/Services/PromoBanner';
 import PromoTop7Banner from '../components/Services/PromoTop7Banner';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import SellForm, { hasPendingSellSubmit } from '../components/SellForm';
-import { trackFunnel } from '../utils/utm';
+import { getUtm, trackFunnel } from '../utils/utm';
+import { wantsDirectSingle } from '../utils/sellEntry';
 import './escrow.css';
 import './premium.css';
 import './public.css';
@@ -91,13 +92,34 @@ const ChoiceCard = ({ imgSrc, imgAlt, title, desc, cta, onClick, color = 'teal' 
 const SellPage = () => {
 	const [params] = useSearchParams();
 	const wantedId = params.get('wanted');
-	const [mode, setMode] = useState(wantedId || hasPendingSellSubmit() ? 'channel' : null);
+	const [search] = useState(() => window.location.search);
+	// IG promo campaigns (current URL or stored first touch) and ?type=single skip the type chooser.
+	const [auto, setAuto] = useState(() => !wantedId && !hasPendingSellSubmit() && wantsDirectSingle(search, getUtm()?.utm_campaign));
+	const [mode, setMode] = useState(wantedId || hasPendingSellSubmit() || auto ? 'channel' : null);
 	const navigate = useNavigate();
+	// Funnel «sell_open» for the auto-opened form: once (trackFunnel dedupes per tab session).
+	useEffect(() => { if (auto) trackFunnel('sell_open', { auto: true }); }, [auto]);
 	// Funnel «sell_open»: the visitor left the type chooser for a form (before any typing).
 	const openChannel = () => { trackFunnel('sell_open'); setMode('channel'); };
 
 	if (mode === 'channel') {
-		return <SellForm onBack={() => setMode(null)} wantedId={wantedId} />;
+		return (
+			<>
+				{auto && (
+					<div className="relative z-20 w-full max-w-2xl mx-auto px-4 text-right" style={{ marginBottom: '-5.5rem', paddingTop: '5.5rem' }}>
+						<button
+							type="button"
+							data-testid="sell-bundle-link"
+							className="text-xs text-gray-400 underline underline-offset-2 hover:text-white"
+							onClick={() => { trackFunnel('sell_open'); navigate('/sell-bundle'); }}
+						>
+							У мене сітка
+						</button>
+					</div>
+				)}
+				<SellForm onBack={() => { setAuto(false); setMode(null); }} wantedId={wantedId} />
+			</>
+		);
 	}
 
 	return (
