@@ -16,15 +16,15 @@ async def _seed(pg_orm):
         db.add(u)
         await db.flush()
         ids = {}
-        for key in ("solo", "in_approved", "in_rejected", "in_pending", "removed"):
+        for key in ("solo", "in_approved", "in_rejected", "in_pending", "in_sold", "removed", "pending"):
             ch = Channel(seller_id=u.id, channel_name=key, telegram_link=f"https://t.me/sm_{key}",
                          category="news", subscribers_count=100, price=10,
-                         status=ChannelStatus.removed if key == "removed" else ChannelStatus.approved)
+                         status={"removed": ChannelStatus.removed, "pending": ChannelStatus.pending}.get(key, ChannelStatus.approved))
             db.add(ch)
             await db.flush()
             ids[key] = ch.id
         for key, st in (("in_approved", BundleStatus.approved), ("in_rejected", BundleStatus.rejected),
-                        ("in_pending", BundleStatus.pending)):
+                        ("in_pending", BundleStatus.pending), ("in_sold", BundleStatus.sold)):
             b = ChannelBundle(seller_id=u.id, name=f"B-{key}", price=100, status=st)
             db.add(b)
             await db.flush()
@@ -54,3 +54,6 @@ async def test_sitemap_excludes_channels_of_unpublished_bundles(pg_orm):
     assert not has(ids["in_rejected"])
     assert not has(ids["in_pending"])
     assert not has(ids["removed"])
+    assert not has(ids["pending"])
+    assert not has(ids["in_sold"])  # sold bundle is no longer an active lot
+    assert r.text.count("/channel/") == 2
