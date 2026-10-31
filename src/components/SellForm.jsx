@@ -5,7 +5,7 @@ import { MAX_PRICE_USDT, MAX_PRICE_HINT, fmtNum } from '../utils/money';
 import { useFormik } from 'formik';
 import { useState, useEffect, useRef } from 'react';
 import * as Yup from 'yup';
-import { channelsAPI, wantedAPI } from '../services/api';
+import { channelsAPI, wantedAPI, servicesAPI } from '../services/api';
 import { useAuth } from '../context/AppContext';
 import { options } from './Main/Calculator';
 import { useNavigate } from 'react-router-dom';
@@ -149,7 +149,32 @@ export const hasPendingSellSubmit = () => {
 	try { return Date.now() - Number(localStorage.getItem(SELL_PENDING_KEY) || 0) < DRAFT_TTL_MS; } catch { return false; }
 };
 
-const inputClass = 'w-full bg-card-inner border border-card-border rounded-lg px-4 py-2.5 text-white placeholder-gray-600 focus:outline-none focus:border-accent/50 text-sm transition-colors';
+const inputClass = 'w-full bg-card-inner border border-card-border rounded-lg px-4 py-2.5 text-white placeholder-gray-600 focus:outline-none focus:border-accent/50 text-base md:text-sm transition-colors';
+
+// Launch offer «Топ 7 днів безкоштовно»: server promo window (PROMO_TOP_UNTIL) capped at 01.11 23:59 Europe/Kyiv.
+const OFFER_UNTIL_MS = Date.parse('2026-11-01T23:59:00+02:00');
+const PromoOffer = () => {
+	const [promo, setPromo] = useState(null);
+	useEffect(() => {
+		if (Date.now() > OFFER_UNTIL_MS) return undefined;
+		let alive = true;
+		servicesAPI.promo().then((r) => { if (alive) setPromo(r.data); }).catch(() => {});
+		return () => { alive = false; };
+	}, []);
+	if (Date.now() > OFFER_UNTIL_MS || !promo?.active) return null;
+	if (promo.ends_at && Date.now() > Date.parse(promo.ends_at)) return null;
+	return (
+		<div data-sell-offer className='relative overflow-hidden mb-4 rounded-2xl border border-amber-300/40 bg-gradient-to-br from-amber-400/15 via-card to-accent/10 px-4 py-3 shadow-lg shadow-amber-500/10'>
+			<div className='flex items-center gap-3'>
+				<span className='text-2xl leading-none' aria-hidden='true'>👑</span>
+				<div className='min-w-0'>
+					<p className='text-base font-extrabold text-white leading-snug'>Топ {promo.days || 7} днів безкоштовно</p>
+					<p className='text-xs text-amber-200/90'>Акція діє до 01.11 23:59 (Київ). Розміщення — безкоштовно.</p>
+				</div>
+			</div>
+		</div>
+	);
+};
 
 const SellForm = ({ onBack, wantedId = null }) => {
 	const [wanted, setWanted] = useState(null);
@@ -161,6 +186,13 @@ const SellForm = ({ onBack, wantedId = null }) => {
 	const [createdChannel, setCreatedChannel] = useState(null);
 	const [showAuth, setShowAuth] = useState(false);
 	const formStarted = useRef(false);
+	// Step 1 = only «Посилання на канал» + «Далі»; a restored draft / pending submit / buyer request opens step 2.
+	const [step, setStep] = useState(() => {
+		const d = readDraft();
+		return (wantedId || hasPendingSellSubmit() || (d && d.telegram_link)) ? 2 : 1;
+	});
+	const markStarted = () => { if (!formStarted.current) { formStarted.current = true; trackFunnel('form_start'); } };
+	const startHandlers = { onFocusCapture: markStarted, onTouchStartCapture: markStarted, onInputCapture: markStarted, onChangeCapture: markStarted };
 
 	const {
 		handleSubmit,
@@ -173,6 +205,8 @@ const SellForm = ({ onBack, wantedId = null }) => {
 		setFieldValue,
 		submitForm,
 		dirty,
+		setFieldTouched,
+		validateField,
 	} = useFormik({
 		initialValues: { ...EMPTY_VALUES, ...(readDraft() || {}) },
 
@@ -275,7 +309,7 @@ const SellForm = ({ onBack, wantedId = null }) => {
 	// Draft autosave + funnel «form_start» on the first edit.
 	useEffect(() => {
 		if (!dirty) return undefined;
-		if (!formStarted.current) { formStarted.current = true; trackFunnel('form_start'); }
+		markStarted();
 		const t = setTimeout(() => saveDraft(values), 400);
 		return () => clearTimeout(t);
 	}, [values, dirty]);
@@ -288,6 +322,20 @@ const SellForm = ({ onBack, wantedId = null }) => {
 		submitForm();
 		// eslint-disable-next-line react-hooks/exhaustive-deps
 	}, [isAuthenticated]);
+
+	const goStep2 = async () => {
+		setFieldTouched('telegram_link', true, false);
+		const err = await validateField('telegram_link');
+		if (err || !String(values.telegram_link || '').trim()) return;
+		const v = values.telegram_link;
+		if (/^(https?:\/\/)?t\.me\/(\+|joinchat\/)/i.test(v) && !values.is_closed) setFieldValue('is_closed', true);
+		trackFunnel('step1_next');
+		saveDraft(values);
+		setStep(2);
+	};
+
+	// After a Telegram login the pending submit needs every field visible (validation errors included).
+	useEffect(() => { if (isAuthenticated && hasPendingSellSubmit()) setStep(2); }, [isAuthenticated]);
 
 	const onFormSubmit = (e) => {
 		trackFunnel('form_submit_attempt');
@@ -324,7 +372,7 @@ const SellForm = ({ onBack, wantedId = null }) => {
 					)}
 
 					{/* Header */}
-					<div className='mb-8'>
+					<div className={step === 1 ? 'mb-4' : 'mb-8'}>
 						<h1 className='text-2xl font-black text-white mb-1'>
 							Продати <span className='text-accent'>канал</span>
 						</h1>
@@ -339,11 +387,46 @@ const SellForm = ({ onBack, wantedId = null }) => {
 						</div>
 					)}
 
+					{step === 1 && <PromoOffer />}
+					{step === 1 && (
+						<form
+							className='bg-card border border-card-border rounded-xl shadow-neon overflow-hidden p-5 sm:p-6'
+							data-sell-step='1'
+							onSubmit={(e) => { e.preventDefault(); goStep2(); }}
+							{...startHandlers}
+						>
+							<InputField label='Посилання на канал' error={errors.telegram_link} touched={touched.telegram_link}>
+								<input
+									className={inputClass}
+									name='telegram_link'
+									value={values.telegram_link}
+									onChange={handleChange}
+									type='text'
+									inputMode='url'
+									autoCapitalize='none'
+									autoCorrect='off'
+									enterKeyHint='next'
+									placeholder='@username або https://t.me/...'
+								/>
+							</InputField>
+							<p className='text-xs text-gray-500 mt-2'>Далі — ціна й тематика. Вхід через Telegram знадобиться лише в кінці.</p>
+							<button
+								type='submit'
+								data-testid='sell-step1-next'
+								className='mt-4 w-full min-h-[52px] bg-accent text-black font-bold rounded-xl shadow-lg shadow-accent/30 hover:brightness-110 transition-all text-base'
+							>
+								Далі →
+							</button>
+						</form>
+					)}
+
 					{/* Form Card */}
+					{step === 2 && (
 					<form
 						className='bg-card border border-card-border rounded-xl shadow-neon overflow-hidden'
 						onSubmit={onFormSubmit}
-						onFocusCapture={() => { if (!formStarted.current) { formStarted.current = true; trackFunnel('form_start'); } }}
+						data-sell-step='2'
+						{...startHandlers}
 					>
 						{/* Required Fields Section */}
 						<div className='p-6 pb-0'>
@@ -719,6 +802,7 @@ const SellForm = ({ onBack, wantedId = null }) => {
 							</div>
 						</div>
 					</form>
+					)}
 				</div>
 			</section>
 

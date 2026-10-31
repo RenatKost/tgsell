@@ -68,7 +68,9 @@ export function trackFunnel(event, extra = {}) {
 		const k = `tgsell_funnel_sent:${event}`;
 		if (sessionStorage.getItem(k)) return;
 		sessionStorage.setItem(k, '1');
-		trackingAPI.funnel({ anon: anonId(), event, ...utm, ...extra }).catch(() => {});
+		const body = { anon: anonId(), event, ...utm };
+		if (extra && Object.keys(extra).length) { body.meta = { ...extra }; if (extra.auto === true) body.auto = true; }
+		Promise.resolve(trackingAPI.funnel(body)).catch(() => {});
 	} catch { /* noop */ }
 }
 
