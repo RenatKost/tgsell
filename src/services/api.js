@@ -467,7 +467,14 @@ export const trackingAPI = {
 	event: (body) => api.post('/track/event', body),
 	heartbeat: (body) => api.post('/track/heartbeat', body),
 	utm: (body) => api.post('/track/utm', body),
-	funnel: (body) => api.post('/track/funnel', body),
+	// keepalive: the funnel beacon survives a tap that navigates away (e.g. «Увійти» → Telegram)
+	funnel: (body) => {
+		try {
+			return fetch(`${API_URL}/track/funnel`, { method: 'POST', keepalive: true, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+		} catch {
+			return api.post('/track/funnel', body);
+		}
+	},
 };
 
 export const userActivityAPI = {

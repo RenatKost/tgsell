@@ -1,7 +1,6 @@
 """UTM tracking: lightweight anonymous visit beacon + admin «Кампанії» report."""
 from __future__ import annotations
 
-from datetime import date
 import hashlib
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
@@ -31,6 +30,8 @@ class UtmVisitIn(BaseModel):
 
 class UtmEventIn(UtmVisitIn):
     event: str = Field(..., max_length=32)
+    auto: bool | None = None  # legacy top-level flag (sell_open auto-open) → meta.auto
+    meta: dict | None = None  # whitelisted + size-capped in svc.clean_meta; unknown keys dropped
 
 
 def _client_key(request: Request) -> str:
@@ -71,15 +72,24 @@ async def track_funnel(body: UtmEventIn, request: Request, db: AsyncSession = De
             (anon and not limiter.per_minute("utm:e:" + anon, PER_ANON_PER_MINUTE)):
         raise HTTPException(status_code=429, detail="Забагато запитів")
     from app.models.utm import UtmEvent
+    meta = svc.clean_meta(body.meta, auto=body.auto)
+    ua = svc.ua_class(request.headers.get("user-agent"))
     svc.log_event(body.event, d)
-    db.add(UtmEvent(anon_hash=anon, event=body.event, created_at=utcnow_naive(), **d))
+    db.add(UtmEvent(anon_hash=anon, event=body.event, meta=meta, ua_class=ua, created_at=utcnow_naive(), **d))
     await db.commit()
     return None
 
 
 @router.get("/admin/utm/campaigns")
-async def admin_campaigns(date_from: date | None = Query(None), date_to: date | None = Query(None),
+async def admin_campaigns(date_from: str | None = Query(None, max_length=40), date_to: str | None = Query(None, max_length=40),
                           admin: User = Depends(get_superadmin_user), db: AsyncSession = Depends(get_db)):
-    if date_from and date_to and date_from > date_to:
+    """date_from/date_to: a date (YYYY-MM-DD, whole day, as before) or an exact ISO datetime
+    (with offset/Z → converted to UTC; naive → treated as UTC)."""
+    try:
+        start = svc.parse_bound(date_from, end=False)
+        end = svc.parse_bound(date_to, end=True)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Невірний формат дати")
+    if start and end and start >= end:
         raise HTTPException(status_code=400, detail="Невірний діапазон дат")
-    return await svc.report(db, date_from, date_to)
+    return await svc.report(db, start, end)

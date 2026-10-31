@@ -6,7 +6,7 @@ from __future__ import annotations
 
 import logging
 import re
-from datetime import date, datetime, timedelta
+from datetime import date, datetime, timedelta, timezone
 
 from sqlalchemy import and_, func, or_, select
 
@@ -58,8 +58,8 @@ def apply(obj, src) -> bool:
     return True
 
 
-FUNNEL_EVENTS = ("sell_open", "login_click", "form_start", "form_submit_attempt", "bot_start", "login_success")
-CLIENT_EVENTS = ("sell_open", "login_click", "form_start", "form_submit_attempt")
+FUNNEL_EVENTS = ("sell_open", "step1_next", "login_click", "form_start", "form_submit_attempt", "bot_start", "login_success")
+CLIENT_EVENTS = ("sell_open", "step1_next", "login_click", "form_start", "form_submit_attempt")
 
 
 def log_event(event: str, d: dict) -> None:
@@ -86,6 +86,38 @@ async def record_event_detached(event: str, anon_hash: str | None, src) -> bool:
         return False
 
 
+UA_CLASSES = ("ig_inapp", "fb_inapp", "tg_inapp", "mobile", "desktop", "bot")
+META_BOOL_KEYS = ("auto",)  # whitelist; everything else is dropped
+META_MAX_KEYS = 8
+
+
+def clean_meta(meta, auto: bool | None = None) -> dict | None:
+    """Whitelisted, size-bounded event meta (only bool flags today). None when empty."""
+    out: dict = {}
+    if isinstance(meta, dict) and len(meta) <= 32:
+        for k in META_BOOL_KEYS:
+            if isinstance(meta.get(k), bool):
+                out[k] = meta[k]
+    if isinstance(auto, bool):
+        out["auto"] = auto
+    return dict(list(out.items())[:META_MAX_KEYS]) or None
+
+
+def parse_bound(v: str | None, end: bool) -> datetime | None:
+    """'YYYY-MM-DD' → start of that day (end: start of next day, i.e. whole day inclusive);
+    ISO datetime → exact moment (aware → UTC naive; naive → UTC). Raises ValueError."""
+    v = (v or "").strip()
+    if not v:
+        return None
+    if len(v) == 10:
+        d = date.fromisoformat(v)
+        return datetime.combine(d + timedelta(days=1) if end else d, datetime.min.time())
+    dt = datetime.fromisoformat(v.replace("Z", "+00:00").replace(" ", "+", 1) if v.count(" ") == 1 and "T" in v else v.replace("Z", "+00:00"))
+    if dt.tzinfo is not None:
+        dt = dt.astimezone(timezone.utc).replace(tzinfo=None)
+    return dt
+
+
 def log_visit(d: dict, path: str | None, ua: str) -> None:
     logger.info(f"[utm] visit source={d.get('utm_source') or '-'} campaign={d.get('utm_campaign') or '-'} "
                 f"content={d.get('utm_content') or '-'} path={path or '-'} ua={ua}")
@@ -106,7 +138,11 @@ def _win(col, start, end):
     return and_(*conds) if conds else True
 
 
-async def report(db, date_from: date | None = None, date_to: date | None = None) -> dict:
+def _iso(x):
+    return x.isoformat() if x else None
+
+
+async def report(db, date_from: date | datetime | None = None, date_to: date | datetime | None = None) -> dict:
     """Per (source, campaign, content): visits, unique visitors, registrations, lots submitted/approved.
     Lots = single channels (not part of a bundle) + bundles; date filter applies to each row's created_at."""
     from app.models.bundle import BundleChannel, BundleStatus, ChannelBundle
@@ -114,13 +150,24 @@ async def report(db, date_from: date | None = None, date_to: date | None = None)
     from app.models.user import User
     from app.models.utm import UtmEvent, UtmVisit
 
-    start, end = _range(date_from, date_to)
+    if isinstance(date_from, datetime) or isinstance(date_to, datetime):
+        start, end = date_from, date_to  # exact bounds (end exclusive), already UTC naive
+        if isinstance(start, date) and not isinstance(start, datetime):
+            start = _range(start, None)[0]
+        if isinstance(end, date) and not isinstance(end, datetime):
+            end = _range(None, end)[1]
+    else:
+        start, end = _range(date_from, date_to)
     rows: dict[tuple, dict] = {}
 
     def row(k):
         return rows.setdefault(tuple(x or "" for x in k), {
             "visits": 0, "visitors": 0, "registrations": 0, "lots_submitted": 0, "lots_approved": 0,
+            "sell_open_auto": 0, "sell_open_manual": 0, "by_ua": {},
             **{e: 0 for e in FUNNEL_EVENTS}})
+
+    def ua_row(r, ua):
+        return r["by_ua"].setdefault(ua or "unknown", {"visits": 0, "visitors": 0, **{e: 0 for e in FUNNEL_EVENTS}})
 
     def key(m):
         return (m.utm_source, m.utm_campaign, m.utm_content)
@@ -133,6 +180,14 @@ async def report(db, date_from: date | None = None, date_to: date | None = None)
     for s, c, ct, n, u in (await db.execute(q)).all():
         r = row((s, c, ct)); r["visits"] += n; r["visitors"] += u
 
+    # visits by ua_class (bots included here so the share is visible; excluded from the totals above)
+    q = (select(UtmVisit.utm_source, UtmVisit.utm_campaign, UtmVisit.utm_content, UtmVisit.ua_class,
+                func.count(UtmVisit.id), func.count(func.distinct(UtmVisit.anon_hash)))
+         .where(_win(UtmVisit.created_at, start, end))
+         .group_by(UtmVisit.utm_source, UtmVisit.utm_campaign, UtmVisit.utm_content, UtmVisit.ua_class))
+    for s, c, ct, ua, n, u in (await db.execute(q)).all():
+        x = ua_row(row((s, c, ct)), ua); x["visits"] += n; x["visitors"] += u
+
     # funnel steps: unique visitors per step (events without an anon id count individually)
     uniq = func.count(func.distinct(UtmEvent.anon_hash)) + func.count(UtmEvent.id).filter(UtmEvent.anon_hash.is_(None))
     q = (select(UtmEvent.utm_source, UtmEvent.utm_campaign, UtmEvent.utm_content, UtmEvent.event, uniq)
@@ -140,6 +195,24 @@ async def report(db, date_from: date | None = None, date_to: date | None = None)
          .group_by(UtmEvent.utm_source, UtmEvent.utm_campaign, UtmEvent.utm_content, UtmEvent.event))
     for s, c, ct, ev, n in (await db.execute(q)).all():
         row((s, c, ct))[ev] += n
+
+    q = (select(UtmEvent.utm_source, UtmEvent.utm_campaign, UtmEvent.utm_content, UtmEvent.ua_class, UtmEvent.event, uniq)
+         .where(_win(UtmEvent.created_at, start, end), UtmEvent.event.in_(FUNNEL_EVENTS))
+         .group_by(UtmEvent.utm_source, UtmEvent.utm_campaign, UtmEvent.utm_content, UtmEvent.ua_class, UtmEvent.event))
+    for s, c, ct, ua, ev, n in (await db.execute(q)).all():
+        ua_row(row((s, c, ct)), ua)[ev] += n
+
+    # sell_open split: auto-opened form (meta.auto=true) vs manual (unique visitors each)
+    q = (select(UtmEvent.utm_source, UtmEvent.utm_campaign, UtmEvent.utm_content, UtmEvent.anon_hash, UtmEvent.meta)
+         .where(_win(UtmEvent.created_at, start, end), UtmEvent.event == "sell_open"))
+    seen: set = set()
+    for i, (s, c, ct, a, m) in enumerate((await db.execute(q)).all()):
+        kind = "sell_open_auto" if isinstance(m, dict) and m.get("auto") is True else "sell_open_manual"
+        k = (s, c, ct, kind, a if a is not None else ("#", i))
+        if k in seen:
+            continue
+        seen.add(k)
+        row((s, c, ct))[kind] += 1
 
     has_utm = lambda m: or_(m.utm_source.isnot(None), m.utm_campaign.isnot(None))  # noqa: E731
     q = (select(User.utm_source, User.utm_campaign, User.utm_content, func.count(User.id))
@@ -168,7 +241,15 @@ async def report(db, date_from: date | None = None, date_to: date | None = None)
 
     items = [{"utm_source": k[0], "utm_campaign": k[1], "utm_content": k[2], **v} for k, v in rows.items()]
     items.sort(key=lambda x: (-x["visits"], -x["registrations"], x["utm_campaign"], x["utm_source"]))
-    totals = {f: sum(i[f] for i in items) for f in ("visits", "visitors", "registrations", "lots_submitted", "lots_approved", *FUNNEL_EVENTS)}
-    return {"items": items, "totals": totals, "funnel_events": list(FUNNEL_EVENTS),
-            "date_from": date_from.isoformat() if date_from else None,
-            "date_to": date_to.isoformat() if date_to else None}
+    nums = ("visits", "visitors", "registrations", "lots_submitted", "lots_approved",
+            "sell_open_auto", "sell_open_manual", *FUNNEL_EVENTS)
+    totals = {f: sum(i[f] for i in items) for f in nums}
+    by_ua: dict = {}
+    for i in items:
+        for ua, v in i["by_ua"].items():
+            t = by_ua.setdefault(ua, {k: 0 for k in v})
+            for k, n in v.items():
+                t[k] += n
+    totals["by_ua"] = by_ua
+    return {"items": items, "totals": totals, "funnel_events": list(FUNNEL_EVENTS), "ua_classes": list(UA_CLASSES),
+            "date_from": _iso(date_from), "date_to": _iso(date_to)}

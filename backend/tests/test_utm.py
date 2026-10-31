@@ -254,3 +254,67 @@ async def test_bot_check_uses_token_utm_when_site_storage_lost(orm, monkeypatch)
     async with orm.session() as db:
         u = (await db.execute(select(User).where(User.telegram_id == 8202))).scalar_one()
     assert u.utm_campaign == "promo_top_image"
+
+
+def test_clean_meta_whitelist_and_parse_bound():
+    from datetime import datetime
+
+    from app.services import utm
+    assert utm.clean_meta({"auto": True, "evil": "x" * 9999, "nested": {"a": 1}}) == {"auto": True}
+    assert utm.clean_meta({"auto": "yes"}) is None and utm.clean_meta(None) is None
+    assert utm.clean_meta(None, auto=True) == {"auto": True}
+    assert utm.clean_meta({str(i): 1 for i in range(100)}) is None  # oversized → dropped
+    assert utm.parse_bound("2026-10-30", end=False) == datetime(2026, 10, 30)
+    assert utm.parse_bound("2026-10-30", end=True) == datetime(2026, 10, 31)  # whole day, back-compat
+    assert utm.parse_bound("2026-10-30T12:30:00+02:00", end=False) == datetime(2026, 10, 30, 10, 30)
+    assert utm.parse_bound("2026-10-30T10:30:00Z", end=True) == datetime(2026, 10, 30, 10, 30)
+    assert utm.parse_bound(None, end=True) is None
+    with pytest.raises(ValueError):
+        utm.parse_bound("nope", end=False)
+
+
+@pytest.mark.asyncio
+async def test_funnel_meta_ua_class_and_report_breakdown(orm, monkeypatch):
+    from datetime import datetime
+
+    from sqlalchemy import select
+
+    from app.models.user import User, UserRole
+    from app.models.utm import UtmEvent
+    client, cur = await _app(orm, monkeypatch)
+    ig = {"utm_source": "ig", "utm_campaign": "meta_c"}
+    desk = {"user-agent": "Mozilla/5.0 (Windows NT 10.0)"}
+    await client.post("/api/track/utm", json={"anon": "a1", "path": "/sell", **ig}, headers={"user-agent": IG_UA})
+    await client.post("/api/track/utm", json={"anon": "a2", "path": "/sell", **ig}, headers=desk)
+    # legacy top-level auto flag (what the current frontend sends) and the meta object both land in meta
+    assert (await client.post("/api/track/funnel", json={"anon": "a1", "event": "sell_open", "auto": True, **ig},
+                              headers={"user-agent": IG_UA})).status_code == 204
+    assert (await client.post("/api/track/funnel", json={"anon": "a3", "event": "sell_open", "meta": {"auto": True, "x": "y"}, **ig},
+                              headers={"user-agent": IG_UA})).status_code == 204
+    assert (await client.post("/api/track/funnel", json={"anon": "a2", "event": "sell_open", **ig}, headers=desk)).status_code == 204
+    assert (await client.post("/api/track/funnel", json={"anon": "a2", "event": "form_start", **ig}, headers=desk)).status_code == 204
+    async with orm.session() as db:
+        evs = {(e.anon_hash is not None, e.event, e.ua_class, str(e.meta)) for e in (await db.execute(select(UtmEvent))).scalars()}
+        assert (True, "sell_open", "ig_inapp", "{'auto': True}") in evs
+        assert (True, "sell_open", "desktop", "None") in evs
+        adm = User(first_name="A", telegram_id=8998, role=UserRole.admin)
+        db.add(adm)
+        await db.commit()
+    cur.user = adm
+    r = await client.get("/api/admin/utm/campaigns")
+    assert r.status_code == 200, r.text
+    p = {i["utm_campaign"]: i for i in r.json()["items"]}["meta_c"]
+    assert (p["sell_open"], p["sell_open_auto"], p["sell_open_manual"]) == (3, 2, 1)
+    assert p["by_ua"]["ig_inapp"]["visits"] == 1 and p["by_ua"]["ig_inapp"]["sell_open"] == 2
+    assert p["by_ua"]["desktop"]["form_start"] == 1
+    assert r.json()["totals"]["sell_open_auto"] == 2 and "ig_inapp" in r.json()["totals"]["by_ua"]
+    # exact datetime bounds (with tz), plus date-only back-compat and validation
+    now = datetime.utcnow()
+    r = await client.get("/api/admin/utm/campaigns", params={"date_from": (now + timedelta(minutes=5)).isoformat() + "Z"})
+    assert r.json()["items"] == []
+    r = await client.get("/api/admin/utm/campaigns", params={"date_from": (now - timedelta(minutes=5)).isoformat() + "Z",
+                                                              "date_to": (now + timedelta(minutes=5)).isoformat() + "+00:00"})
+    assert {i["utm_campaign"] for i in r.json()["items"]} == {"meta_c"}
+    r = await client.get("/api/admin/utm/campaigns", params={"date_from": date.today().isoformat(), "date_to": date.today().isoformat()})
+    assert r.json()["totals"]["visits"] == 2
+    assert (await client.get("/api/admin/utm/campaigns", params={"date_from": "bad"})).status_code == 400

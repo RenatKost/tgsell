@@ -1,7 +1,8 @@
 """UTM campaign tracking (migration 0057): anonymous landing visits with utm_* (no PII)."""
 from datetime import datetime
 
-from sqlalchemy import DateTime, Integer, String
+from sqlalchemy import JSON, DateTime, Integer, String
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.database import Base
@@ -31,4 +32,6 @@ class UtmEvent(Base):
     utm_source: Mapped[str | None] = mapped_column(String(64), nullable=True)
     utm_campaign: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)
     utm_content: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    meta: Mapped[dict | None] = mapped_column(JSON().with_variant(JSONB(), "postgresql"), nullable=True)  # 0059: whitelisted keys only
+    ua_class: Mapped[str | None] = mapped_column(String(16), nullable=True)  # 0059: same classes as utm_visits
     created_at: Mapped[datetime] = mapped_column(DateTime, index=True)
