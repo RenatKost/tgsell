@@ -93,7 +93,9 @@ async def sitemap_xml(db: AsyncSession = Depends(get_db)):
             .where(not_blocked_seller(Channel.seller_id))  # blocked seller's lot → 404, keep out of sitemap
             # A lot that belongs to an unpublished bundle (rejected/pending/removed) is not public
             # content even if the channel row itself is still `approved` — keep it out of the sitemap.
-            .where(~Channel.id.in_(non_public_bundle_channel_ids()))
+            # Only standalone active lots (same rule as the public catalog): bundle members are sold as
+            # part of the bundle lot, so their channel pages are not separate lots.
+            .where(~Channel.id.in_(select(BundleChannel.channel_id).scalar_subquery()))
             .order_by(Channel.id.desc())
             .limit(MAX_CHANNEL_URLS)
         )

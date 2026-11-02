@@ -50,10 +50,27 @@ async def test_sitemap_excludes_channels_of_unpublished_bundles(pg_orm):
         return f"<loc>https://tgsell.me/channel/{cid}</loc>" in r.text
 
     assert has(ids["solo"])
-    assert has(ids["in_approved"])  # channels of a published bundle stay (their pages are public)
+    assert not has(ids["in_approved"])  # bundle members are part of the bundle lot, not standalone lots
     assert not has(ids["in_rejected"])
     assert not has(ids["in_pending"])
     assert not has(ids["removed"])
     assert not has(ids["pending"])
     assert not has(ids["in_sold"])  # sold bundle is no longer an active lot
-    assert r.text.count("/channel/") == 2
+    assert r.text.count("/channel/") == 1
+
+
+@pytest.mark.asyncio
+async def test_sitemap_matches_public_catalog_count(pg_orm):
+    """Sitemap channel URLs == standalone active lots (approved, not in any bundle)."""
+    from fastapi import FastAPI
+    db_mod = importlib.import_module("app.database")
+    seo = importlib.import_module("app.routers.seo")
+    ids = await _seed(pg_orm)
+    app = FastAPI()
+    app.include_router(seo.router)
+    app.dependency_overrides[db_mod.get_db] = pg_orm.get_db
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://t") as cl:
+        r = await cl.get("/sitemap.xml")
+    assert f"/channel/{ids['solo']}<" in r.text
+    for k in ("in_approved", "in_rejected", "in_pending", "in_sold", "removed", "pending"):
+        assert f"/channel/{ids[k]}<" not in r.text

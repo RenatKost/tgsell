@@ -125,6 +125,7 @@ class ChannelResponse(BaseModel):
     # Paid services (migration 0051)
     is_top: bool = False
     top_source: str | None = None
+    top_until: datetime | None = None  # end of the current Top (badge disappears after it)
     tgsell_verified: bool = False
 
     @model_validator(mode="after")

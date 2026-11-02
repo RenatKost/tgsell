@@ -46,7 +46,7 @@ const CabinetCard = ({ channel, onDelete }) => {
 							<Badge tone={status.tone}>{status.text}</Badge>
 							{(channel.listing_type === 'auction' || channel.listing_type === 'both') && <Badge tone='orange' dot={false}>🔥 Аукціон</Badge>}
 							{channel.is_closed && <Badge tone='gray' dot={false}>🔒 Закритий</Badge>}
-							{channel.is_top && <Badge tone='orange' dot={false}>🚀 Топ</Badge>}
+							{channel.is_top && <Badge tone='orange' dot={false}>🚀 Топ{channel.top_until ? ` до ${new Date(channel.top_until + (String(channel.top_until).endsWith('Z') ? '' : 'Z')).toLocaleDateString('uk-UA', { day: '2-digit', month: '2-digit' })}` : ''}</Badge>}
 							{channel.tgsell_verified && <Badge tone='green' dot={false}>✅ Перевірено TgSell</Badge>}
 						</div>
 						<div className='flex flex-wrap items-center gap-x-3 gap-y-1 mt-2 text-sm text-gray-500 dark:text-gray-400'>
