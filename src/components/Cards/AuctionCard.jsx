@@ -1,3 +1,4 @@
+import { parseUtc } from '../../utils/datetime';
 import { fmtNum } from '../../utils/money';
 import { useState, useEffect, useRef } from 'react';
 import { motion } from 'framer-motion';
@@ -23,9 +24,9 @@ const AuctionCard = ({ auction, onBid }) => {
 	/* Countdown + progress */
 	useEffect(() => {
 		const update = () => {
-			const end   = new Date(auction.ends_at).getTime();
+			const end   = parseUtc(auction.ends_at).getTime();
 			const start = auction.starts_at
-				? new Date(auction.starts_at).getTime()
+				? parseUtc(auction.starts_at).getTime()
 				: end - 7 * 86_400_000;
 			const now  = Date.now();
 			const diff = end - now;

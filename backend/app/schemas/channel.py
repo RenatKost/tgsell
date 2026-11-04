@@ -3,6 +3,7 @@ from datetime import datetime
 from pydantic import BaseModel, Field, field_validator, model_validator
 
 from app.utils.limits import check_max_price
+from app.utils.timeutil import UTCDateTime
 
 
 class ChannelCreate(BaseModel):
@@ -101,7 +102,7 @@ class ChannelResponse(BaseModel):
     # Active auction data (populated at runtime if available)
     active_auction_id: int | None = None
     active_auction_price: float | None = None
-    active_auction_ends_at: datetime | None = None
+    active_auction_ends_at: UTCDateTime | None = None
     # Bundle info (populated at runtime if channel is part of a bundle)
     bundle_id: int | None = None
     bundle_name: str | None = None
@@ -125,7 +126,7 @@ class ChannelResponse(BaseModel):
     # Paid services (migration 0051)
     is_top: bool = False
     top_source: str | None = None
-    top_until: datetime | None = None  # end of the current Top (badge disappears after it)
+    top_until: UTCDateTime | None = None  # end of the current Top (badge disappears after it)
     tgsell_verified: bool = False
 
     @model_validator(mode="after")
