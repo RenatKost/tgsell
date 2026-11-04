@@ -4,6 +4,7 @@ import math
 from datetime import timedelta
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi.responses import JSONResponse
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -198,7 +199,18 @@ async def get_channel(channel_id: int, db: AsyncSession = Depends(get_db),
     """Get channel details by ID. Includes active auction data if present.
     Unpublished lots: 404 for everyone except the owner and staff (task 33)."""
     from app.models.auction import Auction, AuctionStatus
-    channel = await visible_channel_or_404(db, channel_id, viewer)
+    try:
+        channel = await visible_channel_or_404(db, channel_id, viewer)
+    except HTTPException as exc:
+        # Relisted lot: old unpublished page points to the new active lot (still a 404 for SEO)
+        if exc.status_code == 404:
+            from app.services.listing_visibility import find_replacement_channel
+            old = (await db.execute(select(Channel).where(Channel.id == channel_id))).scalar_one_or_none()
+            new_id = await find_replacement_channel(db, old) if old is not None else None
+            if new_id:
+                return JSONResponse(status_code=404,
+                                    content={"detail": "Channel not found", "replaced_by": new_id})
+        raise
     data = ChannelResponse.model_validate(channel)
     # Attach active auction info if channel is on auction
     if channel.listing_type in ("auction", "both"):

@@ -44,10 +44,12 @@ const ChannelDetailsPage = () => {
 	const [healthLoading, setHealthLoading] = useState(true);
 	const [loading, setLoading] = useState(true);
 	const [notFound, setNotFound] = useState(false);
+	const [replacedBy, setReplacedBy] = useState(null);
 
 	useEffect(() => {
 		const fetchData = async () => {
 			setNotFound(false);
+			setReplacedBy(null);
 			try {
 				const [channelRes, statsRes] = await Promise.all([
 					channelsAPI.getById(id),
@@ -59,6 +61,8 @@ const ChannelDetailsPage = () => {
 				console.error('Failed to load channel:', err);
 				// Missing / unpublished lot (or invalid id) → show the 404 page instead of redirecting
 				const st = err?.response?.status;
+				const rep = Number(err?.response?.data?.replaced_by);
+				if (st === 404 && rep > 0) { setReplacedBy(rep); return; }
 				if (st === 404 || st === 422 || !(Number(id) > 0)) setNotFound(true);
 				else navigate('/catalog');
 			} finally {
@@ -67,6 +71,13 @@ const ChannelDetailsPage = () => {
 		};
 		fetchData();
 	}, [id, navigate]);
+
+	// Relisted lot: notice + auto-redirect to the new active lot
+	useEffect(() => {
+		if (!replacedBy) return;
+		const t = setTimeout(() => navigate(`/channel/${replacedBy}`, { replace: true }), 3000);
+		return () => clearTimeout(t);
+	}, [replacedBy, navigate]);
 
 	useEffect(() => {
 		if (!channel) return;
@@ -108,6 +119,19 @@ const ChannelDetailsPage = () => {
 		);
 	}
 
+	if (replacedBy) {
+		return (
+			<section className='pt-28 pb-16 px-4 flex justify-center'>
+				<div className='max-w-md w-full text-center rounded-2xl border border-gray-200 dark:border-card-border p-6' role='status'>
+					<h1 className='text-xl font-semibold mb-2'>Лот оновлено</h1>
+					<p className='text-sm opacity-80 mb-4'>Продавець переопублікував цей канал як новий лот. Зараз перенаправимо вас на актуальне оголошення…</p>
+					<NavLink to={`/channel/${replacedBy}`} replace className='inline-block rounded-xl bg-accent text-white px-4 py-2 text-sm font-medium'>
+						Перейти до лоту #{replacedBy}
+					</NavLink>
+				</div>
+			</section>
+		);
+	}
 	if (notFound) return <NotFoundPage />;
 	if (!channel) return null;
 

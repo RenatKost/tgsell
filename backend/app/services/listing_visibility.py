@@ -66,3 +66,45 @@ def ensure_bundle_visible(bundle, viewer) -> None:
     if bundle_is_public(bundle) or can_view_unpublished(viewer, bundle.seller_id):
         return
     raise HTTPException(status_code=404, detail="Bundle not found")
+
+
+def _norm_link(link) -> str | None:
+    """Normalize a Telegram link/username: t.me/Foo, https://t.me/foo/, @foo -> 'foo'."""
+    if not link:
+        return None
+    s = str(link).strip().lower()
+    for p in ("https://", "http://", "www."):
+        if s.startswith(p):
+            s = s[len(p):]
+    for p in ("t.me/", "telegram.me/", "@"):
+        if s.startswith(p):
+            s = s[len(p):]
+    s = s.split("?")[0].strip("/")
+    return s or None
+
+
+def _norm_name(name) -> str | None:
+    s = " ".join(str(name or "").lower().split())
+    return s or None
+
+
+async def find_replacement_channel(db: AsyncSession, old: Channel) -> int | None:
+    """Relisted lot: newest public (approved) lot of the SAME seller for the same Telegram
+    channel (same normalized link/username, or same channel title), created after `old`.
+    Only for unpublished old lots; returns None otherwise."""
+    if old is None or channel_is_public(old):
+        return None
+    from app.services.moderation import not_blocked_seller
+    rows = (await db.execute(
+        select(Channel.id, Channel.telegram_link, Channel.channel_name)
+        .where(Channel.seller_id == old.seller_id)
+        .where(Channel.id > old.id)
+        .where(Channel.status == ChannelStatus.approved)
+        .where(not_blocked_seller(Channel.seller_id))
+        .order_by(Channel.id.desc())
+    )).all()
+    link, name = _norm_link(old.telegram_link), _norm_name(old.channel_name)
+    for cid, l2, n2 in rows:
+        if (link and _norm_link(l2) == link) or (name and _norm_name(n2) == name):
+            return cid
+    return None
