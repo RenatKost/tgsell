@@ -1,8 +1,7 @@
-from datetime import datetime
-
 from pydantic import BaseModel, field_validator, model_validator
 
 from app.utils.limits import check_max_price
+from app.utils.timeutil import UTCDateTime
 
 
 class AuctionBidCreate(BaseModel):
@@ -20,7 +19,7 @@ class AuctionBidResponse(BaseModel):
     bidder_id: int
     bidder_name: str | None = None
     amount: float
-    created_at: datetime
+    created_at: UTCDateTime
 
     model_config = {"from_attributes": True}
 
@@ -34,11 +33,11 @@ class AuctionResponse(BaseModel):
     current_price: float
     buyout_price: float | None
     status: str
-    starts_at: datetime
-    ends_at: datetime
+    starts_at: UTCDateTime
+    ends_at: UTCDateTime
     winner_id: int | None
     bid_count: int
-    created_at: datetime
+    created_at: UTCDateTime
 
     # Joined channel info
     channel_name: str | None = None

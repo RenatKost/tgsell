@@ -1,3 +1,4 @@
+import { parseUtc } from '../../utils/datetime';
 import { fmtNum } from '../../utils/money';
 import { faHeart } from '@fortawesome/free-solid-svg-icons';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
@@ -284,7 +285,7 @@ const DetailsCard = ({ channel, onBuy, onAuction, stats = [] }) => {
 						{channel.active_auction_ends_at && (
 							<span className='text-[10px] text-amber-500 font-semibold bg-amber-500/10 px-2 py-1 rounded-lg'>
 								{(() => {
-									const diff = new Date(channel.active_auction_ends_at) - new Date();
+									const diff = parseUtc(channel.active_auction_ends_at) - new Date();
 									if (diff <= 0) return 'Завершено';
 									const h = Math.floor(diff / 3600000);
 									const m = Math.floor((diff % 3600000) / 60000);

@@ -2,6 +2,7 @@ import asyncio
 import logging
 from datetime import datetime, timedelta, timezone
 import os
+from app.utils.timeutil import to_utc_iso
 
 from fastapi import APIRouter, Body, Depends, HTTPException, Query, Response, status
 from pydantic import BaseModel, Field
@@ -1174,11 +1175,11 @@ async def admin_list_auctions(
             "bid_step": a.bid_step,
             "bid_count": bid_count_real,
             "status": a.status,
-            "starts_at": a.starts_at.isoformat() if a.starts_at else None,
-            "ends_at": a.ends_at.isoformat() if a.ends_at else None,
+            "starts_at": to_utc_iso(a.starts_at),
+            "ends_at": to_utc_iso(a.ends_at),
             "winner_id": a.winner_id,
             "winner_name": a.winner.first_name if a.winner else None,
-            "created_at": a.created_at.isoformat() if a.created_at else None,
+            "created_at": to_utc_iso(a.created_at),
         })
     return {"items": items, "total": len(items)}
 
@@ -1219,7 +1220,7 @@ async def admin_extend_auction(
 
     auction.ends_at = auction.ends_at + timedelta(hours=hours)
     await db.commit()
-    return {"ok": True, "auction_id": auction_id, "new_ends_at": auction.ends_at.isoformat()}
+    return {"ok": True, "auction_id": auction_id, "new_ends_at": to_utc_iso(auction.ends_at)}
 
 
 @router.put("/auctions/{auction_id}")

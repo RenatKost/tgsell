@@ -1,3 +1,4 @@
+import { parseUtc } from '../utils/datetime';
 import { fmtUsdt, fmtNum, MAX_PRICE_USDT, MAX_PRICE_HINT } from '../utils/money';
 import { useCallback, useEffect, useState } from 'react';
 import { NavLink, useNavigate } from 'react-router-dom';
@@ -403,7 +404,7 @@ const CabinetPage = () => {
 						<div className='grid gap-4'>
 							{myAuctions.map(auction => {
 								const isActive = auction.status === 'active';
-								const endDate = auction.ends_at ? new Date(auction.ends_at) : null;
+								const endDate = auction.ends_at ? parseUtc(auction.ends_at) : null;
 								const timeRemaining = endDate ? Math.max(0, endDate - Date.now()) : 0;
 								const hoursLeft = Math.floor(timeRemaining / 3600000);
 								const minsLeft = Math.floor((timeRemaining % 3600000) / 60000);
