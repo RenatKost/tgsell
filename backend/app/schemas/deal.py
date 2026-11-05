@@ -2,6 +2,8 @@ from datetime import datetime
 
 from pydantic import BaseModel, field_serializer, model_validator
 
+from app.utils.timeutil import UTCDateTime
+
 
 class DealCreate(BaseModel):
     channel_id: int | None = None
@@ -41,7 +43,7 @@ class DealResponse(BaseModel):
     overpay_units: int | None = None
     overpay_refund_address: str | None = None
     overpay_status: str | None = None
-    created_at: datetime
+    created_at: UTCDateTime
     paid_at: datetime | None
     completed_at: datetime | None
 
@@ -90,7 +92,7 @@ class DealMessageResponse(BaseModel):
     sender_name: str | None = None
     text: str
     is_system: bool = False
-    created_at: datetime
+    created_at: UTCDateTime
 
     model_config = {"from_attributes": True}
 

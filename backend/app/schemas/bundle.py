@@ -1,6 +1,8 @@
 from datetime import datetime
 from pydantic import BaseModel, Field, field_validator, model_validator
 
+from app.utils.timeutil import UTCDateTime
+
 
 from app.utils.limits import check_max_price
 
@@ -125,7 +127,7 @@ class BundleResponse(BaseModel):
     resources: str | None = None
     status: str
     rejection_reason: str | None = None
-    created_at: datetime
+    created_at: UTCDateTime
     moderated_at: datetime | None = None
     channels: list[BundleChannelInfo] = []
     channel_count: int = 0

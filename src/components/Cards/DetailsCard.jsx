@@ -266,7 +266,7 @@ const DetailsCard = ({ channel, onBuy, onAuction, stats = [] }) => {
 						</div>
 						{channel.created_at && (
 							<p className='text-gray-300 text-[10px]'>
-								Розміщено {new Date(channel.created_at).toLocaleDateString('uk-UA')}
+								Розміщено {parseUtc(channel.created_at).toLocaleDateString('uk-UA')}
 							</p>
 						)}
 					</div>

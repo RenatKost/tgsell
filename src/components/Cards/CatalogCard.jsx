@@ -9,6 +9,7 @@ import { PriceVerdictBadge } from '../Pricing/PriceVerdict';
 import { QualityBadge } from '../Quality/QualityBadge';
 import { formatEr, reliableEr } from '../../utils/er';
 import BalanceBadges from '../Balance/BalanceBadges';
+import { parseUtc } from '../../utils/datetime';
 
 /* ── Tooltip ─────────────────────────────────────────────────────── */
 const Tooltip = ({ children, text, desc }) => {
@@ -294,7 +295,7 @@ const CatalogCard = ({ channel }) => {
 					</div>
 					{channel.created_at && (
 						<p className='text-gray-300 dark:text-gray-600 text-[10px]'>
-							{new Date(channel.created_at).toLocaleDateString('uk-UA')}
+							{parseUtc(channel.created_at).toLocaleDateString('uk-UA')}
 						</p>
 					)}
 				</div>

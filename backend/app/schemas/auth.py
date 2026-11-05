@@ -2,6 +2,8 @@ from datetime import datetime
 
 from pydantic import BaseModel, model_validator
 
+from app.utils.timeutil import UTCDateTime
+
 
 class TelegramAuthData(BaseModel):
     id: int
@@ -34,7 +36,7 @@ class UserResponse(BaseModel):
     avatar_url: str | None
     role: str
     usdt_wallet: str | None
-    created_at: datetime
+    created_at: UTCDateTime
     is_blocked: bool = False
     alert_bot_started: bool = False
 
@@ -55,7 +57,7 @@ class PublicUserProfile(BaseModel):
     username: str | None = None
     first_name: str
     avatar_url: str | None = None
-    created_at: datetime
+    created_at: UTCDateTime
     is_blocked: bool = False
     # Reputation-style public counters (there is no reviews table yet).
     channels_listed: int = 0
