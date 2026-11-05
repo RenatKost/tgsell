@@ -104,3 +104,70 @@ async def test_cannot_delete_sold(orm):
         await db.commit()
     r = await client.delete("/api/channels/201")
     assert r.status_code == 400
+
+
+@pytest.mark.asyncio
+async def test_seller_delete_blocked_by_active_deal(orm):
+    from datetime import timedelta
+
+    from app.models.channel import Channel, ChannelStatus
+    from app.models.deal import Deal, DealStatus
+
+    client, state, ids, seller, other = await _client(orm)
+    async with orm.session() as db:
+        db.add(Deal(
+            channel_id=201, buyer_id=ids["other"], seller_id=ids["seller"],
+            status=DealStatus.paid, escrow_wallet_address="TX1",
+            escrow_private_key_encrypted="e", amount_usdt=10, service_fee=0.3,
+        ))
+        await db.commit()
+    r = await client.delete("/api/channels/201")
+    assert r.status_code == 409
+    assert "Активна угода" in r.json()["detail"]
+    async with orm.session() as db:
+        assert (await db.get(Channel, 201)).status == ChannelStatus.approved
+
+
+@pytest.mark.asyncio
+async def test_seller_delete_blocked_by_auction_with_bids(orm):
+    from datetime import timedelta
+
+    from app.models.auction import Auction
+    from app.models.channel import Channel, ChannelStatus
+    from app.utils.timeutil import utcnow_naive
+
+    client, state, ids, seller, other = await _client(orm)
+    async with orm.session() as db:
+        now = utcnow_naive()
+        db.add(Auction(
+            channel_id=201, seller_id=ids["seller"], start_price=5, current_price=7,
+            status="active", starts_at=now, ends_at=now + timedelta(hours=1), bid_count=2,
+        ))
+        await db.commit()
+    r = await client.delete("/api/channels/201")
+    assert r.status_code == 409
+    assert "ставок" in r.json()["detail"]
+    async with orm.session() as db:
+        assert (await db.get(Channel, 201)).status == ChannelStatus.approved
+
+
+@pytest.mark.asyncio
+async def test_seller_delete_ok_when_auction_has_no_bids(orm):
+    from datetime import timedelta
+
+    from app.models.auction import Auction
+    from app.models.channel import Channel, ChannelStatus
+    from app.utils.timeutil import utcnow_naive
+
+    client, state, ids, seller, other = await _client(orm)
+    async with orm.session() as db:
+        now = utcnow_naive()
+        db.add(Auction(
+            channel_id=201, seller_id=ids["seller"], start_price=5, current_price=5,
+            status="active", starts_at=now, ends_at=now + timedelta(hours=1), bid_count=0,
+        ))
+        await db.commit()
+    r = await client.delete("/api/channels/201")
+    assert r.status_code == 204
+    async with orm.session() as db:
+        assert (await db.get(Channel, 201)).status == ChannelStatus.removed

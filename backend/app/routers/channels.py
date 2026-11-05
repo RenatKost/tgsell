@@ -758,6 +758,11 @@ async def delete_channel(
     if channel.status == ChannelStatus.removed:
         return  # idempotent
 
+    from app.services.channel_availability import removal_blockers
+    blockers = await removal_blockers(db, channel.id)
+    if blockers:
+        raise HTTPException(status_code=409, detail="Неможливо зняти з біржі: " + "; ".join(blockers))
+
     channel.status = ChannelStatus.removed
     channel.removed_at = utcnow_naive()
     channel.removed_by_id = user.id
