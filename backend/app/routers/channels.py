@@ -744,7 +744,8 @@ async def delete_channel(
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    """Delete a channel listing (owner only)."""
+    """Seller remove: soft-delete (status=removed). Keep the row so relist redirect
+    (replaced_by via find_replacement_channel) still works for old /channel/:id URLs."""
     result = await db.execute(select(Channel).where(Channel.id == channel_id))
     channel = result.scalar_one_or_none()
 
@@ -754,6 +755,11 @@ async def delete_channel(
         raise HTTPException(status_code=403, detail="Not your channel")
     if channel.status == ChannelStatus.sold:
         raise HTTPException(status_code=400, detail="Cannot delete sold channel")
+    if channel.status == ChannelStatus.removed:
+        return  # idempotent
 
-    await db.delete(channel)
+    channel.status = ChannelStatus.removed
+    channel.removed_at = utcnow_naive()
+    channel.removed_by_id = user.id
+    channel.removed_reason = "Знято продавцем"
     await db.commit()

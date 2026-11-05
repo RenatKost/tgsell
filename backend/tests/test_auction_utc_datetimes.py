@@ -40,3 +40,36 @@ def test_channel_top_until_and_auction_end_z():
         ta = TypeAdapter(fields[name].rebuild_annotation())
         assert ta.dump_python(NAIVE, mode="json") == "2026-11-05T18:15:53.539486Z"
         assert ta.dump_python(None, mode="json") is None
+
+
+def test_channel_created_at_z():
+    from app.schemas.channel import ChannelResponse
+    from pydantic import TypeAdapter
+    ta = TypeAdapter(ChannelResponse.model_fields["created_at"].rebuild_annotation())
+    assert ta.dump_python(NAIVE, mode="json") == "2026-11-05T18:15:53.539486Z"
+    ch = ChannelResponse(
+        id=1, seller_id=1, telegram_link="https://t.me/x", channel_name="X",
+        seller_telegram=None, category="x", subscribers_count=1, price=1.0,
+        monthly_income=None, description=None, resources=None, avatar_url=None,
+        avg_views=None, er=None, daily_growth=None, age=None,
+        adv_reach_12h=None, adv_reach_24h=None, adv_reach_48h=None,
+        status="approved", created_at=NAIVE,
+    )
+    assert ch.model_dump(mode="json")["created_at"] == "2026-11-05T18:15:53.539486Z"
+    assert ch.model_dump(mode="json")["created_at"].endswith("Z")
+
+
+def test_bundle_user_deal_created_at_z():
+    from app.schemas.auth import UserResponse, PublicUserProfile
+    from app.schemas.bundle import BundleResponse
+    from app.schemas.deal import DealResponse, DealMessageResponse
+    from pydantic import TypeAdapter
+    for schema, field in (
+        (UserResponse, "created_at"),
+        (PublicUserProfile, "created_at"),
+        (BundleResponse, "created_at"),
+        (DealResponse, "created_at"),
+        (DealMessageResponse, "created_at"),
+    ):
+        ta = TypeAdapter(schema.model_fields[field].rebuild_annotation())
+        assert ta.dump_python(NAIVE, mode="json") == "2026-11-05T18:15:53.539486Z"
