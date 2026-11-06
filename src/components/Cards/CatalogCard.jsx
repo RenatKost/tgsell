@@ -48,8 +48,8 @@ const CatalogCard = ({ channel }) => {
 
 	const formatDate = (d) => {
 		if (!d) return '—';
-		const date = new Date(d);
-		if (isNaN(date)) return '—';
+		const date = parseUtc(d);
+		if (!date || isNaN(date)) return '—';
 		const now = new Date();
 		const diff = Math.floor((now - date) / (1000 * 60 * 60));
 		if (diff < 1) return 'щойно';

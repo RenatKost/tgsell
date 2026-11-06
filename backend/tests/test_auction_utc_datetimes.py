@@ -73,3 +73,26 @@ def test_bundle_user_deal_created_at_z():
     ):
         ta = TypeAdapter(schema.model_fields[field].rebuild_annotation())
         assert ta.dump_python(NAIVE, mode="json") == "2026-11-05T18:15:53.539486Z"
+
+
+def test_channel_last_post_and_quality_updated_z():
+    from app.schemas.channel import ChannelResponse
+    from pydantic import TypeAdapter
+    for name in ("last_post_date", "quality_updated_at"):
+        ta = TypeAdapter(ChannelResponse.model_fields[name].rebuild_annotation())
+        assert ta.dump_python(NAIVE, mode="json") == "2026-11-05T18:15:53.539486Z"
+        assert ta.dump_python(None, mode="json") is None
+    ch = ChannelResponse(
+        id=1, seller_id=1, telegram_link="https://t.me/x", channel_name="X",
+        seller_telegram=None, category="x", subscribers_count=1, price=1.0,
+        monthly_income=None, description=None, resources=None, avatar_url=None,
+        avg_views=None, er=None, daily_growth=None, age=None,
+        adv_reach_12h=None, adv_reach_24h=None, adv_reach_48h=None,
+        status="approved", created_at=NAIVE,
+        last_post_date=NAIVE, quality_updated_at=NAIVE,
+    )
+    d = ch.model_dump(mode="json")
+    assert d["last_post_date"] == "2026-11-05T18:15:53.539486Z"
+    assert d["quality_updated_at"] == "2026-11-05T18:15:53.539486Z"
+    assert d["last_post_date"].count("Z") == 1
+    assert d["quality_updated_at"].count("Z") == 1

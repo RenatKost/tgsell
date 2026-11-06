@@ -88,7 +88,7 @@ class ChannelResponse(BaseModel):
     adv_reach_48h: int | None
     total_posts: int | None = None
     post_frequency: float | None = None
-    last_post_date: datetime | None = None
+    last_post_date: UTCDateTime | None = None
     avg_forwards: int | None = None
     avg_reactions: int | None = None
     views_hidden: bool = False
@@ -117,7 +117,7 @@ class ChannelResponse(BaseModel):
     quality_score: int | None = None
     quality_health: str | None = None  # clean / suspicious / insufficient
     quality_breakdown: dict | None = None
-    quality_updated_at: datetime | None = None
+    quality_updated_at: UTCDateTime | None = None
     # Task 31: seller-stated balance (display only)
     stars_balance: int | None = None
     ton_balance: float | None = None
