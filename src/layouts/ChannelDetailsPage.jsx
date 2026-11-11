@@ -1,9 +1,12 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useParams, useNavigate, NavLink, useSearchParams } from 'react-router-dom';
 import { trackEvent } from '../utils/tracking';
 import { Radio, ExternalLink } from 'lucide-react';
 import { channelsAPI, dealsAPI } from '../services/api';
 import { useAuth } from '../context/AppContext';
+import AuthModal from '../components/Header/AuthModal';
+import BuyConfirmModal from '../components/Buy/BuyConfirmModal';
+import { savePendingBuy, peekPendingBuy, clearPendingBuy, markPendingBuyLoggedIn } from '../utils/buyIntent';
 import { IcoSignal } from '../components/Icon3D';
 import DetailsCard from '../components/Cards/DetailsCard';
 import ChannelHealth from '../components/ChanelDetails/ChannelHealth';
@@ -94,16 +97,59 @@ const ChannelDetailsPage = () => {
 		fetchHealth();
 	}, [channel]);
 
-	const handleBuy = async () => {
+	const [showAuth, setShowAuth] = useState(false);
+	const [showConfirm, setShowConfirm] = useState(false);
+	const [buying, setBuying] = useState(false);
+	const [buyError, setBuyError] = useState(null);
+	const loginFromBuyTracked = useRef(false);
+
+	const handleBuy = () => {
+		if (!channel) return;
+		trackEvent('buy_click', { channel_id: channel.id });
 		if (!isAuthenticated) {
-			alert('Авторизуйтесь для покупки');
+			savePendingBuy(channel.id, { needLogin: true });
+			trackEvent('login_prompt_open', { channel_id: channel.id });
+			setShowAuth(true);
 			return;
 		}
+		savePendingBuy(channel.id, { needLogin: false });
+		setBuyError(null);
+		setShowConfirm(true);
+	};
+
+	// After Telegram login (this page or a return from BuyIntentGate): open confirm, never auto-create the deal.
+	useEffect(() => {
+		if (!isAuthenticated || !channel) return;
+		const pending = peekPendingBuy();
+		if (!pending || pending.channelId !== Number(channel.id)) return;
+		if (pending.needLogin && !loginFromBuyTracked.current) {
+			loginFromBuyTracked.current = true;
+			markPendingBuyLoggedIn();
+			trackEvent('login_success_from_buy', { channel_id: channel.id });
+		}
+		setShowAuth(false);
+		setShowConfirm(true);
+	}, [isAuthenticated, channel]);
+
+	const closeConfirm = () => {
+		if (buying) return;
+		setShowConfirm(false);
+		setBuyError(null);
+		clearPendingBuy();
+	};
+
+	const confirmBuy = async () => {
+		if (!channel || buying) return;
+		setBuying(true);
+		setBuyError(null);
 		try {
 			const { data } = await dealsAPI.create(channel.id);
+			clearPendingBuy();
 			navigate(`/deal/${data.id}`);
 		} catch (err) {
-			alert(err.response?.data?.detail || 'Помилка створення угоди');
+			setBuyError(err.response?.data?.detail || 'Помилка створення угоди');
+		} finally {
+			setBuying(false);
 		}
 	};
 
@@ -250,6 +296,21 @@ const ChannelDetailsPage = () => {
 			</div>
 
 			<SimilarChannels channelId={channel.id} />
+
+			<AuthModal
+				show={showAuth}
+				setShow={setShowAuth}
+				title='Увійдіть, щоб купити канал'
+				subtitle='Вхід через Telegram займає кілька секунд. Кошти будуть під захистом гаранта (ескроу), доки ви не підтвердите угоду.'
+			/>
+			<BuyConfirmModal
+				channel={channel}
+				open={showConfirm}
+				onClose={closeConfirm}
+				onConfirm={confirmBuy}
+				busy={buying}
+				error={buyError}
+			/>
 		</section>
 	);
 };

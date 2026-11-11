@@ -22,13 +22,16 @@ from app.utils.activity_ids import _RateLimiter, hash_id, limiter  # noqa: F401
 
 logger = logging.getLogger(__name__)
 
-CLIENT_EVENTS = {"visit", "channel_view", "search", "saved_search_click"}
+CLIENT_EVENTS = {"visit", "channel_view", "search", "saved_search_click", "buy_click", "login_prompt_open", "login_success_from_buy"}
 SERVER_EVENTS = {"login", "favorite_add", "deal_start", "payment", "saved_search_create"}
 PAGES = {"home", "catalog", "channel", "auction", "cabinet", "sell", "deal", "bundle", "faq", "other"}
 
 CHANNEL_VIEW_DEDUPE = timedelta(minutes=10)
+BUY_FUNNEL_DEDUPE = CHANNEL_VIEW_DEDUPE  # buy_click / login_prompt_open / login_success_from_buy
 SEARCH_DEDUPE = timedelta(seconds=60)
 VISIT_DEDUPE = timedelta(minutes=30)
+# Events keyed by channel (object_id) that share the 10-minute viewer dedupe.
+CHANNEL_SCOPED_EVENTS = {"channel_view", "buy_click", "login_prompt_open", "login_success_from_buy"}
 
 HEARTBEAT_MIN_INTERVAL = 20  # seconds; frontend sends every 45 s and never more often than every 30 s
 HEARTBEAT_MAX_PER_MINUTE = 12  # hard flood cap per session (normal: ~1.3/min, even with 4 tabs on one sid ~5/min)
@@ -55,13 +58,20 @@ async def record_event(
         return False
     now = now or utcnow_naive()
     try:
-        window = {"channel_view": CHANNEL_VIEW_DEDUPE, "search": SEARCH_DEDUPE, "visit": VISIT_DEDUPE}.get(event_type)
+        window = {
+            "channel_view": CHANNEL_VIEW_DEDUPE,
+            "buy_click": BUY_FUNNEL_DEDUPE,
+            "login_prompt_open": BUY_FUNNEL_DEDUPE,
+            "login_success_from_buy": BUY_FUNNEL_DEDUPE,
+            "search": SEARCH_DEDUPE,
+            "visit": VISIT_DEDUPE,
+        }.get(event_type)
         if window is not None:
             actor = UserEvent.user_id == user_id if user_id is not None else UserEvent.anon_id == anon_id
             q = select(UserEvent.id).where(
                 actor, UserEvent.event_type == event_type, UserEvent.created_at >= now - window
             )
-            if event_type == "channel_view":
+            if event_type in CHANNEL_SCOPED_EVENTS:
                 q = q.where(UserEvent.object_id == object_id)
             if (await db.execute(q.limit(1))).first():
                 return False
@@ -146,33 +156,76 @@ def _actor(user_id, anon_id, amap) -> str | None:
 
 
 async def funnel(db: AsyncSession, days: int, now: datetime | None = None) -> dict:
+    """Unique-actor funnel. Staff are dropped from every step. A seller viewing
+    (or clicking Buy on) their own lot is dropped from channel_view / buy_click
+    when user_id is known. Deal start / payment come from the deals table.
+    """
+    from app.models.user import User, UserRole
+
     now = now or utcnow_naive()
     since = now - timedelta(days=days)
     amap = await _anon_to_user(db)
+    staff = set((await db.execute(
+        select(User.id).where(User.role.in_((UserRole.admin, UserRole.moderator)))
+    )).scalars().all())
+
+    def keep(actor: str | None) -> bool:
+        if not actor:
+            return False
+        if actor.startswith("u"):
+            try:
+                return int(actor[1:]) not in staff
+            except ValueError:
+                return True
+        return True
+
     visit: set[str] = set()
     view: set[str] = set()
+    buy: set[str] = set()
     for uid, aid in (await db.execute(
         select(UserSession.user_id, UserSession.anon_id).where(UserSession.last_seen_at >= since)
     )).all():
         a = _actor(uid, aid, amap)
-        if a:
+        if keep(a):
             visit.add(a)
-    for uid, aid, et in (await db.execute(
-        select(UserEvent.user_id, UserEvent.anon_id, UserEvent.event_type).where(UserEvent.created_at >= since)
-    )).all():
+    ev_rows = (await db.execute(
+        select(UserEvent.user_id, UserEvent.anon_id, UserEvent.event_type, UserEvent.object_id)
+        .where(UserEvent.created_at >= since)
+    )).all()
+    channel_ids = {oid for _u, _a, et, oid in ev_rows if et in ("channel_view", "buy_click") and oid}
+    sellers: dict[int, int] = {}
+    if channel_ids:
+        sellers = dict((await db.execute(
+            select(Channel.id, Channel.seller_id).where(Channel.id.in_(channel_ids))
+        )).all())
+    for uid, aid, et, oid in ev_rows:
         a = _actor(uid, aid, amap)
-        if not a:
+        if not keep(a):
             continue
         visit.add(a)
+        # Logged-in seller looking at / clicking Buy on their own lot.
+        if et in ("channel_view", "buy_click") and uid is not None and oid is not None:
+            if sellers.get(int(oid)) == uid:
+                continue
         if et == "channel_view":
             view.add(a)
+        elif et == "buy_click":
+            buy.add(a)
     # Deal start / payment come from the deals table itself (source of truth, read-only).
-    start = {f"u{b}" for (b,) in (await db.execute(select(Deal.buyer_id).where(Deal.created_at >= since))).all()}
-    paid = {f"u{b}" for (b,) in (await db.execute(
-        select(Deal.buyer_id).where(Deal.paid_at.is_not(None), Deal.paid_at >= since))).all()}
+    start = set()
+    for (b,) in (await db.execute(select(Deal.buyer_id).where(Deal.created_at >= since))).all():
+        if b not in staff:
+            start.add(f"u{b}")
+    paid = set()
+    for (b,) in (await db.execute(
+        select(Deal.buyer_id).where(Deal.paid_at.is_not(None), Deal.paid_at >= since)
+    )).all():
+        if b not in staff:
+            paid.add(f"u{b}")
     steps = [
         ("visit", "Візит", visit),
         ("channel_view", "Перегляд каналу", view),
+        ("buy_click", "Натиснув Купити", buy),
         ("deal_start", "Початок угоди", start),
         ("payment", "Оплата", paid),
     ]

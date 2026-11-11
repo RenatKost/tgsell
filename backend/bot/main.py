@@ -630,6 +630,34 @@ async def notify_new_deal(bot: Bot, deal: Deal, buyer: User, seller: User):
             logger.error(f"[NOTIFY] Failed to notify admin: {e}", exc_info=True)
 
 
+async def notify_payment_requested(bot: Bot, deal: Deal, buyer: User, seller: User) -> bool:
+    """Buyer: both sides are ready, the escrow address is now the one to pay.
+
+    Called once, after the commit that moves the deal to payment_pending.
+    A Telegram failure must not affect the deal or escrow. Returns True if
+    Telegram accepted the message (or there is no chat to deliver to).
+    """
+    if not buyer or not getattr(buyer, "telegram_id", None):
+        return True
+    frontend_url = settings.frontend_url.rstrip("/")
+    amount = html.escape(str(deal.amount_usdt))
+    addr = html.escape(deal.escrow_wallet_address or "")
+    text = (
+        f"💳 <b>Можна оплачувати угоду #{deal.id}</b>\n\n"
+        f"Обидві сторони підтвердили готовність.\n"
+        f"Перекажіть <b>{amount} USDT</b> мережею <b>TRC-20</b> на адресу:\n"
+        f"<code>{addr}</code>\n\n"
+        f"<a href=\"{frontend_url}/deal/{deal.id}\">Відкрити угоду →</a>"
+    )
+    try:
+        await bot.send_message(buyer.telegram_id, text, parse_mode=ParseMode.HTML)
+        logger.info(f"[NOTIFY] Buyer {buyer.telegram_id} notified that deal #{deal.id} is awaiting payment")
+        return True
+    except Exception as e:
+        logger.warning(f"[NOTIFY] Failed to notify buyer about payment request for deal #{getattr(deal, 'id', '?')}: {e}")
+        return False
+
+
 async def notify_payment_received(bot: Bot, deal: Deal, buyer: User, seller: User):
     """Notify that USDT payment arrived."""
     logger.info(f"[NOTIFY] notify_payment_received called: deal={deal.id}")

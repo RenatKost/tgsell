@@ -8,6 +8,7 @@ import { isInAppBrowser } from '../../utils/inAppBrowser';
 import { trackFunnel, utmPayload } from '../../utils/utm';
 import { anonId } from '../../utils/tracking';
 import InAppBrowserBanner from '../InAppBrowserBanner';
+import '../Services/topGlow.css';
 
 const GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID || '';
 const TOKEN_TTL_MS = 5 * 60 * 1000; // matches backend auth_tokens._TTL
@@ -48,7 +49,7 @@ export const prefetchBotToken = () => {
 };
 const invalidateBotToken = (token) => { if (!token || _tokenCache?.token === token) _tokenCache = null; };
 
-const AuthModal = ({ show, setShow }) => {
+const AuthModal = ({ show, setShow, title, subtitle }) => {
 	const googleBtnRef = useRef(null);
 	const { login, user, loading: authLoading } = useAuth();
 	const [botAuth, setBotAuth] = useState({ status: 'idle' }); // idle | loading | waiting | error
@@ -245,7 +246,7 @@ const AuthModal = ({ show, setShow }) => {
 			}}
 			className='fixed inset-0 flex items-center justify-center bg-black/60 backdrop-blur-sm z-50 p-4'
 		>
-			<div className='bg-white dark:bg-slate-800 rounded-2xl shadow-2xl z-[51] mx-auto text-center max-w-[400px] w-full overflow-hidden animate-fadeIn'>
+			<div className={`bg-white dark:bg-slate-800 rounded-2xl shadow-2xl z-[51] mx-auto text-center max-w-[400px] w-full overflow-hidden animate-fadeIn${title ? ' lot-top-glow' : ''}`}>
 				{/* Close button */}
 				<div className='flex justify-end p-3 pb-0'>
 					<button
@@ -257,7 +258,9 @@ const AuthModal = ({ show, setShow }) => {
 				</div>
 
 				<div className='px-8 pb-8 pt-2'>
-					<h2 className='text-xl font-bold text-gray-800 dark:text-white mb-2'>Авторизація в Телеграм</h2>
+					<h2 className='text-xl font-bold text-gray-800 dark:text-white mb-2'>
+						{title || 'Авторизація в Телеграм'}
+					</h2>
 
 					{isWaiting ? (
 						<p className='text-gray-500 dark:text-gray-400 text-sm mb-6'>
@@ -265,7 +268,7 @@ const AuthModal = ({ show, setShow }) => {
 						</p>
 					) : (
 						<p className='text-gray-500 dark:text-gray-400 text-sm mb-6'>
-							Натисніть кнопку нижче — відкриється бот в Telegram для швидкого входу.
+							{subtitle || 'Натисніть кнопку нижче — відкриється бот в Telegram для швидкого входу.'}
 						</p>
 					)}
 

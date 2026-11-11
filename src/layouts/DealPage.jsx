@@ -1,4 +1,4 @@
-import { fmtUsdt, fmtNum, rawUsdt } from '../utils/money';
+import { fmtUsdt, fmtNum } from '../utils/money';
 import DealChat from '../components/DealChat/DealChat';
 import { useEffect, useRef, useState } from 'react';
 import { useParams } from 'react-router-dom';
@@ -6,6 +6,8 @@ import { Handshake, DollarSign, Send, CreditCard, CheckCircle2, Check } from 'lu
 import { dealsAPI } from '../services/api';
 import { useAuth } from '../context/AppContext';
 import TransferChecklist from '../components/Deal/TransferChecklist';
+import DealPayBlock from '../components/Deal/DealPayBlock';
+import DealNextSteps from '../components/Deal/DealNextSteps';
 import { dealViewer, heroLabel, heroCounterpart, readinessView, transferView } from '../utils/dealViewer';
 import './escrow.css';
 import './premium.css';
@@ -84,7 +86,6 @@ const DealPage = () => {
 	const [error, setError] = useState(null);
 	const [actionLoading, setActionLoading] = useState(false);
 	const [walletAddress, setWalletAddress] = useState('');
-	const [copied, setCopied] = useState(false);
 	const [checklist, setChecklist] = useState(null);
 	const [payoutStatus, setPayoutStatus] = useState(null);
 	const [notice, setNotice] = useState(null);
@@ -176,12 +177,6 @@ const DealPage = () => {
 		const reason = prompt('Опишіть причину спору:');
 		if (!reason) return;
 		handleAction(() => dealsAPI.dispute(id, reason));
-	};
-
-	const copyToClipboard = (text) => {
-		navigator.clipboard.writeText(text);
-		setCopied(true);
-		setTimeout(() => setCopied(false), 2000);
 	};
 
 	if (loading) {
@@ -301,6 +296,7 @@ const DealPage = () => {
 					<p className='text-gray-500 text-sm mb-5'>
 						Обидві сторони повинні підтвердити готовність. Після цього покупець зможе оплатити.
 					</p>
+					<DealNextSteps deal={deal} isBuyer={isBuyer} isSeller={isSeller} isObserver={isObserver} />
 					<div className='flex gap-3 mb-5'>
 						<div className={`flex-1 flex items-center gap-3 p-4 rounded-xl border-2 transition-all duration-300 ${
 							deal.buyer_ready ? 'border-green-400 bg-green-50' : 'border-gray-200 bg-gray-50 dark:bg-slate-700'
@@ -390,44 +386,7 @@ const DealPage = () => {
 
 			{/* Step 2: Payment */}
 			{deal.status === 'payment_pending' && isBuyer && (
-				<div className='bg-white dark:bg-slate-800 rounded-2xl shadow-lg border border-gray-100 dark:border-slate-700 p-4 sm:p-6 mb-6'>
-					<h3 className='font-bold text-lg mb-2'>Оплата</h3>
-					<p className='text-gray-500 text-sm mb-5'>
-						Переведіть <strong className='text-gray-800 dark:text-white tabular-nums [overflow-wrap:anywhere]'>{rawUsdt(deal.amount_usdt)}</strong> <strong className='text-gray-800 dark:text-white'>USDT</strong> через мережу <strong className='text-gray-800 dark:text-white'>TRC-20</strong>
-					</p>
-					<div className='bg-blue-50 dark:bg-blue-900/20 border border-blue-200 rounded-xl p-4 mb-4'>
-						<div className='flex flex-col sm:flex-row sm:justify-between gap-0.5 text-sm mb-2 sm:mb-1'>
-							<span className='text-gray-600 dark:text-gray-300'>Вартість каналу:</span>
-							<span className='font-semibold text-gray-800 dark:text-white'>{fmtUsdt(deal.amount_usdt)} USDT</span>
-						</div>
-						<div className='flex flex-col sm:flex-row sm:justify-between gap-0.5 text-sm mb-2 sm:mb-1'>
-							<span className='text-gray-600 dark:text-gray-300'>Комісія сервісу (3%):</span>
-							<span className='text-gray-500'>{fmtUsdt(deal.service_fee)} USDT — утримується при виплаті продавцю</span>
-						</div>
-						<div className='flex flex-col sm:flex-row sm:justify-between gap-0.5 text-sm'>
-							<span className='text-gray-600 dark:text-gray-300'>Комісія мережі:</span>
-							<span className='text-gray-500'>~1-2 TRX (~0.1-0.2 USDT)</span>
-						</div>
-					</div>
-					<div className='bg-gray-50 dark:bg-slate-700/60 border border-gray-200 dark:border-slate-600 p-3 sm:p-4 rounded-xl mb-4 flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3'>
-						<p className='font-mono text-[13px] sm:text-sm break-all [overflow-wrap:anywhere] min-w-0 flex-1 select-all text-gray-700 dark:text-gray-200'>
-							{deal.escrow_wallet_address}
-						</p>
-						<button
-							onClick={() => copyToClipboard(deal.escrow_wallet_address)}
-							className='self-start sm:self-auto shrink-0 bg-white border border-gray-200 dark:border-slate-600 rounded-lg px-2.5 py-1.5 text-xs font-medium text-gray-500 hover:text-[#3498db] hover:border-[#3498db] transition-all'
-						>
-							{copied ? '✓' : 'Копіювати'}
-						</button>
-					</div>
-					<div className='flex items-start gap-2 bg-yellow-50 border border-yellow-200 rounded-xl px-4 py-3'>
-						<span className='text-yellow-500 text-sm mt-0.5'>⚠️</span>
-						<div className='text-xs text-yellow-700'>
-							<p className='font-semibold'>Переводьте тільки USDT через TRC-20!</p>
-							<p className='mt-0.5 text-yellow-600'>Оплата перевіряється автоматично кожні 30 секунд</p>
-						</div>
-					</div>
-				</div>
+				<DealPayBlock deal={deal} />
 			)}
 			{deal.status === 'payment_pending' && isSeller && (
 				<div className='bg-white dark:bg-slate-800 rounded-2xl shadow-lg border border-gray-100 dark:border-slate-700 p-4 sm:p-6 mb-6'>
