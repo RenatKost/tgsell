@@ -123,12 +123,19 @@ async def test_top_limit_ordering_and_expiry(orm, monkeypatch):
     seller, adm, other, ids = await _seed(orm)
     async with client:
         cur.user = seller
+        first = {}
         for cid in ids[:3]:
-            assert (await client.post("/api/services/orders", json={"channel_id": cid, "kind": "top"})).status_code == 201
+            r0 = await client.post("/api/services/orders", json={"channel_id": cid, "kind": "top"})
+            assert r0.status_code == 201
+            first[cid] = r0.json()
         # 3 reserved (unpaid) → 4th refused
         r = await client.post("/api/services/orders", json={"channel_id": ids[3], "kind": "top"})
         assert r.status_code == 400 and "зайняті" in r.json()["detail"]
-        assert (await client.post("/api/services/orders", json={"channel_id": ids[0], "kind": "top"})).status_code == 400
+        # Re-request for an existing awaiting invoice returns the same address (no 400, no new wallet)
+        again = await client.post("/api/services/orders", json={"channel_id": ids[0], "kind": "top"})
+        assert again.status_code in (200, 201)
+        assert again.json()["escrow_wallet_address"] == first[ids[0]]["escrow_wallet_address"]
+        assert again.json()["id"] == first[ids[0]]["id"]
         st = await _pay_all(orm)
         assert st["paid"] == 3
         assert (await client.post("/api/services/orders", json={"channel_id": ids[3], "kind": "top"})).status_code == 400

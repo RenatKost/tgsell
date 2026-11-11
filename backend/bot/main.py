@@ -785,16 +785,28 @@ async def notify_admin_called(bot: Bot, deal_id: int, channel_name: str, caller_
     await bot.send_message(settings.admin_group_id, telegram_html_safe(text), parse_mode=ParseMode.HTML)
 
 
+def channel_approved_cabinet_top_url(channel) -> str:
+    """Deep link: cabinet opens the Top invoice dialog for this lot."""
+    return f"{settings.frontend_url.rstrip('/')}/cabinet?top={int(channel.id)}"
+
+
 def channel_approved_text(channel, promo_top: bool = False) -> str:
     frontend_url = settings.frontend_url.rstrip("/")
+    top_url = channel_approved_cabinet_top_url(channel)
     return (
         f"✅ <b>Ваш лот схвалено!</b>\n\n"
         f"📡 «{html.escape(channel.channel_name or '')}» тепер доступний у каталозі.\n"
         f"<a href='{frontend_url}/channel/{channel.id}'>Переглянути лот →</a>\n\n"
         + (f"🎁 Акція: ваш лот отримав «Топ» на {settings.promo_top_days} днів безкоштовно\n\n" if promo_top else "")
-        + f"🚀 Хочете більше переглядів? Платні послуги (Топ, пост у каналі, «Перевірено TgSell») — "
-        f"<a href='{frontend_url}/cabinet'>у кабінеті</a>."
+        + f"🚀 Хочете більше переглядів? Підніміть лот у Топ каталогу:\n"
+        f"<a href='{top_url}'>Підняти в Топ →</a>"
     )
+
+
+def channel_approved_top_keyboard(channel) -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(inline_keyboard=[[
+        InlineKeyboardButton(text="Підняти в Топ", url=channel_approved_cabinet_top_url(channel)),
+    ]])
 
 
 async def notify_channel_approved(bot: Bot, channel, seller: User, promo_top: bool = False):
@@ -802,9 +814,51 @@ async def notify_channel_approved(bot: Bot, channel, seller: User, promo_top: bo
     if not seller or not seller.telegram_id:
         return
     try:
-        await bot.send_message(seller.telegram_id, channel_approved_text(channel, promo_top), parse_mode=ParseMode.HTML)
+        await bot.send_message(
+            seller.telegram_id, channel_approved_text(channel, promo_top),
+            parse_mode=ParseMode.HTML, reply_markup=channel_approved_top_keyboard(channel),
+        )
     except Exception as e:
         logger.warning(f"[NOTIFY] Cannot notify seller {seller.telegram_id} about channel approval: {e}")
+
+
+
+def _kyiv_dt_label(value) -> str:
+    """Naive-UTC (or aware) datetime → «дд.мм.рррр, гг:хх» in Europe/Kyiv."""
+    if value is None:
+        return ""
+    from datetime import timezone
+    from zoneinfo import ZoneInfo
+    dt = value
+    if getattr(dt, "tzinfo", None) is None:
+        dt = dt.replace(tzinfo=timezone.utc)
+    local = dt.astimezone(ZoneInfo("Europe/Kyiv"))
+    return local.strftime("%d.%m.%Y, %H:%M")
+
+
+def top_activated_text(channel, active_until) -> str:
+    frontend_url = settings.frontend_url.rstrip("/")
+    until = _kyiv_dt_label(active_until)
+    until_line = f" до {until} (Київ)" if until else ""
+    return (
+        f"🚀 <b>Топ увімкнено{html.escape(until_line)}</b>\n\n"
+        f"📡 «{html.escape(channel.channel_name or '')}» (#{channel.id}) тепер у Топі каталогу.\n"
+        f"<a href='{frontend_url}/channel/{channel.id}'>Переглянути лот →</a>"
+    )
+
+
+async def notify_top_activated(bot: Bot, channel, seller: User, active_until) -> bool:
+    """Seller: paid Top has been switched on. Returns True if Telegram accepted the message
+    (or there is no chat to deliver to — stamp as done, do not retry forever)."""
+    if not seller or not seller.telegram_id:
+        return True
+    try:
+        await bot.send_message(
+            seller.telegram_id, top_activated_text(channel, active_until), parse_mode=ParseMode.HTML)
+        return True
+    except Exception as e:
+        logger.warning(f"[NOTIFY] Cannot notify seller about Top activation on channel #{getattr(channel, 'id', '?')}: {e}")
+        return False
 
 
 async def notify_bundle_approved(bot: Bot, bundle, seller: User, promo_top: bool = False):

@@ -7,6 +7,7 @@ import { NavLink } from 'react-router-dom';
 import { formatEr } from '../../utils/er';
 import { Badge, LISTING_STATUS, surface, btnSecondary, btnDanger, btnPrimary } from '../Cabinet/ui';
 import SellerServices from '../Services/SellerServices';
+import '../Services/topGlow.css';
 import { channelsAPI } from '../../services/api';
 
 
@@ -108,7 +109,7 @@ const ClarificationPanel = ({ channel, onUpdated }) => {
 	);
 };
 
-const CabinetCard = ({ channel, onDelete, onUpdated }) => {
+const CabinetCard = ({ channel, onDelete, onUpdated, orders = [], openTopRequest = 0 }) => {
 	const status = LISTING_STATUS[channel.status] || LISTING_STATUS.pending;
 	const [avatarError, setAvatarError] = useState(false);
 
@@ -129,7 +130,7 @@ const CabinetCard = ({ channel, onDelete, onUpdated }) => {
 	];
 
 	return (
-		<article className={`${surface} overflow-hidden flex flex-col hover:border-accent/50 transition-colors`}>
+		<article className={`${surface} overflow-hidden flex flex-col hover:border-accent/50 transition-colors${channel.is_top ? ' lot-top-glow' : ''}`}>
 			<div className='p-4 sm:p-5'>
 				<div className='flex items-start gap-3 sm:gap-4'>
 					{channel.avatar_url && !avatarError ? (
@@ -208,7 +209,7 @@ const CabinetCard = ({ channel, onDelete, onUpdated }) => {
 					</div>
 				</div>
 			</div>
-			{onDelete && <SellerServices channel={channel} />}
+			{onDelete && <SellerServices channel={channel} orders={orders} openTopRequest={openTopRequest} />}
 		</article>
 	);
 };

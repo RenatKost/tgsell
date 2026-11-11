@@ -1,13 +1,16 @@
 import { parseUtc } from '../utils/datetime';
 import { fmtUsdt, fmtNum, MAX_PRICE_USDT, MAX_PRICE_HINT } from '../utils/money';
-import { useCallback, useEffect, useState } from 'react';
-import { NavLink, useNavigate } from 'react-router-dom';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { NavLink, useNavigate, useSearchParams } from 'react-router-dom';
 import { channelsAPI, favoritesAPI, dealsAPI, auctionsAPI, bundlesAPI, meAPI } from '../services/api';
 import { useAuth } from '../context/AppContext';
 import CabinetCard from '../components/Cards/CabinetCard';
 import CatalogCard from '../components/Cards/CatalogCard';
 import AlertBotHint from '../components/Services/AlertBotHint';
 import PromoBanner from '../components/Services/PromoBanner';
+import AwaitingInvoices from '../components/Services/AwaitingInvoices';
+import useMyServiceOrders from '../hooks/useMyServiceOrders';
+import { parseCabinetTopParam, openInvoices } from '../utils/topFunnel';
 import ReferralCard from '../components/Cabinet/ReferralCard';
 import SavedSearches from '../components/Cabinet/SavedSearches';
 import BundleBalanceEditor from '../components/Balance/BundleBalanceEditor';
@@ -59,6 +62,15 @@ const DEAL_FILTERS = [
 const CabinetPage = () => {
 	const { user, favoriteIds } = useAuth();
 	const navigate = useNavigate();
+	const [searchParams, setSearchParams] = useSearchParams();
+	const { orders } = useMyServiceOrders(!!user?.id);
+	const [topOpenFor, setTopOpenFor] = useState(null);
+	const [topOpenTick, setTopOpenTick] = useState(0);
+	const openTopFor = (channel) => {
+		if (!channel) return;
+		setTopOpenFor(channel.id);
+		setTopOpenTick((n) => n + 1);
+	};
 	const [unread, setUnread] = useState({});
 	useReveal();
 	const [activeTab, setActiveTab] = useState(TABS[0]);
@@ -73,6 +85,12 @@ const CabinetPage = () => {
 	const [loading, setLoading] = useState(true);
 	const [loadError, setLoadError] = useState(false);
 	const [reloadKey, setReloadKey] = useState(0);
+	const hadOpenInvoice = useRef(false);
+	useEffect(() => {
+		const open = openInvoices(orders).length > 0;
+		if (hadOpenInvoice.current && !open) setReloadKey((k) => k + 1);
+		hadOpenInvoice.current = open;
+	}, [orders]);
 	// Tab counters: loaded once on open via GET /api/me/counts, refreshed after actions.
 	// null = still loading (skeleton). Zero rule: every tab shows «0» explicitly.
 	const [tabCounts, setTabCounts] = useState(null);
@@ -140,6 +158,34 @@ const CabinetPage = () => {
 		};
 		if (user?.id) fetchData();
 	}, [user?.id, activeTab, activeFilter, reloadKey]);
+
+	// /cabinet?top=<channel_id> (from the approve alerts-bot): open the Top dialog.
+	// LoginGate keeps this URL, so after sign-in the effect runs again.
+	useEffect(() => {
+		const id = parseCabinetTopParam(searchParams.toString());
+		if (!id || !user?.id) return;
+		let cancelled = false;
+		const go = async () => {
+			setActiveTab(TABS[0]);
+			setActiveFilter(STATUS_FILTERS[0]);
+			let ch = (channels || []).find(c => c.id === id);
+			if (!ch) {
+				try {
+					const { data } = await channelsAPI.getById(id);
+					ch = data;
+					if (ch && !cancelled) setChannels(prev => prev.some(c => c.id === ch.id) ? prev : [ch, ...prev]);
+				} catch { /* not the owner's lot or missing */ }
+			}
+			if (cancelled || !ch) return;
+			openTopFor(ch);
+			const next = new URLSearchParams(searchParams);
+			next.delete('top');
+			setSearchParams(next, { replace: true });
+		};
+		go();
+		return () => { cancelled = true; };
+		// channels is read at effect start; re-run when the list first arrives.
+	}, [user?.id, searchParams, channels, setSearchParams]);
 
 	const handleDelete = async (channelId) => {
 		if (!confirm('Видалити оголошення?')) return;
@@ -293,6 +339,10 @@ const CabinetPage = () => {
 				<>
 					<FilterChips items={STATUS_FILTERS} active={activeFilter} onChange={setActiveFilter}
 						count={f => (f.value === null ? counts.all : counts[f.value] || 0)} />
+					<AwaitingInvoices orders={orders} onOpen={(o) => {
+						const ch = (channels || []).find(c => c.id === o.channel_id);
+						if (ch) openTopFor(ch);
+					}} />
 					{renderBody(
 						filteredChannels.length === 0 && (
 							<EmptyState
@@ -304,7 +354,7 @@ const CabinetPage = () => {
 						),
 						<div className='esc-cab-list grid grid-cols-1 lg:grid-cols-2 2xl:grid-cols-3 gap-4 sm:gap-5'>
 							{filteredChannels.map(channel => (
-								<CabinetCard key={channel.id} channel={channel} onDelete={handleDelete} onUpdated={updated => setChannels(prev => prev.map(c => c.id === updated.id ? { ...c, ...updated } : c))} />
+								<CabinetCard key={channel.id} channel={channel} onDelete={handleDelete} onUpdated={updated => setChannels(prev => prev.map(c => c.id === updated.id ? { ...c, ...updated } : c))} orders={orders} openTopRequest={topOpenFor === channel.id ? topOpenTick : 0} />
 							))}
 						</div>,
 					)}
