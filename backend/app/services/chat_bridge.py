@@ -53,8 +53,8 @@ def keyboard(deal_id: int, link_id: int | None, *, read: bool = False):
 
 
 def format_forward(deal: Deal, msg: DealMessage, sender: User | None, attachment_name: str | None) -> str:
-    role = ROLE_UA.get(chat_svc.role_of(deal, sender, msg.sender_id) or "", "")
-    who = _h(sender.first_name if sender else "Користувач") + (f" ({role})" if role else "")
+    role = ROLE_UA.get(chat_svc.role_of(deal, sender, msg.sender_id, bool(msg.as_guarantor)) or "", "")
+    who = _h(chat_svc.display_name(msg, sender) or "Користувач") + (f" ({role})" if role else "")
     body = msg.text or ""
     if attachment_name:
         cap = "" if body == f"📎 {attachment_name}" else f"\n{_h(body)}"

@@ -6,6 +6,7 @@ import { Handshake, DollarSign, Send, CreditCard, CheckCircle2, Check } from 'lu
 import { dealsAPI } from '../services/api';
 import { useAuth } from '../context/AppContext';
 import TransferChecklist from '../components/Deal/TransferChecklist';
+import { dealViewer, heroLabel, heroCounterpart, readinessView, transferView } from '../utils/dealViewer';
 import './escrow.css';
 import './premium.css';
 import './public.css';
@@ -201,8 +202,11 @@ const DealPage = () => {
 
 	if (!deal) return null;
 
-	const isBuyer = user?.id === deal.buyer_id;
-	const isSeller = user?.id === deal.seller_id;
+	// Staff who are not a party see neutral «гарант» wording, never «Ви продаєте» / «Ви підтвердили».
+	const viewer = dealViewer(user, deal);
+	const { isBuyer, isSeller, isObserver } = viewer;
+	const readiness = readinessView(viewer, deal);
+	const transfer = transferView(viewer, deal);
 	const isSpecialStatus = ['disputed', 'cancelled'].includes(deal.status);
 	const isTransferStatus = ['paid', 'channel_transferring'].includes(deal.status);
 	const mySideKey = isBuyer ? 'buyer' : isSeller ? 'seller' : null;
@@ -244,13 +248,13 @@ const DealPage = () => {
 					)}
 					<div className='flex-1 min-w-0 basis-[11rem]'>
 						<p className='text-blue-200 text-xs font-medium uppercase tracking-wider mb-1'>
-							{isBuyer ? 'Ви купуєте' : 'Ви продаєте'}
+							{heroLabel(viewer)}
 						</p>
 						<h1 className='text-lg sm:text-xl md:text-2xl font-bold truncate'>
 							{deal.channel_name || `Канал #${deal.channel_id}`}
 						</h1>
 						<p className='text-blue-200 text-sm mt-0.5'>
-							{isBuyer ? deal.seller_name || 'Продавець' : deal.buyer_name || 'Покупець'} · {new Date(deal.created_at).toLocaleDateString('uk-UA')}
+							{heroCounterpart(viewer, deal)} · {new Date(deal.created_at).toLocaleDateString('uk-UA')}
 						</p>
 					</div>
 					<div className='text-right min-w-0 max-w-full ml-auto'>
@@ -293,7 +297,7 @@ const DealPage = () => {
 			{/* Step 1: Confirm Readiness */}
 			{deal.status === 'created' && (
 				<div className='bg-white dark:bg-slate-800 rounded-2xl shadow-lg border border-gray-100 dark:border-slate-700 p-4 sm:p-6 mb-6'>
-					<h3 className='font-bold text-lg mb-2'>Підтвердіть готовність до угоди</h3>
+					<h3 className='font-bold text-lg mb-2'>{isObserver ? 'Готовність сторін' : 'Підтвердіть готовність до угоди'}</h3>
 					<p className='text-gray-500 text-sm mb-5'>
 						Обидві сторони повинні підтвердити готовність. Після цього покупець зможе оплатити.
 					</p>
@@ -329,7 +333,7 @@ const DealPage = () => {
 							</div>
 						</div>
 					</div>
-					{((isBuyer && !deal.buyer_ready) || (isSeller && !deal.seller_ready)) ? (
+					{readiness.action === 'confirm' ? (
 						<button
 							onClick={handleConfirmReady}
 							disabled={actionLoading}
@@ -339,7 +343,7 @@ const DealPage = () => {
 						</button>
 					) : (
 						<div className='bg-blue-50 dark:bg-blue-900/20 text-blue-600 text-sm font-medium px-4 py-3 rounded-xl text-center'>
-							Ви підтвердили. Очікуйте іншу сторону
+							{readiness.banner}
 						</div>
 					)}
 				</div>
@@ -493,7 +497,7 @@ const DealPage = () => {
 							</div>
 						</div>
 					</div>
-					{((isBuyer && !deal.buyer_confirmed_transfer) || (isSeller && !deal.seller_confirmed_transfer)) ? (
+					{transfer.action === 'confirm' ? (
 						<>
 						{myChecklistOpen > 0 && (
 							<p className='text-xs text-amber-600 dark:text-amber-400 mb-2'>
@@ -521,7 +525,7 @@ const DealPage = () => {
 						</>
 					) : (
 						<div className='bg-blue-50 dark:bg-blue-900/20 text-blue-600 text-sm font-medium px-4 py-3 rounded-xl text-center'>
-							Ви підтвердили. Очікуйте іншу сторону
+							{transfer.banner}
 						</div>
 					)}
 				</div>

@@ -281,6 +281,7 @@ async def get_all_deals(
             deal_group_chat_id=d.deal_group_chat_id, dispute_reason=d.dispute_reason,
             balance_stars=d.balance_stars, balance_ton=d.balance_ton,
             created_at=d.created_at, paid_at=d.paid_at, completed_at=d.completed_at,
+            **_party_flags(d),
         ))
     return responses
 
@@ -293,6 +294,15 @@ async def _load_deal_full(db: AsyncSession, deal_id: int) -> Deal:
         .execution_options(populate_existing=True)
     )
     return result.scalar_one()
+
+
+def _party_flags(deal: Deal) -> dict:
+    """Real readiness/transfer flags (read-only display); without them the admin list showed False defaults."""
+    return dict(
+        buyer_ready=bool(deal.buyer_ready), seller_ready=bool(deal.seller_ready),
+        buyer_confirmed_transfer=bool(deal.buyer_confirmed_transfer),
+        seller_confirmed_transfer=bool(deal.seller_confirmed_transfer),
+    )
 
 
 def _admin_deal_response(deal: Deal) -> DealResponse:
@@ -308,6 +318,7 @@ def _admin_deal_response(deal: Deal) -> DealResponse:
         created_at=deal.created_at, paid_at=deal.paid_at, completed_at=deal.completed_at,
         seller_payout_address=deal.seller_payout_address,
         payout_tx_hash=deal.payout_tx_hash,
+        **_party_flags(deal),
     )
 
 

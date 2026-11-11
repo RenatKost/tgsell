@@ -10,7 +10,7 @@ const newClientId = () =>
  * - No polling at all for completed/cancelled deals (server returns poll_interval_ms = null):
  *   history is loaded once.
  */
-export default function useDealChat(dealId) {
+export default function useDealChat(dealId, { asGuarantor = false } = {}) {
 	const [messages, setMessages] = useState([]);
 	const [pending, setPending] = useState([]); // optimistic {client_id, text, status, file, progress}
 	const [state, setState] = useState({ peer_read_id: 0, peer_delivered_id: 0, presence: [], deal: null, unread: 0, my_last_read_id: 0, me: null });
@@ -122,23 +122,23 @@ export default function useDealChat(dealId) {
 	const send = useCallback(async (text, clientId = newClientId()) => {
 		setPending(p => [...p.filter(x => x.client_id !== clientId), { client_id: clientId, text, status: 'sending' }]);
 		try {
-			const { data } = await dealsAPI.chatSend(dealId, text, clientId);
+			const { data } = await dealsAPI.chatSend(dealId, text, clientId, asGuarantor);
 			merge([data]);
 		} catch (e) {
 			setPending(p => p.map(x => x.client_id === clientId ? { ...x, status: 'failed', error: e?.response?.data?.detail } : x));
 		}
-	}, [dealId, merge]);
+	}, [dealId, merge, asGuarantor]);
 
 	const upload = useCallback(async (file, caption, clientId = newClientId()) => {
 		setPending(p => [...p.filter(x => x.client_id !== clientId), { client_id: clientId, text: caption || file.name, file, status: 'sending', progress: 0 }]);
 		try {
 			const { data } = await dealsAPI.chatUpload(dealId, file, caption, clientId,
-				(pr) => setPending(p => p.map(x => x.client_id === clientId ? { ...x, progress: pr } : x)));
+				(pr) => setPending(p => p.map(x => x.client_id === clientId ? { ...x, progress: pr } : x)), asGuarantor);
 			merge([data]);
 		} catch (e) {
 			setPending(p => p.map(x => x.client_id === clientId ? { ...x, status: 'failed', error: e?.response?.data?.detail } : x));
 		}
-	}, [dealId, merge]);
+	}, [dealId, merge, asGuarantor]);
 
 	const retry = useCallback((item) => (item.file ? upload(item.file, item.text === item.file.name ? '' : item.text, item.client_id) : send(item.text, item.client_id)), [send, upload]);
 	const discard = useCallback((cid) => setPending(p => p.filter(x => x.client_id !== cid)), []);

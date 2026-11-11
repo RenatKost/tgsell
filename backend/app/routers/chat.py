@@ -24,6 +24,21 @@ router = APIRouter(prefix="/deals", tags=["deal-chat"])
 class ChatMessageCreate(BaseModel):
     text: str = Field(..., max_length=4000)
     client_id: str | None = Field(None, max_length=64)
+    # Staff only (admin/moderator): show this message as the TgSell guarantor, even if the
+    # staff account is also a party of the deal. Sent by the moderator cabinet chat.
+    as_guarantor: bool = False
+
+
+GUARANTOR_ONLY_STAFF = "Писати від імені гаранта може лише адміністратор або модератор"
+
+
+def _as_guarantor(user: User, requested) -> bool:
+    # ``is True``: when the handler is called directly (tests) an unset Form default is a FieldInfo.
+    if requested is not True:
+        return False
+    if not chat_svc.is_staff(user):
+        raise HTTPException(status_code=403, detail=GUARANTOR_ONLY_STAFF)
+    return True
 
 
 class ReadRequest(BaseModel):
@@ -122,6 +137,7 @@ async def post_chat_message(
 ):
     deal = await chat_svc.load_deal_for(db, deal_id, user)
     chat_svc.ensure_can_post(user, deal)
+    as_guarantor = _as_guarantor(user, body.as_guarantor)
     text = body.text.strip()
     if not text:
         raise HTTPException(status_code=400, detail="Message cannot be empty")
@@ -131,7 +147,7 @@ async def post_chat_message(
     if prior is not None:
         return (await chat_svc.serialize_many(db, deal, [prior]))[0]
     msg = DealMessage(deal_id=deal_id, sender_id=user.id, text=text, kind="text", client_id=body.client_id,
-                      tg_forward_status="pending")
+                      tg_forward_status="pending", as_guarantor=as_guarantor)
     db.add(msg)
     try:
         await db.flush()
@@ -192,11 +208,13 @@ async def upload_attachment(
     file: UploadFile = File(...),
     caption: str | None = Form(None, max_length=chat_svc.MAX_TEXT),
     client_id: str | None = Form(None, max_length=64),
+    as_guarantor: bool = Form(False),
     user: User = Depends(get_current_user_or_blocked),
     db: AsyncSession = Depends(get_db),
 ):
     deal = await chat_svc.load_deal_for(db, deal_id, user)
     chat_svc.ensure_can_post(user, deal)
+    as_guarantor = _as_guarantor(user, as_guarantor)
     prior = await _existing_by_client_id(db, deal, client_id)
     if prior is not None:
         return (await chat_svc.serialize_many(db, deal, [prior]))[0]
@@ -213,7 +231,7 @@ async def upload_attachment(
     await chat_svc.check_quotas(db, deal_id, user.id, stored)
     text = (caption or "").strip() or f"📎 {name}"
     msg = DealMessage(deal_id=deal_id, sender_id=user.id, text=text[: chat_svc.MAX_TEXT], kind="file",
-                      client_id=client_id, tg_forward_status="pending")
+                      client_id=client_id, tg_forward_status="pending", as_guarantor=as_guarantor)
     db.add(msg)
     await db.flush()
     db.add(DealAttachment(deal_id=deal_id, message_id=msg.id, uploader_id=user.id, filename=name, mime=mime,
