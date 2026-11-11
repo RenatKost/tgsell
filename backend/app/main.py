@@ -20,6 +20,7 @@ from app.routers import saved_searches as saved_searches_router
 from app.routers import me as me_router
 from app.routers import chat as chat_router
 from app.routers import wanted as wanted_router
+from app.routers import price_offers as price_offers_router
 from app.routers import external_escrow as external_escrow_router
 from app.routers import paid_services as paid_services_router
 from app.tasks.payment_checker import run_payment_checker
@@ -191,6 +192,7 @@ app.include_router(utm_router.router, prefix="/api")
 app.include_router(saved_searches_router.router, prefix="/api")
 app.include_router(wanted_router.router, prefix="/api")
 app.include_router(wanted_router.admin_router, prefix="/api")
+app.include_router(price_offers_router.router, prefix="/api")
 
 from app.routers import seo as seo_router  # noqa: E402
 

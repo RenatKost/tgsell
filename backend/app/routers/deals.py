@@ -93,6 +93,9 @@ async def create_deal(
     """Initiate a purchase — create a deal with escrow wallet.
     Accepts either channel_id (single channel) or bundle_id (network of channels).
     """
+    if body.offer_id is not None and body.bundle_id is not None:
+        raise HTTPException(status_code=400, detail="Пропозиція ціни не застосовується до сітки")
+
     if body.bundle_id is not None:
         # ── Bundle deal ────────────────────────────────────────────────
         from app.models.bundle import ChannelBundle, BundleStatus, BundleChannel
@@ -163,6 +166,10 @@ async def create_deal(
             payment_deadline_at=created_stage_deadline(utcnow_naive()),
         )
         db.add(deal)
+        from app.services import price_offers as offer_svc
+        closed_offers = await offer_svc.close_competing_offers(
+            db, [bc.channel_id for bc in bundle.bundle_channels],
+        )
         await db.commit()
         await db.refresh(deal)
         logger.info(f"[DEAL] Bundle deal #{deal.id} CREATED: buyer={user.id}, seller={bundle.seller_id}, bundle={bundle.id}, amount={bundle.price} USDT")
@@ -190,6 +197,11 @@ async def create_deal(
             await bot.session.close()
         except Exception as e:
             logger.error(f"[DEAL] Failed to notify about bundle deal #{deal.id}: {e}", exc_info=True)
+        try:
+            from app.services import price_offers as offer_svc
+            await offer_svc.notify_offers_closed(closed_offers, db)
+        except Exception as e:
+            logger.warning("[DEAL] Competing-offer close notify failed for bundle deal #%s: %s", deal.id, e)
 
         return _deal_to_response(deal, None, user, seller, bundle)
 
@@ -229,12 +241,39 @@ async def create_deal(
     if bundle_busy.scalar_one_or_none():
         raise HTTPException(status_code=400, detail="Channel is part of a bundle with an active deal")
 
+    # Amount snapshot: catalog price, or an accepted offer for this buyer/lot.
+    # Fee uses the same formula as a regular purchase. Escrow / payout code is untouched.
+    amount = channel.price
+    offer = None
+    if body.offer_id is not None:
+        from app.models.price_offer import PriceOffer, PriceOfferStatus
+        offer = (await db.execute(
+            select(PriceOffer).where(PriceOffer.id == body.offer_id).with_for_update()
+        )).scalar_one_or_none()
+        if not offer:
+            raise HTTPException(status_code=404, detail="Пропозицію не знайдено")
+        if offer.buyer_id != user.id:
+            raise HTTPException(status_code=403, detail="Це не ваша пропозиція")
+        if offer.channel_id != channel.id:
+            raise HTTPException(status_code=400, detail="Пропозиція стосується іншого лота")
+        if offer.status != PriceOfferStatus.accepted:
+            raise HTTPException(status_code=400, detail="Пропозицію ще не прийнято")
+        if offer.deal_id is not None:
+            raise HTTPException(status_code=400, detail="За цією пропозицією угоду вже створено")
+        from app.services import price_offers as offer_svc
+        if not offer_svc.acceptance_still_valid(offer):
+            raise HTTPException(
+                status_code=400,
+                detail="Минуло більше 48 годин від прийняття пропозиції. Створити угоду вже не можна.",
+            )
+        amount = offer.amount_usdt
+
     # Generate escrow wallet
     wallet_address, encrypted_private_key = generate_escrow_wallet()
     logger.info(f"[DEAL] Escrow wallet generated: {wallet_address} for channel #{body.channel_id}")
 
-    # Calculate fee
-    fee = channel.price * (settings.service_fee_percent / 100)
+    # Calculate fee (same formula; base is the snapshotted amount)
+    fee = amount * (settings.service_fee_percent / 100)
 
     deal = Deal(
         channel_id=channel.id,
@@ -244,7 +283,7 @@ async def create_deal(
         status=DealStatus.created,
         escrow_wallet_address=wallet_address,
         escrow_private_key_encrypted=encrypted_private_key,
-        amount_usdt=channel.price,
+        amount_usdt=amount,
         service_fee=fee,
         # Task 31: snapshot of seller-stated balance (later lot edits don't change it)
         **checklist_svc.balance_snapshot(channel),
@@ -252,9 +291,16 @@ async def create_deal(
         payment_deadline_at=created_stage_deadline(utcnow_naive()),
     )
     db.add(deal)
+    if offer is not None:
+        await db.flush()
+        offer.deal_id = deal.id
+    from app.services import price_offers as offer_svc
+    closed_offers = await offer_svc.close_competing_offers(
+        db, [channel.id], keep_offer_id=offer.id if offer is not None else None,
+    )
     await db.commit()
     await db.refresh(deal)
-    logger.info(f"[DEAL] Deal #{deal.id} CREATED: buyer={user.id}, seller={channel.seller_id}, channel={channel.id}, amount={channel.price} USDT, fee={fee:.2f}, escrow={wallet_address}")
+    logger.info(f"[DEAL] Deal #{deal.id} CREATED: buyer={user.id}, seller={channel.seller_id}, channel={channel.id}, amount={amount} USDT, fee={fee:.2f}, escrow={wallet_address}")
 
     # Get seller for response
     seller_result = await db.execute(select(User).where(User.id == channel.seller_id))
@@ -283,6 +329,11 @@ async def create_deal(
         logger.info(f"[DEAL] Telegram notifications sent for deal #{deal.id}")
     except Exception as e:
         logger.error(f"[DEAL] Failed to notify about deal #{deal.id}: {e}", exc_info=True)
+    try:
+        from app.services import price_offers as offer_svc
+        await offer_svc.notify_offers_closed(closed_offers, db)
+    except Exception as e:
+        logger.warning("[DEAL] Competing-offer close notify failed for deal #%s: %s", deal.id, e)
 
     return _deal_to_response(deal, channel, user, seller)
 

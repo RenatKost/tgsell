@@ -142,8 +142,10 @@ export const dealsAPI = {
 		api.get(`/deals/${id}/chat/attachments/${attId}`, { params: { thumb }, responseType: 'blob' }),
 	chatUnread: (ids) => api.get('/deals/my/unread', { params: ids ? { ids: ids.join(',') } : {} }),
 
-	create: (channelId, bundleId = null) =>
-		api.post('/deals', bundleId ? { bundle_id: bundleId } : { channel_id: channelId }),
+	create: (channelId, bundleId = null, offerId = null) =>
+		api.post('/deals', bundleId
+			? { bundle_id: bundleId }
+			: (offerId ? { channel_id: channelId, offer_id: offerId } : { channel_id: channelId })),
 
 	getById: (id) =>
 		api.get(`/deals/${id}`),
@@ -484,6 +486,15 @@ export const trackingAPI = {
 			return api.post('/track/funnel', body);
 		}
 	},
+};
+
+export const priceOffersAPI = {
+	create: (body) => api.post('/price-offers', body),
+	mine: () => api.get('/price-offers/my'),
+	inbox: (status) => api.get('/price-offers/inbox', { params: status ? { status } : {} }),
+	get: (id) => api.get(`/price-offers/${id}`),
+	accept: (id) => api.post(`/price-offers/${id}/accept`),
+	decline: (id) => api.post(`/price-offers/${id}/decline`),
 };
 
 export const userActivityAPI = {

@@ -2,6 +2,7 @@ import { useEffect } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AppContext';
 import { peekPendingBuy } from '../../utils/buyIntent';
+import { peekPendingOffer } from '../../utils/offerIntent';
 
 /** After Telegram login on another path, return the buyer to the lot they wanted to buy. */
 const BuyIntentGate = () => {
@@ -11,7 +12,7 @@ const BuyIntentGate = () => {
 
 	useEffect(() => {
 		if (!isAuthenticated) return;
-		const pending = peekPendingBuy();
+		const pending = peekPendingOffer() || peekPendingBuy();
 		if (!pending) return;
 		const target = `/channel/${pending.channelId}`;
 		if (loc.pathname === target) return;

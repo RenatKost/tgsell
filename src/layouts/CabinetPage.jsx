@@ -13,6 +13,7 @@ import useMyServiceOrders from '../hooks/useMyServiceOrders';
 import { parseCabinetTopParam, openInvoices } from '../utils/topFunnel';
 import ReferralCard from '../components/Cabinet/ReferralCard';
 import SavedSearches from '../components/Cabinet/SavedSearches';
+import PriceOffersPanel from '../components/Cabinet/PriceOffersPanel';
 import BundleBalanceEditor from '../components/Balance/BundleBalanceEditor';
 import BalanceBadges from '../components/Balance/BalanceBadges';
 import {
@@ -103,6 +104,11 @@ const CabinetPage = () => {
 
 	// On open, on every tab switch, and when favourites change anywhere (♡ toggle).
 	useEffect(() => { refreshCounts(); }, [refreshCounts, activeTab, favoriteIds]);
+	useEffect(() => {
+		if (searchParams.get('offers') !== '1') return;
+		const t = setTimeout(() => document.getElementById('price-offers')?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 200);
+		return () => clearTimeout(t);
+	}, [searchParams]);
 	useEffect(() => {
 		const onFocus = () => { if (document.visibilityState === 'visible') refreshCounts(); };
 		document.addEventListener('visibilitychange', onFocus);
@@ -296,6 +302,13 @@ const CabinetPage = () => {
 			<PromoBanner className='mb-4' />
 			<ReferralCard className='mb-4' />
 			<div className='esc-reveal' style={{ '--d': '80ms' }}><AlertBotHint className='mb-6' /></div>
+
+			{user && (
+				<>
+					<PriceOffersPanel role='seller' highlight={searchParams.get('offers') === '1'} onChanged={refreshCounts} />
+					<PriceOffersPanel role='buyer' />
+				</>
+			)}
 
 			{/* Tabs: 3×2 grid on phones (all visible, no hidden scroll), underline row from md */}
 			<div role='tablist' aria-label='Розділи кабінету'

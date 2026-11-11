@@ -5,7 +5,7 @@ import '../Services/topGlow.css';
  * Premium confirmation before POST /api/deals. The deal is created only when
  * the buyer presses «Підтвердити покупку» — never silently after login.
  */
-const BuyConfirmModal = ({ channel, open, onClose, onConfirm, busy, error }) => {
+const BuyConfirmModal = ({ channel, open, onClose, onConfirm, busy, error, amount, note }) => {
 	if (!open || !channel) return null;
 	return (
 		<div
@@ -22,10 +22,10 @@ const BuyConfirmModal = ({ channel, open, onClose, onConfirm, busy, error }) => 
 						{channel.channel_name || 'Канал'}
 					</h2>
 					<p className='text-sm text-gray-500 dark:text-gray-400 mt-2'>
-						Угода створюється на суму лота. Кошти підуть на адресу гаранта (ескроу) лише після підтвердження готовності обома сторонами.
+						{note || 'Угода створюється на суму лота. Кошти підуть на адресу гаранта (ескроу) лише після підтвердження готовності обома сторонами.'}
 					</p>
 					<p className='mt-4 text-2xl font-bold text-gray-900 dark:text-white tabular-nums'>
-						{fmtUsdt(channel.price)} <span className='text-base font-semibold text-accent'>USDT</span>
+						{fmtUsdt(amount != null ? amount : channel.price)} <span className='text-base font-semibold text-accent'>USDT</span>
 					</p>
 					{error && (
 						<p className='mt-3 text-sm text-red-600 dark:text-red-400'>{error}</p>
