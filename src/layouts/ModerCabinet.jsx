@@ -1,4 +1,5 @@
 import { parseUtc } from '../utils/datetime';
+import { siteViewsLabel } from '../utils/siteViews';
 import { fmtUsdt, fmtNum } from '../utils/money';
 import { formatEr } from '../utils/er';
 import { useEffect, useRef, useState } from 'react';
@@ -941,7 +942,7 @@ const ModerCabinet = () => {
 											<div className='bg-gray-50 dark:bg-slate-700/60 p-3 rounded-xl'>
 												<FontAwesomeIcon icon={faEye} className='text-gray-400 mr-1' />
 												<span className='font-semibold text-gray-800 dark:text-gray-200'>{channel.views_hidden ? '🔒' : (fmtNum(channel.avg_views) || '—')}</span>
-												<p className='text-gray-400 text-xs mt-0.5'>переглядів</p>
+												<p className='text-gray-400 text-xs mt-0.5' title='Середні перегляди на пост у Telegram'>перегляди в Telegram</p>
 											</div>
 											<div className='bg-gray-50 dark:bg-slate-700/60 p-3 rounded-xl'>
 												<FontAwesomeIcon icon={faBarChart} className='text-gray-400 mr-1' />
@@ -953,6 +954,11 @@ const ModerCabinet = () => {
 												<p className='text-gray-400 text-xs mt-0.5'>ціна</p>
 											</div>
 										</div>
+										{(channel.site_views_7d != null || channel.site_views_total != null) && (
+											<p className='mt-2 text-sm text-gray-600 dark:text-gray-300'>
+												{siteViewsLabel(channel.site_views_7d, channel.site_views_total)}
+											</p>
+										)}
 										{(channel.listing_type === 'auction' || channel.listing_type === 'both') && channel.auction_start_price && (
 											<div className='grid grid-cols-2 md:grid-cols-3 gap-3 text-sm mt-3'>
 												<div className='bg-orange-50 dark:bg-orange-900/20 p-3 rounded-xl'>
@@ -1232,7 +1238,7 @@ const ModerCabinet = () => {
 											<div className='bg-gray-50 dark:bg-slate-700/60 p-2.5 rounded-xl'>
 												<FontAwesomeIcon icon={faEye} className='text-gray-400 mr-1' />
 												<span className='font-semibold text-gray-800 dark:text-gray-200'>{channel.views_hidden ? '🔒' : (fmtNum(channel.avg_views) || '—')}</span>
-												<p className='text-gray-400 text-xs'>переглядів</p>
+												<p className='text-gray-400 text-xs' title='Середні перегляди на пост у Telegram'>перегляди в Telegram</p>
 											</div>
 											<div className='bg-gray-50 dark:bg-slate-700/60 p-2.5 rounded-xl'>
 												<FontAwesomeIcon icon={faBarChart} className='text-gray-400 mr-1' />
@@ -1249,6 +1255,11 @@ const ModerCabinet = () => {
 												<p className='text-gray-400 text-xs'>категорія</p>
 											</div>
 										</div>
+										{(channel.site_views_7d != null || channel.site_views_total != null) && (
+											<p className='mt-2 text-sm text-gray-600 dark:text-gray-300'>
+												{siteViewsLabel(channel.site_views_7d, channel.site_views_total)}
+											</p>
+										)}
 										<BalanceBadges stars={channel.stars_balance} ton={channel.ton_balance} className='mt-3' />
 										{channel.seller_telegram && (
 											<p className='mt-3 text-sm bg-purple-50 dark:bg-purple-900/20 text-gray-700 dark:text-gray-300 p-2.5 rounded-xl'>

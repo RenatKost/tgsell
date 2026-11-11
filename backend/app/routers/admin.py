@@ -103,6 +103,7 @@ async def get_pending_channels(
     channels = result.scalars().all()
     from app.services.pricing import high_views_flag
     from app.services.clarifications import attach
+    from app.services.site_views import attach as attach_site_views
     out = []
     for c in channels:
         r = ChannelResponse.model_validate(c)
@@ -111,7 +112,8 @@ async def get_pending_channels(
                                last_post_date=c.last_post_date)
         r.moderation_flags = [flag] if flag else []
         out.append(r)
-    return await attach(db, out, channels, admin)
+    out = await attach(db, out, channels, admin)
+    return await attach_site_views(db, out, channels, admin)
 
 
 async def _notify_seller_channel_approved(db, channel, promo: bool) -> None:
@@ -306,7 +308,9 @@ async def clarify_channel(
             await bot.session.close()
     except Exception as e:
         logger.warning(f"[ADMIN] Channel #{channel.id} clarify: seller notification failed: {e}")
-    return await attach_one(db, ChannelResponse.model_validate(channel), channel, admin)
+    from app.services.site_views import attach_one as attach_site_views_one
+    data = await attach_one(db, ChannelResponse.model_validate(channel), channel, admin)
+    return await attach_site_views_one(db, data, channel, admin)
 
 
 @router.get("/deals", response_model=list[DealResponse])
@@ -926,7 +930,9 @@ async def list_all_channels(
     result = await db.execute(query)
     channels = result.scalars().all()
     from app.services.clarifications import attach
-    return await attach(db, [ChannelResponse.model_validate(c) for c in channels], channels, admin)
+    from app.services.site_views import attach as attach_site_views
+    items = await attach(db, [ChannelResponse.model_validate(c) for c in channels], channels, admin)
+    return await attach_site_views(db, items, channels, admin)
 
 
 @router.put("/channels/{channel_id}", response_model=ChannelResponse)

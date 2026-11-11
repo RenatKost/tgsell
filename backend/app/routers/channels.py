@@ -176,7 +176,9 @@ async def list_channels(
         items.append(resp)
 
     from app.services.clarifications import attach
+    from app.services.site_views import attach as attach_site_views
     items = await attach(db, items, list(channels), viewer)
+    items = await attach_site_views(db, items, list(channels), viewer)
 
     return ChannelListResponse(
         items=items,
@@ -235,7 +237,9 @@ async def get_channel(channel_id: int, db: AsyncSession = Depends(get_db),
     data = await _attach_bundle_info(db, data)
     apply_estimate(data, await load_market(db))
     from app.services.clarifications import attach_one
-    return await attach_one(db, data, channel, viewer)
+    from app.services.site_views import attach_one as attach_site_views_one
+    data = await attach_one(db, data, channel, viewer)
+    return await attach_site_views_one(db, data, channel, viewer)
 
 
 @router.get("/{channel_id}/stats", response_model=list[ChannelStatsResponse])
@@ -742,7 +746,9 @@ async def update_channel(
     await db.commit()
     await db.refresh(channel)
     from app.services.clarifications import attach_one
-    return await attach_one(db, ChannelResponse.model_validate(channel), channel, user)
+    from app.services.site_views import attach_one as attach_site_views_one
+    data = await attach_one(db, ChannelResponse.model_validate(channel), channel, user)
+    return await attach_site_views_one(db, data, channel, user)
 
 
 @router.post("/{channel_id}/clarification-reply", response_model=ChannelResponse)
@@ -786,7 +792,9 @@ async def reply_to_clarification(
     except Exception as e:
         logger.warning(f"[CHANNEL] Failed to notify admin about clarification reply #{channel.id}: {e}")
 
-    return await attach_one(db, ChannelResponse.model_validate(channel), channel, user)
+    from app.services.site_views import attach_one as attach_site_views_one
+    data = await attach_one(db, ChannelResponse.model_validate(channel), channel, user)
+    return await attach_site_views_one(db, data, channel, user)
 
 
 @router.delete("/{channel_id}", status_code=status.HTTP_204_NO_CONTENT)

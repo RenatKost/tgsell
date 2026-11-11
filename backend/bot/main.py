@@ -848,8 +848,12 @@ def top_activated_text(channel, active_until) -> str:
 
 
 async def notify_top_activated(bot: Bot, channel, seller: User, active_until) -> bool:
-    """Seller: paid Top has been switched on. Returns True if Telegram accepted the message
-    (or there is no chat to deliver to — stamp as done, do not retry forever)."""
+    """Seller: paid Top has been switched on.
+
+    Returns True when the message was accepted, or when delivery cannot succeed
+    (no telegram_id, bot blocked, chat not found) — the hook stamps and stops.
+    Returns False only for temporary errors so the hook can retry (up to 24h).
+    """
     if not seller or not seller.telegram_id:
         return True
     try:
@@ -858,7 +862,8 @@ async def notify_top_activated(bot: Bot, channel, seller: User, active_until) ->
         return True
     except Exception as e:
         logger.warning(f"[NOTIFY] Cannot notify seller about Top activation on channel #{getattr(channel, 'id', '?')}: {e}")
-        return False
+        from app.utils.telegram_errors import is_permanent_telegram_error
+        return is_permanent_telegram_error(e)
 
 
 async def notify_bundle_approved(bot: Bot, bundle, seller: User, promo_top: bool = False):

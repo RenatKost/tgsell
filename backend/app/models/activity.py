@@ -13,6 +13,7 @@ class UserEvent(Base):
         Index("ix_user_events_created", "created_at"),
         Index("ix_user_events_user_created", "user_id", "created_at"),
         Index("ix_user_events_type_created", "event_type", "created_at"),
+        Index("ix_user_events_type_object_created", "event_type", "object_id", "created_at"),
     )
 
     id: Mapped[int] = mapped_column(primary_key=True)
