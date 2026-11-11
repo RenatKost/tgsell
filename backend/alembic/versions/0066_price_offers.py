@@ -28,6 +28,8 @@ def upgrade() -> None:
         sa.Column("expires_at", sa.DateTime(), nullable=False),
         sa.Column("created_at", sa.DateTime(), server_default=sa.func.now(), nullable=False),
         sa.Column("decided_at", sa.DateTime(), nullable=True),
+        sa.Column("accepted_at", sa.DateTime(), nullable=True),
+        sa.Column("close_reason", sa.String(32), nullable=True),
         sa.Column("deal_id", sa.Integer(), sa.ForeignKey("deals.id"), nullable=True),
     )
     op.create_index("ix_price_offers_channel_id", "price_offers", ["channel_id"])

@@ -166,6 +166,10 @@ async def create_deal(
             payment_deadline_at=created_stage_deadline(utcnow_naive()),
         )
         db.add(deal)
+        from app.services import price_offers as offer_svc
+        closed_offers = await offer_svc.close_competing_offers(
+            db, [bc.channel_id for bc in bundle.bundle_channels],
+        )
         await db.commit()
         await db.refresh(deal)
         logger.info(f"[DEAL] Bundle deal #{deal.id} CREATED: buyer={user.id}, seller={bundle.seller_id}, bundle={bundle.id}, amount={bundle.price} USDT")
@@ -193,6 +197,11 @@ async def create_deal(
             await bot.session.close()
         except Exception as e:
             logger.error(f"[DEAL] Failed to notify about bundle deal #{deal.id}: {e}", exc_info=True)
+        try:
+            from app.services import price_offers as offer_svc
+            await offer_svc.notify_offers_closed(closed_offers, db)
+        except Exception as e:
+            logger.warning("[DEAL] Competing-offer close notify failed for bundle deal #%s: %s", deal.id, e)
 
         return _deal_to_response(deal, None, user, seller, bundle)
 
@@ -251,6 +260,12 @@ async def create_deal(
             raise HTTPException(status_code=400, detail="Пропозицію ще не прийнято")
         if offer.deal_id is not None:
             raise HTTPException(status_code=400, detail="За цією пропозицією угоду вже створено")
+        from app.services import price_offers as offer_svc
+        if not offer_svc.acceptance_still_valid(offer):
+            raise HTTPException(
+                status_code=400,
+                detail="Минуло більше 48 годин від прийняття пропозиції. Створити угоду вже не можна.",
+            )
         amount = offer.amount_usdt
 
     # Generate escrow wallet
@@ -279,6 +294,10 @@ async def create_deal(
     if offer is not None:
         await db.flush()
         offer.deal_id = deal.id
+    from app.services import price_offers as offer_svc
+    closed_offers = await offer_svc.close_competing_offers(
+        db, [channel.id], keep_offer_id=offer.id if offer is not None else None,
+    )
     await db.commit()
     await db.refresh(deal)
     logger.info(f"[DEAL] Deal #{deal.id} CREATED: buyer={user.id}, seller={channel.seller_id}, channel={channel.id}, amount={amount} USDT, fee={fee:.2f}, escrow={wallet_address}")
@@ -310,6 +329,11 @@ async def create_deal(
         logger.info(f"[DEAL] Telegram notifications sent for deal #{deal.id}")
     except Exception as e:
         logger.error(f"[DEAL] Failed to notify about deal #{deal.id}: {e}", exc_info=True)
+    try:
+        from app.services import price_offers as offer_svc
+        await offer_svc.notify_offers_closed(closed_offers, db)
+    except Exception as e:
+        logger.warning("[DEAL] Competing-offer close notify failed for deal #%s: %s", deal.id, e)
 
     return _deal_to_response(deal, channel, user, seller)
 

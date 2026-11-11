@@ -16,12 +16,14 @@ from app.utils.timeutil import utcnow_naive
 def test_parse_amount_bounds():
     from app.services.price_offers import OfferError, parse_amount
 
-    assert parse_amount(30, 100) == 30.0
+    assert parse_amount(50, 100) == 50.0
     assert parse_amount(99.99, 100) == 99.99
     with pytest.raises(OfferError, match="нижчою за ціну"):
         parse_amount(100, 100)
-    with pytest.raises(OfferError, match="30%"):
-        parse_amount(29.99, 100)
+    with pytest.raises(OfferError, match="50%"):
+        parse_amount(49.99, 100)
+    with pytest.raises(OfferError, match="50%"):
+        parse_amount(30, 100)
     with pytest.raises(OfferError, match="0,01"):
         parse_amount(40.123, 100)
 
@@ -64,8 +66,10 @@ async def _client(pg_orm, monkeypatch, *extra_modules):
     monkeypatch.setattr(settings, "frontend_url", "https://tgsell.me")
     monkeypatch.setattr(settings, "service_fee_percent", 3.0)
 
-    importlib.import_module("app.models.channel")
-    importlib.import_module("app.models.deal")
+    for name in ("user", "channel", "deal", "price_offer", "bundle", "auction"):
+        importlib.import_module(f"app.models.{name}")
+    from sqlalchemy.orm import configure_mappers
+    configure_mappers()
     deals = importlib.import_module("app.routers.deals")
     monkeypatch.setattr(deals, "generate_escrow_wallet", lambda: ("TOFFERESCROWADDR00000000000000001", "enc"))
 
@@ -305,3 +309,167 @@ async def test_offer_events_and_funnel_counter_excludes_staff(pg_orm, monkeypatc
     assert f["offer_sent"] == 1  # unique non-staff
     assert f["offer_sent_total"] == 2  # two buyer events, staff dropped
     assert [s["step"] for s in f["steps"]] == ["visit", "channel_view", "buy_click", "deal_start", "payment"]
+
+
+@pytest.mark.asyncio
+async def test_deal_from_offer_rejected_when_accept_older_than_48h(pg_orm, monkeypatch):
+    from app.models.deal import Deal
+    from app.models.price_offer import PriceOffer
+    from sqlalchemy import func, select
+
+    async with pg_orm.session() as db:
+        ids = await _seed(db)
+    app, cl, bot = await _client(pg_orm, monkeypatch)
+    async with cl:
+        created = await cl.post(
+            "/api/price-offers",
+            json={"channel_id": ids.ch_id, "amount_usdt": 70},
+            headers=_tok(ids.buyer_id),
+        )
+        assert created.status_code == 201, created.text
+        offer_id = created.json()["id"]
+        acc = await cl.post(f"/api/price-offers/{offer_id}/accept", headers=_tok(ids.seller_id))
+        assert acc.status_code == 200
+        assert acc.json()["accepted_at"] is not None
+        async with pg_orm.session() as db:
+            offer = await db.get(PriceOffer, offer_id)
+            offer.accepted_at = utcnow_naive() - timedelta(hours=48, minutes=1)
+            await db.commit()
+        # buyer can see the offer, but can no longer confirm the deal
+        got = (await cl.get(f"/api/price-offers/{offer_id}", headers=_tok(ids.buyer_id))).json()
+        assert got["can_create_deal"] is False
+        deal = await cl.post(
+            "/api/deals",
+            json={"channel_id": ids.ch_id, "offer_id": offer_id},
+            headers=_tok(ids.buyer_id),
+        )
+        assert deal.status_code == 400
+        assert "48 годин" in deal.json()["detail"]
+        pub = (await cl.get(f"/api/channels/{ids.ch_id}")).json()
+        assert pub["price"] == 100
+    async with pg_orm.session() as db:
+        n = (await db.execute(select(func.count()).select_from(Deal))).scalar()
+        assert n == 0
+
+
+@pytest.mark.asyncio
+async def test_any_deal_closes_other_pending_and_accepted_offers(pg_orm, monkeypatch):
+    """A deal at the listed price closes everyone else's pending/accepted offers on that lot."""
+    from app.models.price_offer import PriceOffer, PriceOfferStatus
+    from app.models.user import User
+    from app.services.price_offers import CLOSE_REASON_LOT_IN_DEAL
+
+    async with pg_orm.session() as db:
+        ids = await _seed(db)
+        extra = User(first_name="Buyer2", telegram_id=51004)
+        db.add(extra)
+        await db.commit()
+        extra_id = extra.id
+
+    app, cl, bot = await _client(pg_orm, monkeypatch)
+    async with cl:
+        pending = await cl.post(
+            "/api/price-offers",
+            json={"channel_id": ids.ch_id, "amount_usdt": 70, "comment": "pending-one"},
+            headers=_tok(ids.buyer_id),
+        )
+        accepted = await cl.post(
+            "/api/price-offers",
+            json={"channel_id": ids.ch_id, "amount_usdt": 80},
+            headers=_tok(extra_id),
+        )
+        assert pending.status_code == 201 and accepted.status_code == 201, (pending.text, accepted.text)
+        pending_id, accepted_id = pending.json()["id"], accepted.json()["id"]
+        acc = await cl.post(f"/api/price-offers/{accepted_id}/accept", headers=_tok(ids.seller_id))
+        assert acc.status_code == 200
+
+        # third party buys at the listed price
+        deal = await cl.post("/api/deals", json={"channel_id": ids.ch_id}, headers=_tok(ids.other_id))
+        assert deal.status_code == 201, deal.text
+        assert deal.json()["amount_usdt"] == 100
+
+        p = (await cl.get(f"/api/price-offers/{pending_id}", headers=_tok(ids.buyer_id))).json()
+        a = (await cl.get(f"/api/price-offers/{accepted_id}", headers=_tok(extra_id))).json()
+        assert p["status"] == "closed" and p["close_reason"] == CLOSE_REASON_LOT_IN_DEAL
+        assert a["status"] == "closed" and a["close_reason"] == CLOSE_REASON_LOT_IN_DEAL
+        assert a["deal_id"] is None and p["deal_id"] is None
+
+        closed_texts = [text for _chat, text, _kw in bot.sent if "пропозиція закрита" in text.lower() or "пропозицію закрито" in text.lower()]
+        # the required honest sentence must reach both displaced buyers
+        assert len(closed_texts) == 2
+        assert all("Лот уже в угоді з іншим покупцем, ваша пропозиція закрита" in text or
+                   "уже в угоді з іншим покупцем, ваша пропозиція закрита" in text
+                   for text in closed_texts)
+        chats = {chat for chat, text, _ in bot.sent if "пропозиція закрита" in text.lower() or "пропозицію закрито" in text.lower()}
+        assert chats == {51002, 51004}  # the two offer buyers, not the deal buyer / seller
+
+
+@pytest.mark.asyncio
+async def test_offer_deal_keeps_winner_and_closes_others(pg_orm, monkeypatch):
+    from app.models.user import User
+    from app.services.price_offers import CLOSE_REASON_LOT_IN_DEAL
+
+    async with pg_orm.session() as db:
+        ids = await _seed(db, price=200)
+        extra = User(first_name="Buyer2", telegram_id=51005)
+        db.add(extra)
+        await db.commit()
+        extra_id = extra.id
+
+    app, cl, bot = await _client(pg_orm, monkeypatch)
+    async with cl:
+        other_offer = await cl.post(
+            "/api/price-offers",
+            json={"channel_id": ids.ch_id, "amount_usdt": 120},
+            headers=_tok(extra_id),
+        )
+        winner = await cl.post(
+            "/api/price-offers",
+            json={"channel_id": ids.ch_id, "amount_usdt": 150},
+            headers=_tok(ids.buyer_id),
+        )
+        assert other_offer.status_code == 201 and winner.status_code == 201
+        other_id, winner_id = other_offer.json()["id"], winner.json()["id"]
+        assert (await cl.post(f"/api/price-offers/{winner_id}/accept", headers=_tok(ids.seller_id))).status_code == 200
+        deal = await cl.post(
+            "/api/deals",
+            json={"channel_id": ids.ch_id, "offer_id": winner_id},
+            headers=_tok(ids.buyer_id),
+        )
+        assert deal.status_code == 201, deal.text
+        assert deal.json()["amount_usdt"] == 150
+        win = (await cl.get(f"/api/price-offers/{winner_id}", headers=_tok(ids.buyer_id))).json()
+        lost = (await cl.get(f"/api/price-offers/{other_id}", headers=_tok(extra_id))).json()
+        assert win["status"] == "accepted" and win["deal_id"] == deal.json()["id"]
+        assert lost["status"] == "closed" and lost["close_reason"] == CLOSE_REASON_LOT_IN_DEAL
+        pub = (await cl.get(f"/api/channels/{ids.ch_id}")).json()
+        assert pub["price"] == 200
+
+
+@pytest.mark.asyncio
+async def test_close_notify_failure_does_not_block_deal(pg_orm, monkeypatch):
+    import bot.main as bot_main
+    from app.models.user import User
+
+    async def boom(*_a, **_k):
+        raise RuntimeError("telegram down")
+
+    async with pg_orm.session() as db:
+        ids = await _seed(db)
+        extra = User(first_name="Buyer2", telegram_id=51006)
+        db.add(extra)
+        await db.commit()
+        extra_id = extra.id
+    app, cl, bot = await _client(pg_orm, monkeypatch)
+    monkeypatch.setattr(bot_main, "notify_price_offer_closed", boom)
+    async with cl:
+        r = await cl.post(
+            "/api/price-offers",
+            json={"channel_id": ids.ch_id, "amount_usdt": 70},
+            headers=_tok(extra_id),
+        )
+        assert r.status_code == 201
+        deal = await cl.post("/api/deals", json={"channel_id": ids.ch_id}, headers=_tok(ids.buyer_id))
+        assert deal.status_code == 201, deal.text
+        lost = (await cl.get(f"/api/price-offers/{r.json()['id']}", headers=_tok(extra_id))).json()
+        assert lost["status"] == "closed"

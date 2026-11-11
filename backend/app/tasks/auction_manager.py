@@ -69,6 +69,9 @@ async def _create_deal_for_auction(db: AsyncSession, auction: Auction) -> Deal |
     )
     db.add(deal)
     await db.flush()  # Get deal.id
+    from app.services import price_offers as offer_svc
+    closed_offers = await offer_svc.close_competing_offers(db, [auction.channel_id])
+    deal._closed_price_offers = closed_offers  # notified after the cycle commits
 
     # Mark channel as sold
     channel = await db.get(Channel, auction.channel_id)
@@ -178,6 +181,7 @@ async def _notify_auction_no_bids(auction: Auction, channel_name: str, seller: U
 
 async def _process_auctions(db: AsyncSession):
     now = datetime.utcnow()
+    closed_offers: list = []
 
     # 1. Activate scheduled auctions whose start time has passed
     result = await db.execute(
@@ -199,7 +203,7 @@ async def _process_auctions(db: AsyncSession):
             continue
         auction.status = "ended"
         logger.info(f"Auction #{auction.id} ended (channel #{auction.channel_id})")
-        await _finalize_auction(db, auction)
+        closed_offers.extend(await _finalize_auction(db, auction) or [])
 
     # 3. Handle buyout auctions that were ended by place_bid but not yet finalized
     result = await db.execute(
@@ -225,19 +229,26 @@ async def _process_auctions(db: AsyncSession):
                 await _alert_frozen(auction, blocked)
                 continue
             logger.info(f"Auction #{auction.id} was buyout — creating deal now")
-            await _finalize_auction(db, auction)
+            closed_offers.extend(await _finalize_auction(db, auction) or [])
 
     await db.commit()
+    try:
+        from app.services import price_offers as offer_svc
+        await offer_svc.notify_offers_closed(closed_offers, db)
+    except Exception as e:
+        logger.warning("[AUCTION] Competing-offer close notify failed: %s", e)
 
 
-async def _finalize_auction(db: AsyncSession, auction: Auction):
+async def _finalize_auction(db: AsyncSession, auction: Auction) -> list:
     """Create deal and send notifications for a finished auction."""
+    closed_offers: list = []
     channel = await db.get(Channel, auction.channel_id)
     channel_name = channel.channel_name if channel else "—"
 
     if auction.winner_id:
         try:
             deal, channel_name = await _create_deal_for_auction(db, auction)
+            closed_offers = list(getattr(deal, "_closed_price_offers", None) or [])
 
             winner = await db.get(User, auction.winner_id)
             seller = await db.get(User, auction.seller_id)
@@ -259,6 +270,7 @@ async def _finalize_auction(db: AsyncSession, auction: Auction):
             pass  # Already in correct state
         if seller:
             await _notify_auction_no_bids(auction, channel_name, seller)
+    return closed_offers
 
 
 async def run_auction_manager(interval_seconds: int = 60):

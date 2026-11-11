@@ -680,6 +680,28 @@ async def notify_price_offer_accepted(bot: Bot, offer, channel, buyer: User, sel
         return False
 
 
+
+async def notify_price_offer_closed(bot: Bot, offer, channel, buyer: User) -> bool:
+    """Buyer: this lot is now in a deal with someone else. Participant only, not a broadcast."""
+    if not buyer or not getattr(buyer, "telegram_id", None):
+        return True
+    frontend_url = settings.frontend_url.rstrip("/")
+    name = html.escape(getattr(channel, "channel_name", None) or "Лот") if channel else "Лот"
+    text = (
+        f"ℹ️ <b>Пропозицію закрито</b>\n\n"
+        f"Лот «{name}» уже в угоді з іншим покупцем, ваша пропозиція закрита.\n"
+        f"<a href=\"{frontend_url}/catalog\">До каталогу →</a>"
+    )
+    try:
+        await bot.send_message(buyer.telegram_id, text, parse_mode=ParseMode.HTML)
+        logger.info("[NOTIFY] Buyer %s notified that offer #%s was closed", buyer.telegram_id, getattr(offer, "id", "?"))
+        return True
+    except Exception as e:
+        logger.warning("[NOTIFY] Failed to notify buyer about closed offer #%s: %s", getattr(offer, "id", "?"), e)
+        return False
+
+
+
 async def notify_payment_requested(bot: Bot, deal: Deal, buyer: User, seller: User) -> bool:
     """Buyer: both sides are ready, the escrow address is now the one to pay.
 

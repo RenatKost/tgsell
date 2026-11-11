@@ -13,8 +13,9 @@ class PriceOfferStatus:
     accepted = "accepted"
     declined = "declined"
     expired = "expired"
+    closed = "closed"
 
-    ALL = (pending, accepted, declined, expired)
+    ALL = (pending, accepted, declined, expired, closed)
     ACTIVE = (pending,)  # «активна» = ще чекає рішення продавця
 
 
@@ -47,5 +48,7 @@ class PriceOffer(Base):
     expires_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, index=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), nullable=False)
     decided_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    accepted_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    close_reason: Mapped[str | None] = mapped_column(String(32), nullable=True)
     # Set when the buyer confirms and POST /api/deals creates a deal at this amount.
     deal_id: Mapped[int | None] = mapped_column(Integer, ForeignKey("deals.id"), nullable=True)

@@ -31,7 +31,11 @@ def _name(user: User | None) -> str | None:
 
 
 def _to_response(offer: PriceOffer, channel: Channel | None, buyer: User | None, viewer_id: int) -> PriceOfferResponse:
-    accepted_unused = offer.status == PriceOfferStatus.accepted and offer.deal_id is None
+    accepted_unused = (
+        offer.status == PriceOfferStatus.accepted
+        and offer.deal_id is None
+        and svc.acceptance_still_valid(offer)
+    )
     return PriceOfferResponse(
         id=offer.id,
         channel_id=offer.channel_id,
@@ -47,6 +51,8 @@ def _to_response(offer: PriceOffer, channel: Channel | None, buyer: User | None,
         expires_at=offer.expires_at,
         created_at=offer.created_at,
         decided_at=offer.decided_at,
+        accepted_at=offer.accepted_at,
+        close_reason=offer.close_reason,
         deal_id=offer.deal_id,
         can_create_deal=accepted_unused and viewer_id == offer.buyer_id,
     )
@@ -230,8 +236,10 @@ async def accept_offer(
     if busy:
         raise HTTPException(status_code=400, detail="По цьому лоту вже є активна угода")
 
+    now = utcnow_naive()
     offer.status = PriceOfferStatus.accepted
-    offer.decided_at = utcnow_naive()
+    offer.decided_at = now
+    offer.accepted_at = now
     await db.commit()
     await db.refresh(offer)
 

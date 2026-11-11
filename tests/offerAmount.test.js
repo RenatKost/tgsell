@@ -14,11 +14,12 @@ if (typeof globalThis.localStorage === 'undefined') {
 }
 
 describe('offerAmount', () => {
-	it('requires an amount strictly below the lot price and at least 30%', () => {
-		assert.deepEqual(offerBounds(100), { min: 30, max: 99.99, price: 100 });
+	it('requires an amount strictly below the lot price and at least 50%', () => {
+		assert.deepEqual(offerBounds(100), { min: 50, max: 99.99, price: 100 });
 		assert.equal(validateOfferAmount(100, 100), 'Пропозиція має бути нижчою за ціну лота');
-		assert.equal(validateOfferAmount(29.99, 100), 'Пропозиція має бути не нижчою за 30% ціни лота');
-		assert.equal(validateOfferAmount(30, 100), null);
+		assert.equal(validateOfferAmount(49.99, 100), 'Пропозиція має бути не нижчою за 50% ціни лота');
+		assert.equal(validateOfferAmount(50, 100), null);
+		assert.equal(validateOfferAmount(30, 100), 'Пропозиція має бути не нижчою за 50% ціни лота');
 		assert.equal(validateOfferAmount(99.99, 100), null);
 	});
 

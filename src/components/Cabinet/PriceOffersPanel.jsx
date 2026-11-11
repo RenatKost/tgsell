@@ -10,6 +10,7 @@ const STATUS_UA = {
 	accepted: { text: 'Прийнята', tone: 'green' },
 	declined: { text: 'Відхилена', tone: 'gray' },
 	expired: { text: 'Закінчилась', tone: 'gray' },
+	closed: { text: 'Закрита', tone: 'gray' },
 };
 
 const PriceOffersPanel = ({ role, highlight, onChanged }) => {
@@ -63,8 +64,8 @@ const PriceOffersPanel = ({ role, highlight, onChanged }) => {
 					</h2>
 					<p className='text-sm text-gray-500 dark:text-gray-400 mt-0.5'>
 						{role === 'seller'
-							? 'Чужі пропозиції бачите лише ви. Прийняття не змінює публічну ціну лота.'
-							: 'Якщо продавець прийме пропозицію, угоду потрібно підтвердити окремо.'}
+							? 'Чужі пропозиції бачите лише ви. Прийняття не змінює публічну ціну лота. Перша підтверджена покупцем угода забирає лот; інші пропозиції закриються автоматично.'
+							: 'Якщо продавець прийме пропозицію, угоду потрібно підтвердити окремо протягом 48 годин.'}
 					</p>
 				</div>
 				{pending.length > 0 && <Badge tone='blue'>{pending.length}</Badge>}

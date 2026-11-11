@@ -33,6 +33,8 @@ class PriceOfferResponse(BaseModel):
     expires_at: UTCDateTime
     created_at: UTCDateTime
     decided_at: datetime | None = None
+    accepted_at: datetime | None = None
+    close_reason: str | None = None
     deal_id: int | None = None
     # True when this buyer can now create a deal at the agreed amount
     can_create_deal: bool = False

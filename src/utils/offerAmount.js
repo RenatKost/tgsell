@@ -1,6 +1,6 @@
 /** Client-side bounds for a price offer. The server remains the source of truth. */
 
-export const OFFER_MIN_FRACTION = 0.3;
+export const OFFER_MIN_FRACTION = 0.5;
 
 export function offerBounds(lotPrice) {
 	const price = Number(lotPrice);
@@ -20,6 +20,6 @@ export function validateOfferAmount(amount, lotPrice) {
 	const cents = Math.round(n * 100);
 	if (Math.abs(n * 100 - cents) > 1e-6) return 'Сума має бути з точністю до 0,01 USDT';
 	if (cents > Math.round(bounds.max * 100)) return 'Пропозиція має бути нижчою за ціну лота';
-	if (cents < Math.round(bounds.min * 100)) return 'Пропозиція має бути не нижчою за 30% ціни лота';
+	if (cents < Math.round(bounds.min * 100)) return 'Пропозиція має бути не нижчою за 50% ціни лота';
 	return null;
 }

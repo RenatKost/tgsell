@@ -44,7 +44,7 @@ const PriceOfferModal = ({ channel, open, onClose, onSubmit, busy, error }) => {
 					<p className='text-sm text-gray-500 dark:text-gray-400 mt-2'>
 						{channel.channel_name || 'Канал'} · ціна лота{' '}
 						<span className='font-semibold text-gray-800 dark:text-white tabular-nums'>{fmtUsdt(channel.price)} USDT</span>.
-						Сума має бути нижчою за ціну лота і не менше 30%. Продавець отримає пропозицію в боті та кабінеті. Публічна ціна не зміниться.
+						Сума має бути нижчою за ціну лота і не менше 50%. Продавець отримає пропозицію в боті та кабінеті. Публічна ціна не зміниться.
 					</p>
 					<label className='block mt-5 text-[11px] font-semibold uppercase tracking-wider text-gray-400 mb-1.5'>Сума, USDT</label>
 					<input

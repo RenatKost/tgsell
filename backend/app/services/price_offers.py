@@ -1,7 +1,8 @@
 """Price offers: validation, expiry, anti-spam. Does not touch escrow or fees."""
 from __future__ import annotations
 
-from datetime import timedelta
+import logging
+from datetime import datetime, timedelta
 from decimal import Decimal, ROUND_CEILING, ROUND_HALF_UP
 
 from sqlalchemy import func, select, update
@@ -11,7 +12,7 @@ from app.models.price_offer import PriceOffer, PriceOfferStatus
 from app.utils.timeutil import utcnow_naive
 
 TTL_HOURS = 48
-MIN_FRACTION = Decimal("0.30")
+MIN_FRACTION = Decimal("0.50")
 MAX_PER_DAY = 5
 COMMENT_MAX = 300
 
@@ -56,7 +57,7 @@ def parse_amount(amount, lot_price: float) -> float:
     if cents > max_cents:
         raise OfferError("Пропозиція має бути нижчою за ціну лота")
     if cents < min_cents:
-        raise OfferError("Пропозиція має бути не нижчою за 30% ціни лота")
+        raise OfferError("Пропозиція має бути не нижчою за 50% ціни лота")
     return float(Decimal(cents) / 100)
 
 
@@ -102,3 +103,90 @@ async def active_for_lot(db: AsyncSession, buyer_id: int, channel_id: int) -> Pr
             PriceOffer.status == PriceOfferStatus.pending,
         )
     )).scalar_one_or_none()
+
+
+logger = logging.getLogger(__name__)
+
+CLOSE_REASON_LOT_IN_DEAL = "lot_in_deal"
+ACCEPT_DEAL_TTL_HOURS = TTL_HOURS  # 48h after seller accepted to confirm the deal
+
+
+def acceptance_deadline(offer) -> datetime | None:
+    at = getattr(offer, "accepted_at", None) or getattr(offer, "decided_at", None)
+    if not at:
+        return None
+    return at + timedelta(hours=ACCEPT_DEAL_TTL_HOURS)
+
+
+def acceptance_still_valid(offer, now=None) -> bool:
+    now = now or utcnow_naive()
+    deadline = acceptance_deadline(offer)
+    return bool(deadline and deadline >= now)
+
+
+async def close_competing_offers(
+    db: AsyncSession,
+    channel_ids: list[int],
+    *,
+    keep_offer_id: int | None = None,
+    now=None,
+) -> list[PriceOffer]:
+    """Close other pending / unused accepted offers on these lots. Same transaction as the deal."""
+    ids = [int(x) for x in channel_ids if x]
+    if not ids:
+        return []
+    now = now or utcnow_naive()
+    q = select(PriceOffer).where(
+        PriceOffer.channel_id.in_(ids),
+        PriceOffer.status.in_((PriceOfferStatus.pending, PriceOfferStatus.accepted)),
+        PriceOffer.deal_id.is_(None),
+    )
+    if keep_offer_id is not None:
+        q = q.where(PriceOffer.id != keep_offer_id)
+    rows = (await db.execute(q)).scalars().all()
+    if not rows:
+        return []
+    ids = [offer.id for offer in rows]
+    await db.execute(
+        update(PriceOffer)
+        .where(PriceOffer.id.in_(ids))
+        .values(
+            status=PriceOfferStatus.closed,
+            close_reason=CLOSE_REASON_LOT_IN_DEAL,
+            decided_at=func.coalesce(PriceOffer.decided_at, now),
+        )
+        .execution_options(synchronize_session=False)
+    )
+    # Detach so the deal flush does not have to sort a stale PriceOffer mapper.
+    for offer in rows:
+        offer.status = PriceOfferStatus.closed
+        offer.close_reason = CLOSE_REASON_LOT_IN_DEAL
+        if offer.decided_at is None:
+            offer.decided_at = now
+        db.expunge(offer)
+    return list(rows)
+
+
+async def notify_offers_closed(offers: list[PriceOffer], db: AsyncSession) -> None:
+    """After commit. Participant messages only; failure must not affect the deal."""
+    if not offers:
+        return
+    try:
+        from aiogram import Bot
+        from app.config import settings
+        from app.models.channel import Channel
+        from app.models.user import User
+        from bot.main import notify_price_offer_closed
+
+        if not getattr(settings, "bot_token_alerts", None):
+            return
+        bot = Bot(token=settings.bot_token_alerts)
+        try:
+            for offer in offers:
+                buyer = await db.get(User, offer.buyer_id)
+                channel = await db.get(Channel, offer.channel_id)
+                await notify_price_offer_closed(bot, offer, channel, buyer)
+        finally:
+            await bot.session.close()
+    except Exception as e:
+        logger.warning("[OFFER] close-notify failed for %s offer(s): %s", len(offers), e)
