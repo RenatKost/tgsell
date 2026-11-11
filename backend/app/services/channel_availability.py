@@ -71,7 +71,7 @@ async def removal_blockers(db, channel_id: int) -> list[str]:
         out.append("Активна угода " + ", ".join(f"#{d}" for d in deal_ids) + " — спершу завершіть або скасуйте її")
     auc = (await db.execute(select(Auction.id, Auction.bid_count).where(
         Auction.channel_id == channel_id, Auction.status.in_(ACTIVE_AUCTION_STATUSES),
-        Auction.bid_count > 0))).all()
+        Auction.not_deleted(), Auction.bid_count > 0))).all()
     if auc:
         out.append("Аукціон " + ", ".join(f"#{a} ({b} ставок)" for a, b in auc) + " має ставки — спершу скасуйте аукціон")
     return out

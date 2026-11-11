@@ -36,6 +36,8 @@ class Auction(Base):
     bid_count: Mapped[int] = mapped_column(Integer, default=0)
 
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+    # Admin soft-delete (migration 0062). Public lists hide rows with deleted_at set.
+    deleted_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True, index=True)
 
     # Relationships
     channel = relationship("Channel", back_populates="auction")
@@ -43,6 +45,10 @@ class Auction(Base):
     winner = relationship("User", foreign_keys=[winner_id])
     bids = relationship("AuctionBid", back_populates="auction", cascade="all, delete-orphan",
                          order_by="AuctionBid.created_at.desc()")
+
+    @classmethod
+    def not_deleted(cls):
+        return cls.deleted_at.is_(None)
 
 
 class AuctionBid(Base):

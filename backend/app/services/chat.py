@@ -77,6 +77,8 @@ async def load_deal_for(db, deal_id: int, user: User) -> Deal:
 def ensure_can_post(user: User, deal: Deal) -> None:
     from app.services.moderation import ensure_deal_action_allowed
 
+    if deal.status in TERMINAL:
+        raise HTTPException(status_code=409, detail="Угоду закрито — чат лише для читання")
     ensure_deal_action_allowed(user, deal)
 
 

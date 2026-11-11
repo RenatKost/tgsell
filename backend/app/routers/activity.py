@@ -73,7 +73,7 @@ async def get_activity_stats(db: AsyncSession = Depends(get_db)):
             select(func.count()).select_from(AuctionBid).where(AuctionBid.created_at >= today_start)
         )).scalar() or 0
         real_active_auctions = (await db.execute(
-            select(func.count()).select_from(Auction).where(Auction.status == "active")
+            select(func.count()).select_from(Auction).where(Auction.status == "active", Auction.not_deleted())
         )).scalar() or 0
         return {
             "channels_count": real_channels,
@@ -104,7 +104,7 @@ async def get_activity_stats(db: AsyncSession = Depends(get_db)):
     )).scalar() or 0
 
     real_active_auctions = (await db.execute(
-        select(func.count()).select_from(Auction).where(Auction.status == "active")
+        select(func.count()).select_from(Auction).where(Auction.status == "active", Auction.not_deleted())
     )).scalar() or 0
 
     # Boosted values — offset shrinks as real grows
