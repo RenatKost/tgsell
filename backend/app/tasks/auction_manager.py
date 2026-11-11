@@ -181,7 +181,7 @@ async def _process_auctions(db: AsyncSession):
 
     # 1. Activate scheduled auctions whose start time has passed
     result = await db.execute(
-        select(Auction).where(Auction.status == "scheduled", Auction.starts_at <= now)
+        select(Auction).where(Auction.status == "scheduled", Auction.starts_at <= now, Auction.not_deleted())
     )
     for auction in result.scalars().all():
         auction.status = "active"
@@ -189,7 +189,7 @@ async def _process_auctions(db: AsyncSession):
 
     # 2. End auctions past their end time
     result = await db.execute(
-        select(Auction).where(Auction.status == "active", Auction.ends_at <= now)
+        select(Auction).where(Auction.status == "active", Auction.ends_at <= now, Auction.not_deleted())
     )
     for auction in result.scalars().all():
         blocked = await _blocked_party(db, auction)
@@ -206,6 +206,7 @@ async def _process_auctions(db: AsyncSession):
         select(Auction).where(
             Auction.status == "ended",
             Auction.winner_id.isnot(None),
+            Auction.not_deleted(),
         )
     )
     for auction in result.scalars().all():

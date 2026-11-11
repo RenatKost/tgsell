@@ -163,6 +163,20 @@ async def test_no_polling_for_terminal_deals_and_header(env, chat):
 
 
 @pytest.mark.asyncio
+async def test_cannot_post_to_terminal_deals(env, chat):
+    r, _ = chat
+    for status in (env.S.completed, env.S.cancelled):
+        deal_id, _ = await env.make_deal(status)
+        with pytest.raises(HTTPException) as e:
+            await send(env, chat, deal_id, env.ids.buyer, "ще одне")
+        assert e.value.status_code == 409
+        assert "лише для читання" in e.value.detail
+        with pytest.raises(HTTPException) as e:
+            await call(env, r.chat_typing, deal_id, user=env.ids.buyer)
+        assert e.value.status_code == 409
+
+
+@pytest.mark.asyncio
 async def test_blocked_party_reads_but_cannot_post(env, chat):
     import importlib
 

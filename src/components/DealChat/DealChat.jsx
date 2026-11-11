@@ -1,5 +1,6 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { dealsAPI } from '../../services/api';
+import { isDealChatReadOnly, messageRoleLabel } from '../../utils/dealViewer';
 import useDealChat from './useDealChat';
 
 const STATUS_LABELS = {
@@ -148,7 +149,7 @@ const Header = ({ deal, presence, onCallAdmin, compact }) => {
 	);
 };
 
-const Composer = ({ disabled, asGuarantor = false, onSend, onUpload, onTyping }) => {
+const Composer = ({ disabled, placeholder, hint, onSend, onUpload, onTyping }) => {
 	const [text, setText] = useState('');
 	const [file, setFile] = useState(null);
 	const [err, setErr] = useState('');
@@ -180,6 +181,7 @@ const Composer = ({ disabled, asGuarantor = false, onSend, onUpload, onTyping })
 					<button type='button' onClick={() => setFile(null)} className='ml-auto text-gray-400'>✕</button>
 				</div>
 			)}
+			{hint && <div className='text-[11px] text-gray-500 dark:text-gray-400 mb-2'>{hint}</div>}
 			{err && <div className='text-xs text-red-600 mb-1'>{err}</div>}
 			<div className='flex items-end gap-2'>
 				<button type='button' disabled={disabled} onClick={() => fileRef.current?.click()} className='w-10 h-10 rounded-xl text-gray-500 hover:bg-gray-100 dark:hover:bg-slate-700 shrink-0 disabled:opacity-40' title='Додати файл'>📎</button>
@@ -188,7 +190,7 @@ const Composer = ({ disabled, asGuarantor = false, onSend, onUpload, onTyping })
 					onChange={e => { setText(e.target.value); onTyping(); e.target.style.height = 'auto'; e.target.style.height = Math.min(e.target.scrollHeight, 140) + 'px'; }}
 					onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); submit(); } }}
 					onPaste={e => { const f = [...(e.clipboardData?.files || [])][0]; if (f) { e.preventDefault(); pick(f); } }}
-					placeholder={disabled ? 'Надсилання недоступне' : (file ? 'Підпис…' : (asGuarantor ? 'Написати як гарант TgSell…' : 'Написати…'))}
+					placeholder={disabled ? (placeholder || 'Надсилання недоступне') : (file ? 'Підпис…' : (placeholder || 'Написати…'))}
 					className='flex-1 min-w-0 resize-none border border-gray-200 dark:border-slate-600 bg-gray-50 dark:bg-slate-700/60 dark:text-gray-100 rounded-xl px-3 sm:px-4 py-2.5 text-base sm:text-sm focus:outline-none focus:ring-2 focus:ring-blue-100 focus:border-blue-400' />
 				<button type='submit' disabled={disabled || (!text.trim() && !file)} className='w-10 h-10 rounded-xl bg-blue-500 hover:bg-blue-600 text-white shrink-0 disabled:opacity-30'>➤</button>
 			</div>
@@ -287,13 +289,19 @@ const DealChat = ({ dealId, userId, onCallAdmin, compact = false, height = 'h-[6
 						? <div className='flex items-center gap-2 my-2 text-[11px] text-blue-500'><div className='flex-1 h-px bg-blue-200' />Нові повідомлення<div className='flex-1 h-px bg-blue-200' /></div> : null;
 					if (m.is_system) return <div key={it.key}>{divider}<SystemCard m={m} /></div>;
 					const own = m.sender_id === me;
+					const role = messageRoleLabel(m);
 					return (
 						<div key={it.key}>
 							{divider}
 							<div className={`flex mb-2 ${own ? 'justify-end' : 'justify-start'}`}>
 								<div className={`max-w-[85%] sm:max-w-[75%] rounded-2xl px-3 py-2 shadow-sm ${own ? 'bg-blue-500 text-white rounded-br-md' : 'bg-white dark:bg-slate-800 text-gray-800 dark:text-gray-100 rounded-bl-md'}`}>
-									{!own && <div className={`text-[11px] font-semibold mb-0.5 ${m.sender_role === 'guarantor' ? 'text-purple-600' : 'text-blue-600'}`}>{m.sender_name || 'Користувач'}{m.sender_role ? ` · ${ROLE_LABEL[m.sender_role]}` : ''}</div>}
-									{own && m.as_guarantor && <div className='text-[11px] font-semibold mb-0.5 text-blue-50'>Ви · Гарант TgSell</div>}
+									{!own && (
+										<div className={`text-[11px] font-semibold mb-0.5 flex items-center gap-1.5 min-w-0 ${m.sender_role === 'guarantor' || m.as_guarantor ? 'text-purple-600' : 'text-blue-600'}`}>
+											<span className='truncate'>{m.sender_name || 'Користувач'}</span>
+											{role && <span className='shrink-0 font-bold opacity-90'>· {role}</span>}
+										</div>
+									)}
+									{own && role && <div className='text-[11px] font-semibold mb-0.5 text-blue-50'>Ви · {role}</div>}
 									{m.attachment && <Attachment dealId={dealId} att={m.attachment} own={own} />}
 									{!(m.attachment && m.text === `📎 ${m.attachment.filename}`) && <div className='text-[15px] sm:text-sm whitespace-pre-wrap break-words'><Linkified text={m.text} /></div>}
 									<div className={`text-[11px] leading-none mt-1 flex items-center justify-end gap-1 ${own ? 'text-blue-50' : 'text-gray-400'}`}>
@@ -322,8 +330,13 @@ const DealChat = ({ dealId, userId, onCallAdmin, compact = false, height = 'h-[6
 				<button onClick={toBottom} className='absolute right-4 bottom-20 bg-blue-500 text-white text-xs px-3 py-1.5 rounded-full shadow-lg'>↓ {newBelow} нових</button>
 			)}
 			{chat.error && <div className='text-xs text-red-600 px-4 py-1 bg-red-50'>{chat.error}</div>}
-			{chat.deal && !chat.deal.polling && <div className='text-[11px] text-gray-400 px-4 py-1'>Угоду закрито — чат показано як історію.</div>}
-			<Composer disabled={!canPost} asGuarantor={asGuarantor} onSend={chat.send} onUpload={chat.upload} onTyping={chat.notifyTyping} />
+			<Composer
+				disabled={!canPost || isDealChatReadOnly(chat.deal)}
+				placeholder={isDealChatReadOnly(chat.deal)
+					? 'Угоду закрито — чат лише для читання'
+					: (asGuarantor ? 'Написати як гарант TgSell…' : 'Написати…')}
+				hint={isDealChatReadOnly(chat.deal) ? 'Угоду закрито — чат лише для читання' : null}
+				onSend={chat.send} onUpload={chat.upload} onTyping={chat.notifyTyping} />
 		</div>
 	);
 };

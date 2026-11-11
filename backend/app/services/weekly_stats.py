@@ -142,7 +142,7 @@ async def collect_weekly_stats(db: AsyncSession, now: datetime | None = None) ->
     bundles_total = await _count(db, select(func.count(ChannelBundle.id)).where(b_ok))
     bundles_new = await _count(db, select(func.count(ChannelBundle.id)).where(b_ok, ChannelBundle.created_at >= since))
 
-    a_ok = Auction.status == "active"
+    a_ok = (Auction.status == "active") & Auction.not_deleted()
     auctions_total = await _count(db, select(func.count(Auction.id)).where(a_ok))
     auctions_new = await _count(db, select(func.count(Auction.id)).where(a_ok, Auction.created_at >= since))
 

@@ -72,6 +72,7 @@ async def list_auctions(
     query = (
         select(Auction)
         .options(selectinload(Auction.channel))
+        .where(Auction.not_deleted())
     )
 
     if seller_id:
@@ -131,6 +132,7 @@ async def create_auction_from_channel(
         select(Auction).where(
             Auction.channel_id == channel_id,
             Auction.status.in_(["active", "scheduled"]),
+            Auction.not_deleted(),
         )
     )
     if existing.scalar_one_or_none():
@@ -175,7 +177,7 @@ async def create_auction_from_channel(
 async def auction_stats(db: AsyncSession = Depends(get_db)):
     """Gamification stats for display."""
     active_count = (await db.execute(
-        select(func.count()).select_from(Auction).where(Auction.status == "active")
+        select(func.count()).select_from(Auction).where(Auction.status == "active", Auction.not_deleted())
     )).scalar() or 0
 
     total_bids = (await db.execute(
@@ -204,7 +206,7 @@ async def get_auction(auction_id: int, db: AsyncSession = Depends(get_db)):
     result = await db.execute(
         select(Auction)
         .options(selectinload(Auction.channel), selectinload(Auction.bids))
-        .where(Auction.id == auction_id)
+        .where(Auction.id == auction_id, Auction.not_deleted())
         .where(not_blocked_seller(Auction.seller_id))
     )
     auction = result.scalar_one_or_none()
@@ -240,7 +242,7 @@ async def place_bid(
 ):
     """Place a bid on an auction."""
     result = await db.execute(
-        select(Auction).where(Auction.id == auction_id)
+        select(Auction).where(Auction.id == auction_id, Auction.not_deleted())
     )
     auction = result.scalar_one_or_none()
     if not auction:

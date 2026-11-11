@@ -27,7 +27,7 @@ async def my_counts(user: User = Depends(get_current_user), db: AsyncSession = D
         # «Мої оголошення»: owner sees own channels in every status
         "listings": await _count(db, select(func.count(Channel.id)).where(Channel.seller_id == uid)),
         "bundles": await _count(db, select(func.count(ChannelBundle.id)).where(ChannelBundle.seller_id == uid)),
-        "auctions": await _count(db, select(func.count(Auction.id)).where(Auction.seller_id == uid)),
+        "auctions": await _count(db, select(func.count(Auction.id)).where(Auction.seller_id == uid, Auction.not_deleted())),
         "deals": await _count(db, select(func.count(Deal.id)).where(
             or_(Deal.buyer_id == uid, Deal.seller_id == uid))),
         # «Обране» lists only approved channels

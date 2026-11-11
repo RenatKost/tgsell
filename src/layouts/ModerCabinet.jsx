@@ -392,10 +392,10 @@ const ModerCabinet = () => {
 	};
 
 	const handleDeleteChannel = async (id) => {
-		if (!confirm('УВАГА: це НЕЗВОРОТНЕ видалення лота з бази (разом зі статистикою). Для безпечного зняття використовуйте «Зняти з публікації». Видалити назавжди?')) return;
+		if (!confirm('Лот буде знято з публічного каталогу (м’яке видалення, можна відновити через «Відновити публікацію»). Продовжити?')) return;
 		try {
 			await adminAPI.deleteChannel(id);
-			setAllChannels(prev => prev.filter(c => c.id !== id));
+			patchChannel(id, { status: 'removed' });
 		} catch (err) { alert(err.response?.data?.detail || 'Помилка видалення'); }
 	};
 
@@ -516,7 +516,7 @@ const ModerCabinet = () => {
 	};
 
 	const handleDeleteAuction = async (id) => {
-		if (!confirm('Видалити аукціон і всі ставки?')) return;
+		if (!confirm('Аукціон буде приховано з публічних сторінок (ставки збережуться). Продовжити?')) return;
 		try {
 			await adminAPI.deleteAuction(id);
 			setAuctions(prev => prev.filter(a => a.id !== id));
@@ -1113,7 +1113,7 @@ const ModerCabinet = () => {
 												<button onClick={() => { setWarnId(warnId === channel.id ? null : channel.id); setWarnText(channel.buyer_warning || ''); }} className={`p-2 rounded-lg duration-300 ${channel.buyer_warning ? 'text-amber-500' : 'text-gray-400'} hover:text-amber-600 hover:bg-amber-50 dark:hover:bg-amber-900/20`} title='Попередження для покупця'>
 													⚠️
 												</button>
-												<button onClick={() => handleDeleteChannel(channel.id)} className='text-gray-400 hover:text-red-500 p-2 rounded-lg hover:bg-red-50 dark:hover:bg-red-900/20 duration-300' title='Видалити назавжди (незворотно)'>
+												<button onClick={() => handleDeleteChannel(channel.id)} className='text-gray-400 hover:text-red-500 p-2 rounded-lg hover:bg-red-50 dark:hover:bg-red-900/20 duration-300' title='Зняти з каталогу (можна відновити)'>
 													<FontAwesomeIcon icon={faTrash} />
 												</button>
 											</div>

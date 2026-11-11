@@ -218,6 +218,7 @@ async def get_channel(channel_id: int, db: AsyncSession = Depends(get_db),
             select(Auction)
             .where(Auction.channel_id == channel_id)
             .where(Auction.status == AuctionStatus.active)
+            .where(Auction.not_deleted())
             .order_by(Auction.ends_at.asc())
             .limit(1)
         )

@@ -46,3 +46,33 @@ export function transferView(v, deal) {
 	if (v.isParty) return { action: null, banner: 'Ви підтвердили. Очікуйте іншу сторону' };
 	return { action: null, banner: waitingText(!!deal.buyer_confirmed_transfer, !!deal.seller_confirmed_transfer, 'підтвердження передачі від') };
 }
+
+export const TERMINAL_DEAL_STATUSES = ['completed', 'cancelled'];
+
+export function isDealChatReadOnly(deal) {
+	return TERMINAL_DEAL_STATUSES.includes(deal?.status);
+}
+
+// Composer state for /deal/:id and the admin deal chat.
+export function dealChatComposer(user, deal) {
+	const closed = isDealChatReadOnly(deal);
+	const v = dealViewer(user, deal);
+	const asGuarantor = !closed && v.isStaffObserver;
+	return {
+		readOnly: closed,
+		hint: closed ? 'Угоду закрито — чат лише для читання' : null,
+		asGuarantor,
+		placeholder: closed
+			? 'Угоду закрито — чат лише для читання'
+			: (asGuarantor ? 'Написати як гарант TgSell…' : 'Написати…'),
+	};
+}
+
+// Role chip next to a chat message, from the same sender_role / as_guarantor the API returns.
+export function messageRoleLabel(message) {
+	if (!message || message.is_system) return null;
+	if (message.as_guarantor || message.sender_role === 'guarantor') return 'Гарант';
+	if (message.sender_role === 'seller') return 'Продавець';
+	if (message.sender_role === 'buyer') return 'Покупець';
+	return null;
+}

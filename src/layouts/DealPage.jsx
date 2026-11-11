@@ -643,7 +643,7 @@ const DealPage = () => {
 				</div>
 			)}
 			<div id='chat' className='scroll-mt-24'>
-				<DealChat dealId={deal.id} userId={user?.id} onCallAdmin={handleCallAdmin} deal={deal} />
+				<DealChat dealId={deal.id} userId={user?.id} onCallAdmin={handleCallAdmin} deal={deal} asGuarantor={viewer.isStaffObserver} />
 			</div>
 		</section>
 	);

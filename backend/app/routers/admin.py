@@ -27,6 +27,26 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/admin", tags=["admin"])
 
+# Deals where funds may already sit in escrow — never hard- or soft-delete the lot/auction.
+_ESCROW_LIVE = (
+    DealStatus.paid,
+    DealStatus.channel_transferring,
+    DealStatus.disputed,
+    DealStatus.awaiting_payout,
+    DealStatus.payout_in_progress,
+)
+
+
+async def _refuse_if_active_escrow(db: AsyncSession, channel_id: int) -> None:
+    ids = list((await db.execute(select(Deal.id).where(
+        Deal.channel_id == channel_id, Deal.status.in_(_ESCROW_LIVE),
+    ))).scalars())
+    if ids:
+        raise HTTPException(
+            status_code=409,
+            detail="Неможливо видалити: угода " + ", ".join(f"#{d}" for d in ids) + " має активне ескроу",
+        )
+
 
 @router.post("/setup")
 async def initial_admin_setup(
@@ -899,12 +919,40 @@ async def admin_delete_channel(
     admin: User = Depends(get_admin_user),
     db: AsyncSession = Depends(get_db),
 ):
-    """Admin: delete any channel."""
-    result = await db.execute(select(Channel).where(Channel.id == channel_id))
-    channel = result.scalar_one_or_none()
+    """Admin: soft-delete a lot (status=removed, same fields as seller remove / «Зняти з біржі»)."""
+    from app.services.channel_availability import removal_blockers
+
+    channel = (await db.execute(
+        select(Channel).where(Channel.id == channel_id).with_for_update()
+    )).scalar_one_or_none()
     if not channel:
         raise HTTPException(status_code=404, detail="Channel not found")
-    await db.delete(channel)
+    if channel.status == ChannelStatus.removed:
+        return
+    if channel.status == ChannelStatus.sold:
+        raise HTTPException(status_code=400, detail="Проданий лот не можна видалити")
+    await _refuse_if_active_escrow(db, channel.id)
+    blockers = await removal_blockers(db, channel.id)
+    if blockers:
+        raise HTTPException(status_code=409, detail="Неможливо видалити: " + "; ".join(blockers))
+
+    prev = channel.status.value
+    now = utcnow_naive()
+    channel.status = ChannelStatus.removed
+    channel.removed_at = now
+    channel.removed_by_id = admin.id
+    channel.removed_reason = "Видалено адміністратором"
+    # Zero-bid live auctions (bids would have blocked removal) — hide them too.
+    live_auctions = (await db.execute(select(Auction).where(
+        Auction.channel_id == channel.id,
+        Auction.status.in_(("scheduled", "active")),
+        Auction.not_deleted(),
+    ))).scalars().all()
+    for auc in live_auctions:
+        auc.status = "cancelled"
+        auc.deleted_at = now
+    audit(db, admin, "channel.delete", "channel", channel.id, prev_status=prev,
+          reason=channel.removed_reason)
     await db.commit()
 
 
@@ -1191,6 +1239,7 @@ async def admin_list_auctions(
             "winner_id": a.winner_id,
             "winner_name": a.winner.first_name if a.winner else None,
             "created_at": to_utc_iso(a.created_at),
+            "deleted_at": to_utc_iso(a.deleted_at),
         })
     return {"items": items, "total": len(items)}
 
@@ -1202,7 +1251,7 @@ async def admin_cancel_auction(
     db: AsyncSession = Depends(get_db),
 ):
     """Admin cancel an auction."""
-    result = await db.execute(select(Auction).where(Auction.id == auction_id))
+    result = await db.execute(select(Auction).where(Auction.id == auction_id, Auction.not_deleted()))
     auction = result.scalar_one_or_none()
     if not auction:
         raise HTTPException(status_code=404, detail="Auction not found")
@@ -1222,7 +1271,7 @@ async def admin_extend_auction(
     db: AsyncSession = Depends(get_db),
 ):
     """Admin extend auction end time by N hours."""
-    result = await db.execute(select(Auction).where(Auction.id == auction_id))
+    result = await db.execute(select(Auction).where(Auction.id == auction_id, Auction.not_deleted()))
     auction = result.scalar_one_or_none()
     if not auction:
         raise HTTPException(status_code=404, detail="Auction not found")
@@ -1244,7 +1293,7 @@ async def admin_update_auction(
     db: AsyncSession = Depends(get_db),
 ):
     """Admin edit auction parameters."""
-    result = await db.execute(select(Auction).where(Auction.id == auction_id))
+    result = await db.execute(select(Auction).where(Auction.id == auction_id, Auction.not_deleted()))
     auction = result.scalar_one_or_none()
     if not auction:
         raise HTTPException(status_code=404, detail="Auction not found")
@@ -1267,12 +1316,20 @@ async def admin_delete_auction(
     admin: User = Depends(get_admin_user),
     db: AsyncSession = Depends(get_db),
 ):
-    """Admin delete auction and its bids."""
-    result = await db.execute(select(Auction).where(Auction.id == auction_id))
-    auction = result.scalar_one_or_none()
+    """Admin soft-delete an auction (deleted_at). Bids are kept; public lists hide the row."""
+    auction = (await db.execute(
+        select(Auction).where(Auction.id == auction_id).with_for_update()
+    )).scalar_one_or_none()
     if not auction:
         raise HTTPException(status_code=404, detail="Auction not found")
-    await db.delete(auction)
+    if auction.deleted_at is not None:
+        return
+    await _refuse_if_active_escrow(db, auction.channel_id)
+    prev = auction.status
+    if auction.status in ("scheduled", "active"):
+        auction.status = "cancelled"
+    auction.deleted_at = utcnow_naive()
+    audit(db, admin, "auction.delete", "auction", auction.id, prev_status=prev)
     await db.commit()
 
 
@@ -1592,7 +1649,7 @@ async def admin_dashboard_stats(
     )).scalar() or 0
 
     active_auctions = (await db.execute(
-        select(func.count()).select_from(Auction).where(Auction.status == "active")
+        select(func.count()).select_from(Auction).where(Auction.status == "active", Auction.not_deleted())
     )).scalar() or 0
 
     total_users = (await db.execute(
