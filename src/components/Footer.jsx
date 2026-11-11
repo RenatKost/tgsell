@@ -46,6 +46,7 @@ const cols = [
   {
     title: 'Компанія',
     links: [
+      { to: '/blog', label: 'Блог' },
       { to: '/faq', label: 'FAQ' },
       { to: '/contacts', label: 'Контакти' },
       { to: '/privacy', label: 'Політика конфіденційності' },

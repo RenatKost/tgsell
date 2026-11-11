@@ -23,6 +23,8 @@ import SellChannelLanding from './layouts/SellChannelLanding';
 import ChannelPriceCalculatorPage from './layouts/ChannelPriceCalculatorPage';
 import WantedPage from './layouts/WantedPage';
 import EscrowPage from './layouts/EscrowPage';
+import BlogPage from './layouts/BlogPage';
+import BlogArticlePage from './layouts/BlogArticlePage';
 
 export const router = createBrowserRouter([
 	{
@@ -122,6 +124,14 @@ export const router = createBrowserRouter([
 			{
 				path: '/contacts',
 				element: <ContactsPage />,
+			},
+			{
+				path: '/blog',
+				element: <BlogPage />,
+			},
+			{
+				path: '/blog/:slug',
+				element: <BlogArticlePage />,
 			},
 			{
 				path: '/kupyty-telegram-kanal',

@@ -1,4 +1,4 @@
-"""Task 28: robots.txt + dynamic sitemap.xml (static pages + published channels)."""
+"""Task 28: robots.txt + dynamic sitemap.xml (static pages + published blog articles + published channels)."""
 from __future__ import annotations
 
 import logging
@@ -25,6 +25,7 @@ STATIC_PAGES = [
     ("/auction", "hourly", "0.8"),
     ("/wanted", "daily", "0.7"),
     ("/escrow", "monthly", "0.7"),
+    ("/blog", "weekly", "0.6"),
     ("/kupyty-telegram-kanal", "weekly", "0.9"),
     ("/prodaty-telegram-kanal", "weekly", "0.9"),
     ("/skilky-koshtuye-telegram-kanal", "weekly", "0.8"),
@@ -59,12 +60,15 @@ async def robots_txt():
     return PlainTextResponse(ROBOTS_TXT, headers={"Cache-Control": "public, max-age=3600"})
 
 
-def build_sitemap(channels: list[tuple[int, object]]) -> str:
+def build_sitemap(channels: list[tuple[int, object]], blog_articles=()) -> str:
     out = ['<?xml version="1.0" encoding="UTF-8"?>',
            '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">']
     for path, freq, prio in STATIC_PAGES:
         out.append(f"  <url><loc>{escape(SITE_URL + path)}</loc>"
                    f"<changefreq>{freq}</changefreq><priority>{prio}</priority></url>")
+    for a in blog_articles:  # published only (blog_content.published_articles)
+        out.append(f"  <url><loc>{escape(a.url)}</loc><lastmod>{a.date_iso}</lastmod>"
+                   f"<changefreq>monthly</changefreq><priority>0.6</priority></url>")
     for cid, created in channels:
         lastmod = f"<lastmod>{created.date().isoformat()}</lastmod>" if created else ""
         out.append(f"  <url><loc>{escape(f'{SITE_URL}/channel/{int(cid)}')}</loc>{lastmod}"
@@ -102,5 +106,11 @@ async def sitemap_xml(db: AsyncSession = Depends(get_db)):
         channels = [(r[0], r[1]) for r in rows.all()]
     except Exception as e:  # sitemap must not 500 — static pages are still useful
         logger.warning("sitemap: channel query failed: %s", type(e).__name__)
-    return Response(build_sitemap(channels), media_type="application/xml",
+    try:
+        from app.services.blog_content import published_articles
+        blog_articles = published_articles()
+    except Exception as e:  # blog content problems must not break the sitemap
+        logger.warning("sitemap: blog content failed: %s", type(e).__name__)
+        blog_articles = []
+    return Response(build_sitemap(channels, blog_articles), media_type="application/xml",
                     headers={"Cache-Control": "public, max-age=900"})

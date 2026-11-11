@@ -483,3 +483,9 @@ export const userActivityAPI = {
 };
 
 export default api;
+
+// Blog: published articles only; `html` is already sanitized by the server renderer.
+export const blogAPI = {
+	list: () => api.get('/blog'),
+	get: (slug) => api.get(`/blog/${encodeURIComponent(slug)}`),
+};
