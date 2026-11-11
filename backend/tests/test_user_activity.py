@@ -127,8 +127,11 @@ async def test_tracking_dedupe_heartbeat_users_and_funnel(pg_orm, monkeypatch):
         assert [x["days"] for x in f] == [7, 30]
         users = {s["step"]: s["users"] for s in f[0]["steps"]}
         # visitors: buyer (anon-1 linked), anon-2, anon-3, lurker, spam
-        assert users == {"visit": 5, "channel_view": 3, "deal_start": 1, "payment": 1}
-        assert f[0]["steps"][3]["from_prev_pct"] == 100.0
+        # buy_click is a new middle step (0 here); payment still converts 100% from deal_start
+        assert users == {"visit": 5, "channel_view": 3, "buy_click": 0, "deal_start": 1, "payment": 1}
+        assert f[0]["steps"][2]["label"] == "Натиснув Купити"
+        assert f[0]["steps"][3]["from_prev_pct"] is None  # deal_start after a 0 buy_click
+        assert f[0]["steps"][4]["from_prev_pct"] == 100.0
 
 
 def test_clean_attribution_strips_pii():

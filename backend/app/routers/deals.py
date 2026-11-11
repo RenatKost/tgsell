@@ -69,6 +69,7 @@ def _deal_to_response(deal: Deal, channel: Channel | None = None, buyer: User | 
         overpay_refund_address=deal.overpay_refund_address,
         overpay_status=deal.overpay_status,
         created_at=deal.created_at,
+        payment_deadline_at=deal.payment_deadline_at,
         paid_at=deal.paid_at,
         completed_at=deal.completed_at,
         balance_stars=deal.balance_stars,
@@ -426,6 +427,7 @@ async def confirm_ready(
         await _add_system_message(db, deal.id, user.id, "Продавець підтвердив готовність", event="ready_confirmed")
 
     # Both ready → move to payment_pending
+    became_payable = False
     if deal.buyer_ready and deal.seller_ready:
         deal.status = DealStatus.payment_pending
         # Payment window starts now (PAYMENT_TIMEOUT_HOURS); checker cancels only after
@@ -437,10 +439,27 @@ async def confirm_ready(
             f"Адреса для оплати вказана вище."
         )
         await _add_system_message(db, deal.id, user.id, payment_msg, event="payment_requested")
+        became_payable = True
 
     await db.commit()
     await db.refresh(deal)
-    return _deal_to_response(deal, deal.channel, deal.buyer, deal.seller)
+    resp = _deal_to_response(deal, deal.channel, deal.buyer, deal.seller)
+    # Best-effort buyer reminder AFTER commit. Failure must not touch escrow / status.
+    # Only on this transition — existing payment_pending deals are not backfilled.
+    if became_payable:
+        try:
+            from aiogram import Bot
+            from app.config import settings
+            from bot.main import notify_payment_requested
+            if getattr(settings, "bot_token_alerts", None):
+                bot = Bot(token=settings.bot_token_alerts)
+                try:
+                    await notify_payment_requested(bot, deal, deal.buyer, deal.seller)
+                finally:
+                    await bot.session.close()
+        except Exception as e:
+            logger.warning(f"[DEAL] Payment-requested notify failed for deal #{deal.id}: {e}")
+    return resp
 
 
 @router.post("/{deal_id}/confirm-channel-transfer", response_model=DealResponse)

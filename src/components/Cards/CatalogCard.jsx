@@ -4,13 +4,14 @@ import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { useState } from 'react';
 import { NavLink, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AppContext';
-import { dealsAPI } from '../../services/api';
 import { PriceVerdictBadge } from '../Pricing/PriceVerdict';
 import { QualityBadge } from '../Quality/QualityBadge';
 import { formatEr, reliableEr } from '../../utils/er';
 import BalanceBadges from '../Balance/BalanceBadges';
 import { parseUtc } from '../../utils/datetime';
 import '../Services/topGlow.css';
+import { savePendingBuy } from '../../utils/buyIntent';
+import { trackEvent } from '../../utils/tracking';
 
 /* ── Tooltip ─────────────────────────────────────────────────────── */
 const Tooltip = ({ children, text, desc }) => {
@@ -73,14 +74,12 @@ const CatalogCard = ({ channel }) => {
 	const hasActivity = channel.total_posts || channel.post_frequency || channel.last_post_date
 		|| channel.avg_forwards > 0 || channel.avg_reactions > 0;
 
-	const handleBuy = async () => {
-		if (!isAuthenticated) { alert('Увійдіть для покупки каналу'); return; }
-		try {
-			const { data } = await dealsAPI.create(channel.id);
-			navigate(`/deal/${data.id}`);
-		} catch (err) {
-			alert(err.response?.data?.detail || 'Помилка створення угоди');
-		}
+	const handleBuy = (e) => {
+		e?.preventDefault?.();
+		e?.stopPropagation?.();
+		trackEvent('buy_click', { channel_id: channel.id });
+		savePendingBuy(channel.id, { needLogin: !isAuthenticated });
+		navigate(`/channel/${channel.id}`);
 	};
 
 	return (

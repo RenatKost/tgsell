@@ -63,4 +63,5 @@ test('Kyiv datetime label and countdown', () => {
 	assert.equal(formatCountdown('2026-11-11T12:10:00.000Z', now), 'Залишилось 10 хв');
 	assert.equal(formatCountdown('2026-11-11T11:00:00.000Z', now), 'Строк оплати минув');
 	assert.equal(formatCountdown('2026-11-13T12:00:00.000Z', now), 'Залишилось 2 д 0 год');
+	assert.equal(formatCountdown('2026-11-11T11:00:00.000Z', now, 'Час підтвердження минув'), 'Час підтвердження минув');
 });

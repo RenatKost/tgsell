@@ -75,11 +75,11 @@ export function inTopUntilLabel(topUntil) {
 	return label ? `У Топі до ${label}` : 'У Топі';
 }
 
-export function formatCountdown(deadline, nowMs) {
+export function formatCountdown(deadline, nowMs, expiredLabel) {
 	const d = parseUtc(deadline);
 	if (!d || isNaN(d.getTime())) return '';
 	const ms = d.getTime() - (nowMs ?? Date.now());
-	if (ms <= 0) return 'Строк оплати минув';
+	if (ms <= 0) return expiredLabel || 'Строк оплати минув';
 	const totalMin = Math.floor(ms / 60000);
 	const hours = Math.floor(totalMin / 60);
 	const minutes = totalMin % 60;

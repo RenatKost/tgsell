@@ -44,6 +44,7 @@ class DealResponse(BaseModel):
     overpay_refund_address: str | None = None
     overpay_status: str | None = None
     created_at: UTCDateTime
+    payment_deadline_at: UTCDateTime | None = None  # display: created-stage or payment window; set by existing deal logic
     paid_at: datetime | None
     completed_at: datetime | None
 
