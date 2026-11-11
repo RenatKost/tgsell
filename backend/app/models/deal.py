@@ -7,6 +7,7 @@ from sqlalchemy import (
     Integer, Numeric, String, Text, UniqueConstraint, func,
 )
 from sqlalchemy import text as sa_text
+from sqlalchemy import false as sa_false
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database import Base
@@ -204,6 +205,9 @@ class DealMessage(Base):
     deleted_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     # Telegram bridge (0030): NULL = not forwarded (legacy/system), "pending" → worker forwards, "done"
     tg_forward_status: Mapped[str | None] = mapped_column(String(16), nullable=True)
+    # 0061: staff (admin/moderator) posted explicitly as the TgSell guarantor — shown as
+    # «Гарант» even when that staff account is also a party of the deal.
+    as_guarantor: Mapped[bool] = mapped_column(Boolean, default=False, server_default=sa_false(), nullable=False)
 
     deal = relationship("Deal", back_populates="messages")
     sender = relationship("User")

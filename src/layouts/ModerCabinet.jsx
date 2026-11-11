@@ -188,7 +188,7 @@ const DealChatModal = ({ dealId, userId, onClose }) => (
 			<div className='flex justify-end px-3 pt-2'>
 				<button onClick={onClose} className='text-gray-400 hover:text-gray-600 text-lg px-2' aria-label='Закрити'>✕</button>
 			</div>
-			<DealChat dealId={dealId} userId={userId} compact height='h-[70vh] sm:h-[32rem]' />
+			<DealChat dealId={dealId} userId={userId} compact asGuarantor height='h-[70vh] sm:h-[32rem]' />
 		</div>
 	</div>
 );

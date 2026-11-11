@@ -100,9 +100,20 @@ def message_kind(m: DealMessage) -> str:
     return m.kind or ("system" if m.is_system else "text")
 
 
-def role_of(deal: Deal, user: User | None, user_id: int | None) -> str | None:
+GUARANTOR_DISPLAY_NAME = "TgSell"
+
+
+def role_of(deal: Deal, user: User | None, user_id: int | None, as_guarantor: bool = False) -> str | None:
+    """Display role of a chat author.
+
+    Default priority is party > staff: a staff account that is the buyer/seller of this deal
+    speaks as that party. ``as_guarantor`` (stored per message, set only for staff) overrides
+    it so the message is shown as the TgSell guarantor.
+    """
     if user_id is None:
         return None
+    if as_guarantor and user is not None and is_staff(user):
+        return "guarantor"
     if user_id == deal.buyer_id:
         return "buyer"
     if user_id == deal.seller_id:
@@ -110,6 +121,14 @@ def role_of(deal: Deal, user: User | None, user_id: int | None) -> str | None:
     if user is not None and is_staff(user):
         return "guarantor"
     return None
+
+
+def display_name(m: DealMessage, sender: User | None) -> str | None:
+    """Messages posted as guarantor are signed «TgSell», never with the staff member's own name
+    (that account may also be a party of the deal)."""
+    if getattr(m, "as_guarantor", False) and sender is not None and is_staff(sender):
+        return GUARANTOR_DISPLAY_NAME
+    return sender.first_name if sender else None
 
 
 def serialize(m: DealMessage, deal: Deal, senders: dict, attachments: dict) -> dict:
@@ -121,8 +140,9 @@ def serialize(m: DealMessage, deal: Deal, senders: dict, attachments: dict) -> d
         "id": m.id, "deal_id": m.deal_id, "kind": kind, "event": m.event, "meta": m.meta,
         "text": m.text, "is_system": system_,
         "sender_id": None if system_ else m.sender_id,
-        "sender_name": sender.first_name if sender else None,
-        "sender_role": None if system_ else role_of(deal, sender, m.sender_id),
+        "sender_name": display_name(m, sender),
+        "sender_role": None if system_ else role_of(deal, sender, m.sender_id, bool(getattr(m, "as_guarantor", False))),
+        "as_guarantor": bool(getattr(m, "as_guarantor", False)) and not system_,
         "client_id": m.client_id, "created_at": m.created_at.isoformat() + "Z" if m.created_at else None,
         "attachment": None if att is None else {
             "id": att.id, "filename": att.filename, "mime": att.mime, "size": att.size,

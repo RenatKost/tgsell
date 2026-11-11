@@ -119,14 +119,17 @@ export const dealsAPI = {
 	tgNotify: (id) => api.get(`/deals/${id}/tg-notify`),
 	chatPoll: (id, afterId = 0) => api.get(`/deals/${id}/chat`, { params: { after_id: afterId } }),
 	chatHistory: (id, beforeId) => api.get(`/deals/${id}/chat/history`, { params: { before_id: beforeId } }),
-	chatSend: (id, text, clientId) => api.post(`/deals/${id}/chat/messages`, { text, client_id: clientId }),
+	// asGuarantor: staff only (moderator cabinet) — message is shown as «TgSell · Гарант».
+	chatSend: (id, text, clientId, asGuarantor = false) =>
+		api.post(`/deals/${id}/chat/messages`, asGuarantor ? { text, client_id: clientId, as_guarantor: true } : { text, client_id: clientId }),
 	chatRead: (id, messageId) => api.post(`/deals/${id}/chat/read`, { message_id: messageId }),
 	chatTyping: (id) => api.post(`/deals/${id}/chat/typing`),
-	chatUpload: (id, file, caption, clientId, onProgress) => {
+	chatUpload: (id, file, caption, clientId, onProgress, asGuarantor = false) => {
 		const fd = new FormData();
 		fd.append('file', file);
 		if (caption) fd.append('caption', caption);
 		if (clientId) fd.append('client_id', clientId);
+		if (asGuarantor) fd.append('as_guarantor', 'true');
 		return api.post(`/deals/${id}/chat/attachments`, fd, {
 			headers: { 'Content-Type': 'multipart/form-data' },
 			onUploadProgress: (e) => onProgress?.(e.total ? Math.round((e.loaded / e.total) * 100) : 0),

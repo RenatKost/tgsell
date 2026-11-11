@@ -148,7 +148,7 @@ const Header = ({ deal, presence, onCallAdmin, compact }) => {
 	);
 };
 
-const Composer = ({ disabled, onSend, onUpload, onTyping }) => {
+const Composer = ({ disabled, asGuarantor = false, onSend, onUpload, onTyping }) => {
 	const [text, setText] = useState('');
 	const [file, setFile] = useState(null);
 	const [err, setErr] = useState('');
@@ -188,7 +188,7 @@ const Composer = ({ disabled, onSend, onUpload, onTyping }) => {
 					onChange={e => { setText(e.target.value); onTyping(); e.target.style.height = 'auto'; e.target.style.height = Math.min(e.target.scrollHeight, 140) + 'px'; }}
 					onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); submit(); } }}
 					onPaste={e => { const f = [...(e.clipboardData?.files || [])][0]; if (f) { e.preventDefault(); pick(f); } }}
-					placeholder={disabled ? 'Надсилання недоступне' : (file ? 'Підпис…' : 'Написати…')}
+					placeholder={disabled ? 'Надсилання недоступне' : (file ? 'Підпис…' : (asGuarantor ? 'Написати як гарант TgSell…' : 'Написати…'))}
 					className='flex-1 min-w-0 resize-none border border-gray-200 dark:border-slate-600 bg-gray-50 dark:bg-slate-700/60 dark:text-gray-100 rounded-xl px-3 sm:px-4 py-2.5 text-base sm:text-sm focus:outline-none focus:ring-2 focus:ring-blue-100 focus:border-blue-400' />
 				<button type='submit' disabled={disabled || (!text.trim() && !file)} className='w-10 h-10 rounded-xl bg-blue-500 hover:bg-blue-600 text-white shrink-0 disabled:opacity-30'>➤</button>
 			</div>
@@ -198,10 +198,11 @@ const Composer = ({ disabled, onSend, onUpload, onTyping }) => {
 
 /**
  * Deal chat (website). Used on the deal page and in the moderator cabinet.
- * props: dealId, userId, onCallAdmin?, compact? (modal), height? (css class)
+ * props: dealId, userId, onCallAdmin?, compact? (modal), height? (css class),
+ *        asGuarantor? (moderator cabinet: staff messages are sent and shown as «TgSell · Гарант»)
  */
-const DealChat = ({ dealId, userId, onCallAdmin, compact = false, height = 'h-[60vh] sm:h-[28rem]', canPost = true }) => {
-	const chat = useDealChat(dealId);
+const DealChat = ({ dealId, userId, onCallAdmin, compact = false, height = 'h-[60vh] sm:h-[28rem]', canPost = true, asGuarantor = false }) => {
+	const chat = useDealChat(dealId, { asGuarantor });
 	const listRef = useRef(null);
 	const nearBottomRef = useRef(true);
 	const [newBelow, setNewBelow] = useState(0);
@@ -292,6 +293,7 @@ const DealChat = ({ dealId, userId, onCallAdmin, compact = false, height = 'h-[6
 							<div className={`flex mb-2 ${own ? 'justify-end' : 'justify-start'}`}>
 								<div className={`max-w-[85%] sm:max-w-[75%] rounded-2xl px-3 py-2 shadow-sm ${own ? 'bg-blue-500 text-white rounded-br-md' : 'bg-white dark:bg-slate-800 text-gray-800 dark:text-gray-100 rounded-bl-md'}`}>
 									{!own && <div className={`text-[11px] font-semibold mb-0.5 ${m.sender_role === 'guarantor' ? 'text-purple-600' : 'text-blue-600'}`}>{m.sender_name || 'Користувач'}{m.sender_role ? ` · ${ROLE_LABEL[m.sender_role]}` : ''}</div>}
+									{own && m.as_guarantor && <div className='text-[11px] font-semibold mb-0.5 text-blue-50'>Ви · Гарант TgSell</div>}
 									{m.attachment && <Attachment dealId={dealId} att={m.attachment} own={own} />}
 									{!(m.attachment && m.text === `📎 ${m.attachment.filename}`) && <div className='text-[15px] sm:text-sm whitespace-pre-wrap break-words'><Linkified text={m.text} /></div>}
 									<div className={`text-[11px] leading-none mt-1 flex items-center justify-end gap-1 ${own ? 'text-blue-50' : 'text-gray-400'}`}>
@@ -321,7 +323,7 @@ const DealChat = ({ dealId, userId, onCallAdmin, compact = false, height = 'h-[6
 			)}
 			{chat.error && <div className='text-xs text-red-600 px-4 py-1 bg-red-50'>{chat.error}</div>}
 			{chat.deal && !chat.deal.polling && <div className='text-[11px] text-gray-400 px-4 py-1'>Угоду закрито — чат показано як історію.</div>}
-			<Composer disabled={!canPost} onSend={chat.send} onUpload={chat.upload} onTyping={chat.notifyTyping} />
+			<Composer disabled={!canPost} asGuarantor={asGuarantor} onSend={chat.send} onUpload={chat.upload} onTyping={chat.notifyTyping} />
 		</div>
 	);
 };
