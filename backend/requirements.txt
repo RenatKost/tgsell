@@ -25,6 +25,8 @@ tronpy==0.4.0
 cryptography==42.0.2
 
 # Utils
+markdown-it-py==3.0.0  # blog: safe markdown (html disabled)
+PyYAML==6.0.3  # blog: frontmatter (strict safe loader)
 python-dotenv==1.0.0
 Pillow==11.0.0
 tzdata>=2024.1  # zoneinfo Europe/Chisinau for the weekly report (slim image)

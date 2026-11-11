@@ -195,6 +195,10 @@ app.include_router(wanted_router.admin_router, prefix="/api")
 from app.routers import seo as seo_router  # noqa: E402
 
 app.include_router(seo_router.router)  # /robots.txt, /sitemap.xml (before SPA catch-all)
+from app.routers import blog as blog_router  # noqa: E402
+
+app.include_router(blog_router.api_router, prefix="/api")
+app.include_router(blog_router.router)  # /blog, /blog/<slug>: SSR, real 404 (before SPA catch-all)
 
 @app.get("/api/health")
 async def health():
