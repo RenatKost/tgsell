@@ -630,6 +630,56 @@ async def notify_new_deal(bot: Bot, deal: Deal, buyer: User, seller: User):
             logger.error(f"[NOTIFY] Failed to notify admin: {e}", exc_info=True)
 
 
+async def notify_price_offer_received(bot: Bot, offer, channel, buyer: User, seller: User) -> bool:
+    """Seller: a buyer sent a counter-offer on their lot. Participant only, not a broadcast."""
+    if not seller or not getattr(seller, "telegram_id", None):
+        return True
+    frontend_url = settings.frontend_url.rstrip("/")
+    name = html.escape(getattr(channel, "channel_name", None) or "Лот")
+    amount = html.escape(str(offer.amount_usdt))
+    listed = html.escape(str(getattr(channel, "price", "") or ""))
+    comment = (offer.comment or "").strip()
+    comment_line = f"\nКоментар: <i>{html.escape(comment)}</i>" if comment else ""
+    text = (
+        f"💬 <b>Нова пропозиція ціни</b>\n\n"
+        f"Лот: <b>{name}</b>\n"
+        f"Запропоновано: <b>{amount} USDT</b> (ціна лота {listed} USDT)"
+        f"{comment_line}\n\n"
+        f"Прийняти або відхилити можна в кабінеті. Публічна ціна лота не змінюється.\n"
+        f"<a href=\"{frontend_url}/cabinet?offers=1\">Відкрити пропозиції →</a>"
+    )
+    try:
+        await bot.send_message(seller.telegram_id, text, parse_mode=ParseMode.HTML)
+        logger.info("[NOTIFY] Seller %s notified about price offer #%s", seller.telegram_id, offer.id)
+        return True
+    except Exception as e:
+        logger.warning("[NOTIFY] Failed to notify seller about price offer #%s: %s", getattr(offer, "id", "?"), e)
+        return False
+
+
+async def notify_price_offer_accepted(bot: Bot, offer, channel, buyer: User, seller: User) -> bool:
+    """Buyer: the seller accepted. Link opens confirm-then-create; no silent deal."""
+    if not buyer or not getattr(buyer, "telegram_id", None):
+        return True
+    frontend_url = settings.frontend_url.rstrip("/")
+    name = html.escape(getattr(channel, "channel_name", None) or "Лот")
+    amount = html.escape(str(offer.amount_usdt))
+    text = (
+        f"✅ <b>Продавець прийняв вашу пропозицію</b>\n\n"
+        f"Лот: <b>{name}</b>\n"
+        f"Погоджена ціна: <b>{amount} USDT</b>\n\n"
+        f"Підтвердіть створення угоди за цією ціною. Угоду ми не створюємо автоматично.\n"
+        f"<a href=\"{frontend_url}/channel/{offer.channel_id}?offer={offer.id}\">Підтвердити угоду →</a>"
+    )
+    try:
+        await bot.send_message(buyer.telegram_id, text, parse_mode=ParseMode.HTML)
+        logger.info("[NOTIFY] Buyer %s notified that offer #%s was accepted", buyer.telegram_id, offer.id)
+        return True
+    except Exception as e:
+        logger.warning("[NOTIFY] Failed to notify buyer about accepted offer #%s: %s", getattr(offer, "id", "?"), e)
+        return False
+
+
 async def notify_payment_requested(bot: Bot, deal: Deal, buyer: User, seller: User) -> bool:
     """Buyer: both sides are ready, the escrow address is now the one to pay.
 

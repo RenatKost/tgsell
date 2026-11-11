@@ -2,11 +2,14 @@ import { useEffect, useRef, useState } from 'react';
 import { useParams, useNavigate, NavLink, useSearchParams } from 'react-router-dom';
 import { trackEvent } from '../utils/tracking';
 import { Radio, ExternalLink } from 'lucide-react';
-import { channelsAPI, dealsAPI } from '../services/api';
+import { channelsAPI, dealsAPI, priceOffersAPI } from '../services/api';
 import { useAuth } from '../context/AppContext';
 import AuthModal from '../components/Header/AuthModal';
 import BuyConfirmModal from '../components/Buy/BuyConfirmModal';
+import PriceOfferModal from '../components/Buy/PriceOfferModal';
 import { savePendingBuy, peekPendingBuy, clearPendingBuy, markPendingBuyLoggedIn } from '../utils/buyIntent';
+import { savePendingOffer, peekPendingOffer, clearPendingOffer, markPendingOfferLoggedIn } from '../utils/offerIntent';
+import { offerBounds } from '../utils/offerAmount';
 import { IcoSignal } from '../components/Icon3D';
 import DetailsCard from '../components/Cards/DetailsCard';
 import ChannelHealth from '../components/ChanelDetails/ChannelHealth';
@@ -40,7 +43,7 @@ const ChannelDetailsPage = () => {
 	}, [id, searchParams, setSearchParams]);
 	const navigate = useNavigate();
 	useReveal();
-	const { isAuthenticated } = useAuth();
+	const { isAuthenticated, user } = useAuth();
 	const [channel, setChannel] = useState(null);
 	const [stats, setStats] = useState([]);
 	const [health, setHealth] = useState(null);
@@ -120,6 +123,7 @@ const ChannelDetailsPage = () => {
 	// After Telegram login (this page or a return from BuyIntentGate): open confirm, never auto-create the deal.
 	useEffect(() => {
 		if (!isAuthenticated || !channel) return;
+		if (peekPendingOffer()) return;
 		const pending = peekPendingBuy();
 		if (!pending || pending.channelId !== Number(channel.id)) return;
 		if (pending.needLogin && !loginFromBuyTracked.current) {
@@ -136,6 +140,7 @@ const ChannelDetailsPage = () => {
 		setShowConfirm(false);
 		setBuyError(null);
 		clearPendingBuy();
+		setAcceptedOffer(null);
 	};
 
 	const confirmBuy = async () => {
@@ -143,13 +148,102 @@ const ChannelDetailsPage = () => {
 		setBuying(true);
 		setBuyError(null);
 		try {
-			const { data } = await dealsAPI.create(channel.id);
+			const { data } = await dealsAPI.create(channel.id, null, acceptedOffer?.id || null);
 			clearPendingBuy();
+			setAcceptedOffer(null);
 			navigate(`/deal/${data.id}`);
 		} catch (err) {
 			setBuyError(err.response?.data?.detail || 'Помилка створення угоди');
 		} finally {
 			setBuying(false);
+		}
+	};
+
+	const [showOffer, setShowOffer] = useState(false);
+	const [offering, setOffering] = useState(false);
+	const [offerError, setOfferError] = useState(null);
+	const [acceptedOffer, setAcceptedOffer] = useState(null);
+	const [offerSent, setOfferSent] = useState(false);
+	useEffect(() => {
+		if (!offerSent) return;
+		const t = setTimeout(() => setOfferSent(false), 5000);
+		return () => clearTimeout(t);
+	}, [offerSent]);
+	const loginFromOfferTracked = useRef(false);
+
+	const handleOffer = () => {
+		if (!channel) return;
+		trackEvent('offer_open', { channel_id: channel.id });
+		if (!isAuthenticated) {
+			clearPendingBuy();
+			savePendingOffer(channel.id, { needLogin: true });
+			trackEvent('login_prompt_open', { channel_id: channel.id });
+			setShowAuth(true);
+			return;
+		}
+		setOfferError(null);
+		setShowOffer(true);
+	};
+
+	// After login from the offer path: open the offer form, never auto-send.
+	useEffect(() => {
+		if (!isAuthenticated || !channel) return;
+		const pending = peekPendingOffer();
+		if (!pending || pending.channelId !== Number(channel.id)) return;
+		if (pending.needLogin && !loginFromOfferTracked.current) {
+			loginFromOfferTracked.current = true;
+			markPendingOfferLoggedIn();
+		}
+		clearPendingOffer();
+		setShowAuth(false);
+		setShowConfirm(false);
+		setOfferError(null);
+		setShowOffer(true);
+	}, [isAuthenticated, channel]);
+
+	// Deep link from the accepted-offer bot message: /channel/:id?offer=:id
+	useEffect(() => {
+		const raw = searchParams.get('offer');
+		const offerId = Number(raw);
+		if (!(offerId > 0) || !isAuthenticated) return;
+		let cancelled = false;
+		(async () => {
+			try {
+				const { data } = await priceOffersAPI.get(offerId);
+				if (cancelled) return;
+				if (data.channel_id !== Number(id) || !data.can_create_deal) return;
+				setAcceptedOffer(data);
+				setShowConfirm(true);
+				const next = new URLSearchParams(searchParams);
+				next.delete('offer');
+				setSearchParams(next, { replace: true });
+			} catch { /* 403/404: ignore */ }
+		})();
+		return () => { cancelled = true; };
+	}, [isAuthenticated, id, searchParams, setSearchParams]);
+
+	const closeOffer = () => {
+		if (offering) return;
+		setShowOffer(false);
+		setOfferError(null);
+		clearPendingOffer();
+	};
+
+	const submitOffer = async ({ amount_usdt, comment }) => {
+		if (!channel || offering) return;
+		setOffering(true);
+		setOfferError(null);
+		try {
+			await priceOffersAPI.create({ channel_id: channel.id, amount_usdt, comment });
+			trackEvent('offer_sent', { channel_id: channel.id });
+			clearPendingOffer();
+			setShowOffer(false);
+			setOfferError(null);
+			setOfferSent(true);
+		} catch (err) {
+			setOfferError(err.response?.data?.detail || 'Не вдалося надіслати пропозицію');
+		} finally {
+			setOffering(false);
 		}
 	};
 
@@ -223,7 +317,7 @@ const ChannelDetailsPage = () => {
 
 				{/* LEFT SIDEBAR: DetailsCard → Comment → Resources → ChannelHealth */}
 				<div className='esc-reveal flex flex-col gap-4'>
-					<DetailsCard channel={channel} onBuy={handleBuy} onAuction={handleGoAuction} stats={stats} />
+					<DetailsCard channel={channel} onBuy={handleBuy} onAuction={handleGoAuction} onOffer={handleOffer} showOffer={!channel.bundle_id && user?.id !== channel.seller_id && !!offerBounds(channel.price)} stats={stats} />
 					{hasBalance(channel) && (
 						<div className='bg-white dark:bg-card rounded-2xl border border-gray-100 dark:border-card-border p-4'>
 							<p className='text-xs font-semibold text-gray-500 dark:text-gray-400 mb-2'>Баланс каналу</p>
@@ -310,7 +404,24 @@ const ChannelDetailsPage = () => {
 				onConfirm={confirmBuy}
 				busy={buying}
 				error={buyError}
+				amount={acceptedOffer ? acceptedOffer.amount_usdt : undefined}
+				note={acceptedOffer
+					? 'Угоду буде створено за погодженою пропозицією. Публічна ціна лота не змінюється. Кошти підуть на адресу гаранта лише після підтвердження готовності обома сторонами.'
+					: undefined}
 			/>
+			<PriceOfferModal
+				channel={channel}
+				open={showOffer}
+				onClose={closeOffer}
+				onSubmit={submitOffer}
+				busy={offering}
+				error={offerError}
+			/>
+			{offerSent && (
+				<div role='status' className='fixed bottom-4 left-1/2 -translate-x-1/2 z-50 max-w-sm w-[calc(100%-2rem)] rounded-xl bg-emerald-600 text-white text-sm font-medium px-4 py-3 shadow-lg'>
+					Пропозицію надіслано продавцю. Відповідь прийде в Telegram-бот і зʼявиться у кабінеті.
+				</div>
+			)}
 		</section>
 	);
 };

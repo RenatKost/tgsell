@@ -25,7 +25,7 @@ const Tooltip = ({ children, text, desc }) => {
 	);
 };
 
-const DetailsCard = ({ channel, onBuy, onAuction, stats = [] }) => {
+const DetailsCard = ({ channel, onBuy, onAuction, onOffer, showOffer, stats = [] }) => {
 	const { isAuthenticated, favoriteIds, toggleFavorite } = useAuth();
 	const isFav = favoriteIds.has(channel.id);
 	const [avatarError, setAvatarError] = useState(false);
@@ -314,12 +314,23 @@ const DetailsCard = ({ channel, onBuy, onAuction, stats = [] }) => {
 					) : (
 						<>
 							{(channel.listing_type === 'sale' || channel.listing_type === 'both' || !channel.listing_type) && (
-								<button
-									onClick={onBuy}
-									className='esc-btn chd-buy w-full font-bold bg-accent text-black py-2.5 rounded-lg shadow-lg shadow-accent/30 hover:shadow-accent/50 hover:brightness-110 transition-all text-sm'
-								>
-									Купити канал
-								</button>
+								<div className='flex flex-col gap-2'>
+									<button
+										onClick={onBuy}
+										className='esc-btn chd-buy w-full font-bold bg-accent text-black py-2.5 rounded-lg shadow-lg shadow-accent/30 hover:shadow-accent/50 hover:brightness-110 transition-all text-sm'
+									>
+										Купити канал
+									</button>
+									{showOffer && onOffer && (
+										<button
+											type='button'
+											onClick={onOffer}
+											className='w-full font-semibold py-2.5 rounded-lg border border-gray-200 dark:border-card-border text-gray-800 dark:text-gray-100 hover:border-accent hover:text-accent transition-all text-sm'
+										>
+											Запропонувати свою ціну
+										</button>
+									)}
+								</div>
 							)}
 							{(channel.listing_type === 'auction' || channel.listing_type === 'both') && channel.active_auction_id && (
 								<button

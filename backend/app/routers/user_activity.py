@@ -56,7 +56,8 @@ async def track_event(body: EventIn, user_id: int | None = Depends(_optional_use
         raise HTTPException(status_code=429, detail="Забагато запитів")
     page = body.page if body.page in ua.PAGES else ("other" if body.page else None)
     if body.type in ("channel_view", "saved_search_click", "buy_click",
-                     "login_prompt_open", "login_success_from_buy"):
+                     "login_prompt_open", "login_success_from_buy",
+                     "offer_open", "offer_sent"):
         if body.channel_id is None:
             raise HTTPException(status_code=400, detail="channel_id обовʼязковий")
         await ua.record_event(db, body.type, user_id=user_id, anon_id=anon,

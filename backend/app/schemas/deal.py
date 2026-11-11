@@ -8,6 +8,9 @@ from app.utils.timeutil import UTCDateTime
 class DealCreate(BaseModel):
     channel_id: int | None = None
     bundle_id: int | None = None
+    # Accepted price offer: deal.amount_usdt is snapshotted from the offer,
+    # then existing escrow / fee / payout logic runs unchanged off those fields.
+    offer_id: int | None = None
 
 
 class DealResponse(BaseModel):

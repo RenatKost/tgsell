@@ -22,7 +22,7 @@ from app.utils.activity_ids import _RateLimiter, hash_id, limiter  # noqa: F401
 
 logger = logging.getLogger(__name__)
 
-CLIENT_EVENTS = {"visit", "channel_view", "search", "saved_search_click", "buy_click", "login_prompt_open", "login_success_from_buy"}
+CLIENT_EVENTS = {"visit", "channel_view", "search", "saved_search_click", "buy_click", "login_prompt_open", "login_success_from_buy", "offer_open", "offer_sent"}
 SERVER_EVENTS = {"login", "favorite_add", "deal_start", "payment", "saved_search_create"}
 PAGES = {"home", "catalog", "channel", "auction", "cabinet", "sell", "deal", "bundle", "faq", "other"}
 
@@ -31,7 +31,7 @@ BUY_FUNNEL_DEDUPE = CHANNEL_VIEW_DEDUPE  # buy_click / login_prompt_open / login
 SEARCH_DEDUPE = timedelta(seconds=60)
 VISIT_DEDUPE = timedelta(minutes=30)
 # Events keyed by channel (object_id) that share the 10-minute viewer dedupe.
-CHANNEL_SCOPED_EVENTS = {"channel_view", "buy_click", "login_prompt_open", "login_success_from_buy"}
+CHANNEL_SCOPED_EVENTS = {"channel_view", "buy_click", "login_prompt_open", "login_success_from_buy", "offer_open"}
 
 HEARTBEAT_MIN_INTERVAL = 20  # seconds; frontend sends every 45 s and never more often than every 30 s
 HEARTBEAT_MAX_PER_MINUTE = 12  # hard flood cap per session (normal: ~1.3/min, even with 4 tabs on one sid ~5/min)
@@ -63,6 +63,7 @@ async def record_event(
             "buy_click": BUY_FUNNEL_DEDUPE,
             "login_prompt_open": BUY_FUNNEL_DEDUPE,
             "login_success_from_buy": BUY_FUNNEL_DEDUPE,
+            "offer_open": BUY_FUNNEL_DEDUPE,
             "search": SEARCH_DEDUPE,
             "visit": VISIT_DEDUPE,
         }.get(event_type)
@@ -240,7 +241,22 @@ async def funnel(db: AsyncSession, days: int, now: datetime | None = None) -> di
             "from_visit_pct": round(n * 100 / top, 1) if top else None,
         })
         prev = n
-    return {"days": days, "steps": out}
+    offer_actors: set[str] = set()
+    offer_total = 0
+    for uid, aid, et, oid in ev_rows:
+        if et != "offer_sent":
+            continue
+        a = _actor(uid, aid, amap)
+        if not keep(a):
+            continue
+        offer_total += 1
+        offer_actors.add(a)
+    return {
+        "days": days,
+        "steps": out,
+        "offer_sent": len(offer_actors),
+        "offer_sent_total": offer_total,
+    }
 
 
 async def users_activity(db: AsyncSession, now: datetime | None = None, limit: int = 200) -> list[dict]:
