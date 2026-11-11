@@ -4,7 +4,7 @@ description: "Як оцінити Telegram-канал за аудиторією,
 slug: otsinka-vartosti-telegram-kanalu
 lang: uk
 status: published
-date: 2026-11-08
+date: 2026-11-11
 ---
 
 # Як оцінити вартість Telegram-каналу без універсального множника

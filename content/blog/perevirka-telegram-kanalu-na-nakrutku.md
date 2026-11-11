@@ -4,7 +4,7 @@ description: "Послідовна перевірка приросту, пере
 slug: perevirka-telegram-kanalu-na-nakrutku
 lang: uk
 status: published
-date: 2026-11-08
+date: 2026-11-11
 ---
 
 # Як перевірити Telegram-канал на накрутку: докази та обмеження

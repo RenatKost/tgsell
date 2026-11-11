@@ -4,7 +4,7 @@ description: "Як обрати Telegram-канал, перевірити ста
 slug: yak-kupyty-telegram-kanal
 lang: uk
 status: published
-date: 2026-11-08
+date: 2026-11-11
 ---
 
 # Як купити Telegram-канал: перевірка активу та умов угоди

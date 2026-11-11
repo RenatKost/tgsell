@@ -4,7 +4,7 @@ description: "Практичний план продажу Telegram-каналу
 slug: yak-prodaty-telegram-kanal
 lang: uk
 status: published
-date: 2026-11-08
+date: 2026-11-11
 ---
 
 # Як продати Telegram-канал: підготовка, домовленості та передача

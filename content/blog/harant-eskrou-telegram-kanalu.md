@@ -4,7 +4,7 @@ description: "Роль гаранта в угоді з Telegram-каналом, 
 slug: harant-eskrou-telegram-kanalu
 lang: uk
 status: published
-date: 2026-11-08
+date: 2026-11-11
 ---
 
 # Гарант та ескроу для Telegram-каналу: що погодити до угоди
