@@ -1,5 +1,6 @@
 import { parseUtc } from '../../utils/datetime';
 import { fmtNum } from '../../utils/money';
+import { siteViewsLabel } from '../../utils/siteViews';
 import { faChartLine, faListAlt, faUsers, faTrash, faArrowRight } from '@fortawesome/free-solid-svg-icons';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { useState } from 'react';
@@ -123,11 +124,12 @@ const CabinetCard = ({ channel, onDelete, onUpdated, orders = [], openTopRequest
 	};
 
 	const stats = [
-		['Перегляди', channel.views_hidden ? <span className='text-amber-500' title='Приховано'>🔒</span> : (fmtNum(channel.avg_views) || '—')],
+		['Перегляди в Telegram', channel.views_hidden ? <span className='text-amber-500' title='Приховано'>🔒</span> : (fmtNum(channel.avg_views) || '—')],
 		['ER', formatEr(channel.er, channel.subscribers_count)],
 		['Вік', formatAge(channel.age)],
 		['Дохід/міс', channel.monthly_income ? `${fmtNum(channel.monthly_income)} $` : '—'],
 	];
+	const siteViews = siteViewsLabel(channel.site_views_7d, channel.site_views_total);
 
 	return (
 		<article className={`${surface} overflow-hidden flex flex-col hover:border-accent/50 transition-colors${channel.is_top ? ' lot-top-glow' : ''}`}>
@@ -176,11 +178,16 @@ const CabinetCard = ({ channel, onDelete, onUpdated, orders = [], openTopRequest
 			<dl className='grid grid-cols-2 sm:grid-cols-4 gap-px bg-gray-100 dark:bg-card-border border-y border-gray-100 dark:border-card-border'>
 				{stats.map(([k, v]) => (
 					<div key={k} className='bg-white dark:bg-card px-3 py-2.5 text-center'>
-						<dt className='text-xs text-gray-500 dark:text-gray-400'>{k}</dt>
+						<dt className='text-xs text-gray-500 dark:text-gray-400 leading-tight' title={k === 'Перегляди в Telegram' ? 'Середні перегляди на пост у Telegram' : undefined}>{k}</dt>
 						<dd className='font-semibold text-gray-900 dark:text-gray-100 text-sm mt-0.5 tabular-nums'>{v}</dd>
 					</div>
 				))}
 			</dl>
+			{siteViews && (
+				<p className='px-4 sm:px-5 py-2 text-sm text-gray-600 dark:text-gray-300 border-b border-gray-100 dark:border-card-border'>
+					{siteViews}
+				</p>
+			)}
 
 			<div className='p-4 sm:p-5 mt-auto'>
 				{channel.rejection_reason && channel.status === 'rejected' && (

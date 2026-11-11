@@ -199,12 +199,35 @@ async def expire_tops(db, now: datetime) -> int:
 
 
 
+# Temporary Telegram failures retry until this window after paid_at; then we stop.
+TOP_NOTIFY_RETRY_HOURS = 24
+
+
+def _top_notify_started_at(order) -> datetime | None:
+    return getattr(order, "paid_at", None) or getattr(order, "created_at", None)
+
+
+def _top_notify_retry_expired(order, now: datetime) -> bool:
+    started = _top_notify_started_at(order)
+    if started is None:
+        return False
+    a, b = started, now
+    if getattr(a, "tzinfo", None) is not None and getattr(b, "tzinfo", None) is None:
+        a = a.replace(tzinfo=None)
+    elif getattr(a, "tzinfo", None) is None and getattr(b, "tzinfo", None) is not None:
+        b = b.replace(tzinfo=None)
+    return (b - a) >= timedelta(hours=TOP_NOTIFY_RETRY_HOURS)
+
+
 async def notify_pending_top_activations(session_factory, now: datetime | None = None, notify=None) -> int:
     """Best-effort «Топ увімкнено» to the seller, AFTER activation has been committed.
 
-    Does not touch payment detection, wallets, or channel.top_until. A Telegram
-    failure leaves seller_notified_at NULL so the next cycle can retry — one
-    successful message per order. Existing paid rows are backfilled in 0064.
+    Does not touch payment detection, wallets, or channel.top_until.
+
+    Permanent delivery failures (no telegram_id, bot blocked, chat not found)
+    stamp seller_notified_at and are not retried. Temporary failures leave it
+    NULL and retry, but not longer than TOP_NOTIFY_RETRY_HOURS after paid_at
+    (then we stamp and stop). Existing paid rows are backfilled in 0064.
     """
     from app.models.user import User
 
@@ -245,19 +268,26 @@ async def notify_pending_top_activations(session_factory, now: datetime | None =
                     continue
                 ch = await db.get(Channel, order.channel_id)
                 seller = await db.get(User, order.seller_id)
+                from app.utils.telegram_errors import is_permanent_telegram_error
+
                 ok = False
-                try:
-                    ok = bool(await notify(ch, seller, order.active_until))
-                except Exception as e:
-                    logger.warning(f"[SERVICES] Top activation notify failed for order #{oid}: {e}")
-                    ok = False
-                if ok:
+                give_up = not seller or not getattr(seller, "telegram_id", None)
+                if not give_up:
+                    try:
+                        ok = bool(await notify(ch, seller, order.active_until))
+                    except Exception as e:
+                        logger.warning(f"[SERVICES] Top activation notify failed for order #{oid}: {e}")
+                        ok = False
+                        give_up = is_permanent_telegram_error(e)
+                stale = _top_notify_retry_expired(order, now)
+                if ok or give_up or stale:
                     # Re-load in case another cycle raced; only stamp if still unset.
                     order = await db.get(PaidServiceOrder, oid)
                     if order is not None and order.seller_notified_at is None:
                         order.seller_notified_at = now
                         await db.commit()
-                        sent += 1
+                        if ok:
+                            sent += 1
         except Exception as e:
             logger.warning(f"[SERVICES] Top activation notify loop failed for order #{oid}: {e}")
     return sent

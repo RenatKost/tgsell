@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from pydantic import BaseModel, Field, field_validator, model_validator
+from pydantic import BaseModel, Field, field_validator, model_serializer, model_validator
 
 from app.utils.limits import check_max_price
 from app.utils.timeutil import UTCDateTime
@@ -152,12 +152,25 @@ class ChannelResponse(BaseModel):
     top_source: str | None = None
     top_until: UTCDateTime | None = None  # end of the current Top (badge disappears after it)
     tgsell_verified: bool = False
+    # Owner/staff only: honest TgSell channel_view counts (omitted in public API).
+    site_views_7d: int | None = None
+    site_views_total: int | None = None
 
     @model_validator(mode="after")
     def _sanitize_avatar(self):
         from app.utils.avatars import public_channel_avatar_url
         self.avatar_url = public_channel_avatar_url(self.id, self.avatar_url)
         return self
+
+    @model_serializer(mode="wrap")
+    def _omit_private_site_views(self, serializer):
+        data = serializer(self)
+        # Buyers / public catalog must not see these keys at all.
+        if data.get("site_views_7d") is None:
+            data.pop("site_views_7d", None)
+        if data.get("site_views_total") is None:
+            data.pop("site_views_total", None)
+        return data
 
     model_config = {"from_attributes": True}
 
