@@ -11,7 +11,7 @@ from app.database import Base
 
 # Import all models so Alembic sees them
 from app.models.user import User  # noqa: F401
-from app.models.channel import Channel, ChannelPost, ChannelStats  # noqa: F401
+from app.models.channel import Channel, ChannelClarification, ChannelPost, ChannelStats  # noqa: F401
 from app.models.deal import Deal, DealChecklistItem, Transaction  # noqa: F401
 from app.models.activity import UserEvent, UserSession  # noqa: F401
 from app.models.saved_search import SavedSearch, SavedSearchMatch  # noqa: F401

@@ -78,6 +78,7 @@ const SECTIONS = [
 const STATUS_FILTERS = [
 	{ text: 'Всі', value: '', dot: 'bg-gray-400' },
 	{ text: 'На модерації', value: 'pending', dot: 'bg-yellow-500' },
+	{ text: 'Очікують уточнення', value: 'needs_clarification', dot: 'bg-orange-500' },
 	{ text: 'Опубліковані', value: 'approved', dot: 'bg-green-500' },
 	{ text: 'Відхилені', value: 'rejected', dot: 'bg-red-500' },
 	{ text: 'Продані', value: 'sold', dot: 'bg-blue-500' },
@@ -115,6 +116,7 @@ const DEAL_STATUS_LABELS = {
 
 const STATUS_LABELS = {
 	pending: 'На модерації',
+	needs_clarification: 'Очікує уточнення',
 	approved: 'Опубліковано',
 	rejected: 'Відхилено',
 	sold: 'Продано',
@@ -123,6 +125,7 @@ const STATUS_LABELS = {
 
 const STATUS_COLORS = {
 	pending: 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400',
+	needs_clarification: 'bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400',
 	approved: 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400',
 	rejected: 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400',
 	sold: 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400',
@@ -193,6 +196,31 @@ const DealChatModal = ({ dealId, userId, onClose }) => (
 	</div>
 );
 
+
+const formatAsked = (iso) => {
+	if (!iso) return '';
+	try {
+		return new Date(iso).toLocaleString('uk-UA', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+	} catch { return ''; }
+};
+
+const ClarificationHistory = ({ items }) => {
+	if (!items?.length) return null;
+	return (
+		<div className='mt-4 text-sm bg-orange-50 dark:bg-orange-900/20 border border-orange-200 dark:border-orange-800/40 rounded-xl p-3 space-y-2'>
+			<p className='font-semibold text-orange-800 dark:text-orange-200'>Історія уточнень</p>
+			{items.map(item => (
+				<div key={item.id} className='text-gray-700 dark:text-gray-200'>
+					<p className='whitespace-pre-wrap break-words'><span className='font-semibold'>Питання{item.asked_at ? ` (${formatAsked(item.asked_at)})` : ''}{item.asked_by_name ? ` · ${item.asked_by_name}` : ''}:</span> {item.question}</p>
+					{item.answer
+						? <p className='mt-1 whitespace-pre-wrap break-words'><span className='font-semibold'>Відповідь продавця{item.answered_at ? ` (${formatAsked(item.answered_at)})` : ''}:</span> {item.answer}</p>
+						: <p className='mt-1 text-orange-700 dark:text-orange-300'>Очікуємо відповідь продавця</p>}
+				</div>
+			))}
+		</div>
+	);
+};
+
 const ModerCabinet = () => {
 	const { user } = useAuth();
 	// Money actions + blocking are admin-only (backend enforces; UI hides for moderators).
@@ -219,6 +247,8 @@ const ModerCabinet = () => {
 	const [statusFilter, setStatusFilter] = useState('');
 	const [rejectId, setRejectId] = useState(null);
 	const [rejectReason, setRejectReason] = useState('');
+	const [clarifyId, setClarifyId] = useState(null);
+	const [clarifyText, setClarifyText] = useState('');
 	const [editId, setEditId] = useState(null);
 	const [unpublishId, setUnpublishId] = useState(null);
 	const [unpublishReason, setUnpublishReason] = useState('');
@@ -356,6 +386,18 @@ const ModerCabinet = () => {
 			setRejectId(null);
 			setRejectReason('');
 		} catch (err) { alert(err.response?.data?.detail || 'Помилка'); }
+	};
+
+	const handleClarify = async (id) => {
+		const question = clarifyText.trim();
+		if (question.length < 5) { alert('Вкажіть питання для продавця (мінімум 5 символів)'); return; }
+		try {
+			const { data } = await adminAPI.clarifyChannel(id, question);
+			setPendingChannels(prev => prev.map(c => c.id === id ? { ...c, ...data } : c));
+			patchChannel(id, data);
+			setClarifyId(null);
+			setClarifyText('');
+		} catch (err) { alert(err.response?.data?.detail || 'Помилка запиту уточнення'); }
 	};
 
 	const patchChannel = (id, patch) => setAllChannels(prev => prev.map(c => (c.id === id ? { ...c, ...patch } : c)));
@@ -882,6 +924,9 @@ const ModerCabinet = () => {
 												<button onClick={() => handleApprove(channel.id)} className='bg-[#27ae60] text-white px-5 py-2.5 rounded-xl font-semibold hover:bg-[#219a52] duration-300 flex items-center gap-2 shadow-sm'>
 													<FontAwesomeIcon icon={faCheck} /> Схвалити
 												</button>
+												<button onClick={() => { setClarifyId(clarifyId === channel.id ? null : channel.id); setClarifyText(''); }} className='bg-orange-500 text-white px-5 py-2.5 rounded-xl font-semibold hover:bg-orange-600 duration-300 flex items-center gap-2 shadow-sm'>
+													Запитати уточнення
+												</button>
 												<button onClick={() => setRejectId(rejectId === channel.id ? null : channel.id)} className='bg-red-500 text-white px-5 py-2.5 rounded-xl font-semibold hover:bg-red-600 duration-300 flex items-center gap-2 shadow-sm'>
 													<FontAwesomeIcon icon={faTimes} /> Відхилити
 												</button>
@@ -926,6 +971,18 @@ const ModerCabinet = () => {
 										)}
 										{channel.description && (
 											<p className='mt-4 text-gray-600 dark:text-gray-300 text-sm bg-blue-50 dark:bg-blue-900/20 p-3 rounded-xl'>{channel.description}</p>
+										)}
+										{channel.status === 'needs_clarification' && (
+											<p className='mt-3 text-xs font-semibold text-orange-700 dark:text-orange-300'>Статус: очікує уточнення від продавця</p>
+										)}
+										<ClarificationHistory items={channel.clarifications} />
+										{clarifyId === channel.id && (
+											<div className='mt-4 flex flex-col sm:flex-row gap-2'>
+												<textarea value={clarifyText} onChange={e => setClarifyText(e.target.value)} rows={3} maxLength={2000}
+													placeholder='Питання продавцю (обовʼязкове)'
+													className='flex-1 border border-gray-200 dark:border-slate-600 rounded-xl px-4 py-2.5 bg-white dark:bg-slate-700 text-gray-800 dark:text-gray-200 focus:outline-none focus:ring-2 focus:ring-orange-300' />
+												<button onClick={() => handleClarify(channel.id)} className='bg-orange-500 text-white px-5 py-2.5 rounded-xl font-semibold hover:bg-orange-600 duration-300'>Надіслати питання</button>
+											</div>
 										)}
 										{rejectId === channel.id && (
 											<div className='mt-4 flex gap-2'>
@@ -1100,6 +1157,11 @@ const ModerCabinet = () => {
 												<button onClick={() => editId === channel.id ? setEditId(null) : startEdit(channel)} className='text-gray-400 hover:text-blue-500 p-2 rounded-lg hover:bg-blue-50 dark:hover:bg-blue-900/20 duration-300'>
 													<FontAwesomeIcon icon={faPen} />
 												</button>
+												{['pending', 'needs_clarification'].includes(channel.status) && (
+													<button onClick={() => { setClarifyId(clarifyId === channel.id ? null : channel.id); setClarifyText(''); }} className='text-xs px-3 py-1.5 rounded-lg bg-orange-100 text-orange-700 hover:bg-orange-200 dark:bg-orange-900/30 dark:text-orange-300 font-semibold duration-300' title='Запитати уточнення в продавця'>
+														Запитати уточнення
+													</button>
+												)}
 												{['approved', 'pending'].includes(channel.status) && (
 													<button onClick={() => { setUnpublishId(unpublishId === channel.id ? null : channel.id); setUnpublishReason(''); }} className='text-xs px-3 py-1.5 rounded-lg bg-orange-100 text-orange-700 hover:bg-orange-200 dark:bg-orange-900/30 dark:text-orange-300 font-semibold duration-300' title='Зняти з публікації / відхилити з причиною'>
 														Зняти з публікації
@@ -1122,6 +1184,17 @@ const ModerCabinet = () => {
 											<p className='mb-3 text-sm bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-300 p-2.5 rounded-xl'>
 												<span className='font-semibold'>Причина зняття:</span> {channel.rejection_reason}
 											</p>
+										)}
+										<ClarificationHistory items={channel.clarifications} />
+										{clarifyId === channel.id && (
+											<div className='mb-3 bg-orange-50 dark:bg-orange-900/20 p-4 rounded-xl border border-orange-200 dark:border-orange-800'>
+												<p className='text-sm font-semibold text-gray-800 dark:text-gray-200 mb-2'>Запитати уточнення</p>
+												<textarea value={clarifyText} onChange={e => setClarifyText(e.target.value)} rows={3} maxLength={2000} placeholder='Питання продавцю (обовʼязкове)' className='w-full border border-gray-200 dark:border-slate-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-slate-700 text-gray-800 dark:text-gray-200' />
+												<div className='flex gap-2 mt-2'>
+													<button onClick={() => handleClarify(channel.id)} className='bg-orange-500 text-white px-4 py-2 rounded-lg text-sm font-semibold hover:bg-orange-600'>Надіслати питання</button>
+													<button onClick={() => setClarifyId(null)} className='px-4 py-2 rounded-lg text-sm text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-slate-700'>Скасувати</button>
+												</div>
+											</div>
 										)}
 										{channel.buyer_warning && warnId !== channel.id && (
 											<p className='mb-3 text-sm bg-amber-50 dark:bg-amber-900/20 text-amber-800 dark:text-amber-300 p-2.5 rounded-xl'>

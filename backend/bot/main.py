@@ -872,6 +872,48 @@ async def notify_channel_republished(bot: Bot, channel, seller: User):
         logger.warning(f"[NOTIFY] Cannot notify seller {seller.telegram_id} about channel republish: {e}")
 
 
+
+async def notify_channel_clarification_requested(bot: Bot, channel, seller: User, question: str):
+    """Seller: moderator asked a question about this lot (alerts bot)."""
+    if not seller or not seller.telegram_id:
+        return
+    frontend_url = settings.frontend_url.rstrip("/")
+    text = (
+        f"❓ <b>Модератор просить уточнення</b>\n\n"
+        f"📡 «{html.escape(channel.channel_name or '')}» (#{channel.id})\n\n"
+        f"<b>Питання:</b>\n{html.escape(question or '')}\n\n"
+        f"Відредагуйте той самий лот у кабінеті та натисніть «Відправити на перевірку».\n"
+        f"<a href=\"{frontend_url}/cabinet\">Відкрити кабінет →</a>"
+    )
+    try:
+        await bot.send_message(seller.telegram_id, text, parse_mode=ParseMode.HTML)
+    except Exception as e:
+        logger.warning(f"[NOTIFY] Cannot notify seller about clarification on channel #{channel.id}: {e}")
+
+
+async def notify_admin_clarification_reply(bot: Bot, channel, seller: User, answer: str | None):
+    """Admin group: seller resubmitted a lot after a clarification request."""
+    if not settings.admin_group_id:
+        return
+    listing_label = {"sale": "Каталог", "auction": "Аукціон", "both": "Каталог + Аукціон"}.get(
+        channel.listing_type, "Каталог")
+    seller_name = html.escape((seller.first_name if seller else "") or "Продавець")
+    answer_block = f"\nКоментар продавця: {html.escape(answer)}" if answer else ""
+    admin_text = (
+        f"📺 <b>Відповідь на уточнення — лот знову на модерації</b>\n\n"
+        f"Канал: {html.escape(channel.channel_name or channel.telegram_link or '')} (#{channel.id})\n"
+        f"Продавець: {seller_name} (id={channel.seller_id})\n"
+        f"Тип: {listing_label}\n"
+        f"Ціна: {channel.price} USDT"
+        f"{answer_block}"
+    )
+    try:
+        await bot.send_message(
+            settings.admin_group_id, telegram_html_safe(admin_text), parse_mode=ParseMode.HTML)
+    except Exception as e:
+        logger.warning(f"[NOTIFY] Cannot notify admin about clarification reply #{channel.id}: {e}")
+
+
 async def notify_new_bundle_deal(bot: Bot, deal, bundle, buyer: User, seller: User):
     """Notify seller about a new bundle deal."""
     frontend_url = settings.frontend_url.rstrip("/")

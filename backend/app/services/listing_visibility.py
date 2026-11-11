@@ -1,6 +1,6 @@
 """Task 33: who may see a listing (channel / bundle).
 
-Published lots (approved, sold) are public. Unpublished ones (pending, rejected,
+Published lots (approved, sold) are public. Unpublished ones (pending, needs_clarification, rejected,
 removed) exist only for their owner and staff (admin/moderator); everyone else
 gets a plain 404 so neither the lot nor the seller's contacts leak.
 """

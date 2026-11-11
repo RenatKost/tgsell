@@ -13,11 +13,11 @@ from sqlalchemy.orm import selectinload
 from app.database import get_db
 from app.utils.avatars import public_channel_avatar_url
 from app.models.auction import Auction, AuctionBid
-from app.models.channel import Channel, ChannelStatus
+from app.models.channel import Channel, ChannelStatus, MODERATION_STATUSES
 from app.models.deal import Deal, DealStatus, Transaction, TransactionStatus, TransactionType
 from app.models.user import User, UserRole
 from app.schemas.bundle import BundleBalancesUpdate
-from app.schemas.channel import ChannelResponse, ChannelUpdate
+from app.schemas.channel import ChannelClarifyRequest, ChannelResponse, ChannelUpdate
 from app.schemas.deal import DealResolveRequest, DealResponse
 from app.services.moderation import audit
 from app.utils.security import get_admin_user, get_superadmin_user
@@ -97,11 +97,12 @@ async def get_pending_channels(
     """Get all channels awaiting moderation."""
     result = await db.execute(
         select(Channel)
-        .where(Channel.status == ChannelStatus.pending, ~_bundle_member_exists())
-        .order_by(Channel.created_at.asc())
+        .where(Channel.status.in_(MODERATION_STATUSES), ~_bundle_member_exists())
+        .order_by(Channel.status.desc(), Channel.created_at.asc())
     )
     channels = result.scalars().all()
     from app.services.pricing import high_views_flag
+    from app.services.clarifications import attach
     out = []
     for c in channels:
         r = ChannelResponse.model_validate(c)
@@ -110,7 +111,7 @@ async def get_pending_channels(
                                last_post_date=c.last_post_date)
         r.moderation_flags = [flag] if flag else []
         out.append(r)
-    return out
+    return await attach(db, out, channels, admin)
 
 
 async def _notify_seller_channel_approved(db, channel, promo: bool) -> None:
@@ -140,8 +141,8 @@ async def approve_channel(
     channel = result.scalar_one_or_none()
     if not channel:
         raise HTTPException(status_code=404, detail="Channel not found")
-    if channel.status != ChannelStatus.pending:
-        raise HTTPException(status_code=400, detail="Channel is not pending")
+    if channel.status not in MODERATION_STATUSES:
+        raise HTTPException(status_code=400, detail="Лот не очікує модерації")
     if await _channel_bundle_id(db, channel_id) is not None:
         raise HTTPException(status_code=400, detail=BUNDLE_MEMBER_DETAIL)
 
@@ -253,8 +254,8 @@ async def reject_channel(
     channel = result.scalar_one_or_none()
     if not channel:
         raise HTTPException(status_code=404, detail="Channel not found")
-    if channel.status != ChannelStatus.pending:
-        raise HTTPException(status_code=400, detail="Channel is not pending")
+    if channel.status not in MODERATION_STATUSES:
+        raise HTTPException(status_code=400, detail="Лот не очікує модерації")
     if await _channel_bundle_id(db, channel_id) is not None:
         raise HTTPException(status_code=400, detail=BUNDLE_MEMBER_DETAIL)
 
@@ -270,6 +271,42 @@ async def reject_channel(
     except Exception as e:
         logger.error(f"Reject channel #{channel_id} failed: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Помилка відхилення: {e}")
+
+
+@router.post("/channels/{channel_id}/clarify", response_model=ChannelResponse)
+async def clarify_channel(
+    channel_id: int,
+    body: ChannelClarifyRequest,
+    admin: User = Depends(get_admin_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """«Запитати уточнення»: lot → needs_clarification, seller is notified, history is kept."""
+    from app.services.clarifications import ask, attach_one
+
+    channel = (await db.execute(
+        select(Channel).where(Channel.id == channel_id).with_for_update()
+    )).scalar_one_or_none()
+    if not channel:
+        raise HTTPException(status_code=404, detail="Channel not found")
+    if await _channel_bundle_id(db, channel_id) is not None:
+        raise HTTPException(status_code=400, detail=BUNDLE_MEMBER_DETAIL)
+    row = await ask(db, channel, admin, body.question)
+    await db.commit()
+    await db.refresh(channel)
+    logger.info(f"[ADMIN] Clarification asked on channel #{channel.id} by staff #{admin.id}")
+    try:
+        from aiogram import Bot
+        from app.config import settings
+        from bot.main import notify_channel_clarification_requested
+        seller = (await db.execute(select(User).where(User.id == channel.seller_id))).scalar_one_or_none()
+        bot = Bot(token=settings.bot_token_alerts)
+        try:
+            await notify_channel_clarification_requested(bot, channel, seller, row.question)
+        finally:
+            await bot.session.close()
+    except Exception as e:
+        logger.warning(f"[ADMIN] Channel #{channel.id} clarify: seller notification failed: {e}")
+    return await attach_one(db, ChannelResponse.model_validate(channel), channel, admin)
 
 
 @router.get("/deals", response_model=list[DealResponse])
@@ -888,7 +925,8 @@ async def list_all_channels(
         query = query.where(Channel.status == status)
     result = await db.execute(query)
     channels = result.scalars().all()
-    return [ChannelResponse.model_validate(c) for c in channels]
+    from app.services.clarifications import attach
+    return await attach(db, [ChannelResponse.model_validate(c) for c in channels], channels, admin)
 
 
 @router.put("/channels/{channel_id}", response_model=ChannelResponse)

@@ -5,10 +5,110 @@ import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { useState } from 'react';
 import { NavLink } from 'react-router-dom';
 import { formatEr } from '../../utils/er';
-import { Badge, LISTING_STATUS, surface, btnSecondary, btnDanger } from '../Cabinet/ui';
+import { Badge, LISTING_STATUS, surface, btnSecondary, btnDanger, btnPrimary } from '../Cabinet/ui';
 import SellerServices from '../Services/SellerServices';
+import { channelsAPI } from '../../services/api';
 
-const CabinetCard = ({ channel, onDelete }) => {
+
+const formatAsked = (iso) => {
+	if (!iso) return '';
+	try {
+		return new Date(iso).toLocaleString('uk-UA', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+	} catch { return ''; }
+};
+
+const ClarificationPanel = ({ channel, onUpdated }) => {
+	const history = channel.clarifications || [];
+	const waiting = channel.status === 'needs_clarification';
+	const [editing, setEditing] = useState(false);
+	const [busy, setBusy] = useState(false);
+	const [answer, setAnswer] = useState('');
+	const [form, setForm] = useState({
+		price: channel.price ?? '',
+		description: channel.description || '',
+		category: channel.category || '',
+		monthly_income: channel.monthly_income ?? '',
+		resources: channel.resources || '',
+	});
+	if (!waiting && history.length === 0) return null;
+
+	const submit = async () => {
+		setBusy(true);
+		try {
+			const payload = { answer: answer.trim() || null };
+			if (editing) {
+				payload.price = form.price === '' ? undefined : Number(form.price);
+				payload.description = form.description;
+				payload.category = form.category;
+				payload.monthly_income = form.monthly_income === '' ? null : Number(form.monthly_income);
+				payload.resources = form.resources;
+			}
+			const { data } = await channelsAPI.replyClarification(channel.id, payload);
+			onUpdated?.(data);
+		} catch (err) {
+			alert(err.response?.data?.detail || 'Не вдалося відправити на перевірку');
+		} finally {
+			setBusy(false);
+		}
+	};
+
+	return (
+		<div className='mt-3 px-3 py-3 text-sm rounded-xl border border-orange-200 dark:border-orange-900/50 bg-orange-50 dark:bg-orange-900/20 text-orange-950 dark:text-orange-100'>
+			{history.length > 0 && (
+				<div className='space-y-2 mb-3'>
+					<p className='font-semibold'>Запит уточнення від модератора</p>
+					{history.map(item => (
+						<div key={item.id} className='text-sm'>
+							<p className='whitespace-pre-wrap break-words'><span className='font-semibold'>Питання{item.asked_at ? ` (${formatAsked(item.asked_at)})` : ''}:</span> {item.question}</p>
+							{item.answer && <p className='mt-1 whitespace-pre-wrap break-words text-gray-700 dark:text-gray-200'><span className='font-semibold'>Ваша відповідь:</span> {item.answer}</p>}
+						</div>
+					))}
+				</div>
+			)}
+			{waiting && (
+				<>
+					<button type='button' onClick={() => setEditing(e => !e)} className={`${btnSecondary} mb-2 w-full sm:w-auto`}>
+						{editing ? 'Сховати редагування' : 'Редагувати лот'}
+					</button>
+					{editing && (
+						<div className='grid gap-2 mb-3'>
+							<label className='text-xs'>Ціна, USDT
+								<input type='number' min='0' value={form.price} onChange={e => setForm(f => ({ ...f, price: e.target.value }))}
+									className='mt-1 w-full rounded-lg border border-orange-200 dark:border-orange-800 bg-white dark:bg-card px-3 py-2 text-sm text-gray-900 dark:text-white' />
+							</label>
+							<label className='text-xs'>Категорія
+								<input value={form.category} onChange={e => setForm(f => ({ ...f, category: e.target.value }))}
+									className='mt-1 w-full rounded-lg border border-orange-200 dark:border-orange-800 bg-white dark:bg-card px-3 py-2 text-sm text-gray-900 dark:text-white' />
+							</label>
+							<label className='text-xs'>Опис
+								<textarea rows={3} value={form.description} onChange={e => setForm(f => ({ ...f, description: e.target.value }))}
+									className='mt-1 w-full rounded-lg border border-orange-200 dark:border-orange-800 bg-white dark:bg-card px-3 py-2 text-sm text-gray-900 dark:text-white' />
+							</label>
+							<label className='text-xs'>Дохід / міс., USDT
+								<input type='number' min='0' value={form.monthly_income} onChange={e => setForm(f => ({ ...f, monthly_income: e.target.value }))}
+									className='mt-1 w-full rounded-lg border border-orange-200 dark:border-orange-800 bg-white dark:bg-card px-3 py-2 text-sm text-gray-900 dark:text-white' />
+							</label>
+							<label className='text-xs'>Ресурси
+								<textarea rows={2} value={form.resources} onChange={e => setForm(f => ({ ...f, resources: e.target.value }))}
+									className='mt-1 w-full rounded-lg border border-orange-200 dark:border-orange-800 bg-white dark:bg-card px-3 py-2 text-sm text-gray-900 dark:text-white' />
+							</label>
+						</div>
+					)}
+					<label className='text-xs block mb-2'>Коментар для модератора (необовʼязково)
+						<textarea rows={3} value={answer} onChange={e => setAnswer(e.target.value)} maxLength={2000}
+							placeholder='Коротко поясніть зміни або дайте відповідь на питання'
+							className='mt-1 w-full rounded-lg border border-orange-200 dark:border-orange-800 bg-white dark:bg-card px-3 py-2 text-sm text-gray-900 dark:text-white' />
+					</label>
+					<button type='button' disabled={busy} onClick={submit} className={`${btnPrimary} w-full sm:w-auto disabled:opacity-50`}>
+						{busy ? 'Надсилаємо…' : 'Відправити на перевірку'}
+					</button>
+				</>
+			)}
+		</div>
+	);
+};
+
+const CabinetCard = ({ channel, onDelete, onUpdated }) => {
 	const status = LISTING_STATUS[channel.status] || LISTING_STATUS.pending;
 	const [avatarError, setAvatarError] = useState(false);
 
@@ -82,11 +182,12 @@ const CabinetCard = ({ channel, onDelete }) => {
 			</dl>
 
 			<div className='p-4 sm:p-5 mt-auto'>
-				{channel.rejection_reason && (
+				{channel.rejection_reason && channel.status === 'rejected' && (
 					<p className='mb-3 px-3 py-2 text-sm text-red-700 dark:text-red-300 bg-red-50 dark:bg-red-900/20 rounded-xl border border-red-100 dark:border-red-900/40'>
 						<span className='font-semibold'>Причина відхилення:</span> {channel.rejection_reason}
 					</p>
 				)}
+				<ClarificationPanel channel={channel} onUpdated={onUpdated} />
 				<div className='flex items-center justify-between gap-3'>
 					<div className='min-w-0'>
 						<p className='text-xs text-gray-500 dark:text-gray-400'>Ціна</p>

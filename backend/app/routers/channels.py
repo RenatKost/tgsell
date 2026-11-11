@@ -19,6 +19,7 @@ from app.schemas.channel import (
     ChannelPostsListResponse,
     ChannelResponse,
     ChannelStatsResponse,
+    ChannelClarificationReply,
     ChannelUpdate,
 )
 from app.services.moderation import not_blocked_seller
@@ -174,6 +175,9 @@ async def list_channels(
             resp.bundle_id, resp.bundle_name = bundle_map[c.id]
         items.append(resp)
 
+    from app.services.clarifications import attach
+    items = await attach(db, items, list(channels), viewer)
+
     return ChannelListResponse(
         items=items,
         total=total,
@@ -230,7 +234,8 @@ async def get_channel(channel_id: int, db: AsyncSession = Depends(get_db),
     # Attach bundle info
     data = await _attach_bundle_info(db, data)
     apply_estimate(data, await load_market(db))
-    return data
+    from app.services.clarifications import attach_one
+    return await attach_one(db, data, channel, viewer)
 
 
 @router.get("/{channel_id}/stats", response_model=list[ChannelStatsResponse])
@@ -548,7 +553,7 @@ async def create_channel(
         existing = await db.execute(
             select(Channel).where(
                 Channel.telegram_link.ilike(f"%{clean_link}%"),
-                Channel.status.in_([ChannelStatus.pending, ChannelStatus.approved]),
+                Channel.status.in_([ChannelStatus.pending, ChannelStatus.approved, ChannelStatus.needs_clarification]),
             )
         )
         if existing.scalar_one_or_none():
@@ -736,7 +741,52 @@ async def update_channel(
 
     await db.commit()
     await db.refresh(channel)
-    return ChannelResponse.model_validate(channel)
+    from app.services.clarifications import attach_one
+    return await attach_one(db, ChannelResponse.model_validate(channel), channel, user)
+
+
+@router.post("/{channel_id}/clarification-reply", response_model=ChannelResponse)
+async def reply_to_clarification(
+    channel_id: int,
+    body: ChannelClarificationReply,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Seller edits the same lot and returns it to the moderation queue."""
+    from app.services.clarifications import attach_one, reply
+
+    channel = (await db.execute(
+        select(Channel).where(Channel.id == channel_id).with_for_update()
+    )).scalar_one_or_none()
+    if not channel:
+        raise HTTPException(status_code=404, detail="Channel not found")
+
+    update_data = body.model_dump(exclude_unset=True, exclude={"answer"})
+    effective_is_closed = update_data.get("is_closed", channel.is_closed)
+    if not effective_is_closed:
+        for stat_field in ("subscribers_count", "avg_views", "er"):
+            update_data.pop(stat_field, None)
+    for field, value in update_data.items():
+        setattr(channel, field, value)
+
+    await reply(db, channel, user, body.answer)
+    await db.commit()
+    await db.refresh(channel)
+
+    try:
+        from aiogram import Bot
+        from app.config import settings as cfg
+        from bot.main import notify_admin_clarification_reply
+        if cfg.admin_group_id and cfg.bot_token_alerts:
+            bot = Bot(token=cfg.bot_token_alerts)
+            try:
+                await notify_admin_clarification_reply(bot, channel, user, (body.answer or "").strip() or None)
+            finally:
+                await bot.session.close()
+    except Exception as e:
+        logger.warning(f"[CHANNEL] Failed to notify admin about clarification reply #{channel.id}: {e}")
+
+    return await attach_one(db, ChannelResponse.model_validate(channel), channel, user)
 
 
 @router.delete("/{channel_id}", status_code=status.HTTP_204_NO_CONTENT)
