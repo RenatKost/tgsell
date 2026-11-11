@@ -127,11 +127,14 @@ async def create_order(db, *, seller_id: int, channel: Channel, kind: str, now: 
     if channel.status != ChannelStatus.approved:
         raise ServiceError("Послуги доступні лише для опублікованих лотів")
     cfg = await get_settings(db)
-    open_same = (await db.execute(select(PaidServiceOrder.id).where(
+    open_same = (await db.execute(select(PaidServiceOrder).where(
         PaidServiceOrder.channel_id == channel.id, PaidServiceOrder.kind == kind,
         PaidServiceOrder.status.in_((ST_AWAITING, ST_PAID, ST_IN_REVIEW, ST_ACTIVE)),
     ).limit(1))).scalar_one_or_none()
     if open_same:
+        # Read-only: give the owner the already-created invoice (same address/price). No new wallet.
+        if open_same.status == ST_AWAITING and open_same.seller_id == seller_id:
+            return open_same
         raise ServiceError("Для цього лота вже є активна заявка на цю послугу")
     if kind == KIND_VERIFIED and channel.tgsell_verified:
         raise ServiceError("Лот уже має значок «Перевірено TgSell»")
@@ -195,6 +198,71 @@ async def expire_tops(db, now: datetime) -> int:
     return len(rows)
 
 
+
+async def notify_pending_top_activations(session_factory, now: datetime | None = None, notify=None) -> int:
+    """Best-effort «Топ увімкнено» to the seller, AFTER activation has been committed.
+
+    Does not touch payment detection, wallets, or channel.top_until. A Telegram
+    failure leaves seller_notified_at NULL so the next cycle can retry — one
+    successful message per order. Existing paid rows are backfilled in 0064.
+    """
+    from app.models.user import User
+
+    now = now or utcnow_naive()
+    sent = 0
+    async with session_factory() as db:
+        rows = (await db.execute(
+            select(PaidServiceOrder)
+            .where(
+                PaidServiceOrder.kind == KIND_TOP,
+                PaidServiceOrder.status == ST_ACTIVE,
+                PaidServiceOrder.seller_notified_at.is_(None),
+            )
+            .order_by(PaidServiceOrder.id.asc())
+        )).scalars().all()
+        order_ids = [o.id for o in rows]
+    if not order_ids:
+        return 0
+
+    if notify is None:
+        async def notify(channel, seller, active_until):
+            from aiogram import Bot
+            from app.config import settings
+            if not getattr(settings, "bot_token_alerts", None):
+                return False
+            from bot.main import notify_top_activated
+            bot = Bot(token=settings.bot_token_alerts)
+            try:
+                return bool(await notify_top_activated(bot, channel, seller, active_until))
+            finally:
+                await bot.session.close()
+
+    for oid in order_ids:
+        try:
+            async with session_factory() as db:
+                order = await db.get(PaidServiceOrder, oid)
+                if order is None or order.seller_notified_at is not None or order.status != ST_ACTIVE:
+                    continue
+                ch = await db.get(Channel, order.channel_id)
+                seller = await db.get(User, order.seller_id)
+                ok = False
+                try:
+                    ok = bool(await notify(ch, seller, order.active_until))
+                except Exception as e:
+                    logger.warning(f"[SERVICES] Top activation notify failed for order #{oid}: {e}")
+                    ok = False
+                if ok:
+                    # Re-load in case another cycle raced; only stamp if still unset.
+                    order = await db.get(PaidServiceOrder, oid)
+                    if order is not None and order.seller_notified_at is None:
+                        order.seller_notified_at = now
+                        await db.commit()
+                        sent += 1
+        except Exception as e:
+            logger.warning(f"[SERVICES] Top activation notify loop failed for order #{oid}: {e}")
+    return sent
+
+
 async def check_orders_once(session_factory, now: datetime | None = None, fetch_balance=None) -> dict:
     """Read-only balance polling for awaiting orders + Top expiry. Returns counters."""
     from app.services import escrow as escrow_svc
@@ -238,6 +306,13 @@ async def check_orders_once(session_factory, now: datetime | None = None, fetch_
                             f"Адреса: <code>{o.escrow_wallet_address}</code>\nРішення — за адміністратором.")))
         stats["expired"] = await expire_tops(db, now)
         await db.commit()
+    # Seller «Топ увімкнено»: only after the payment commit above. Must not
+    # roll back activation if Telegram fails (see notify_pending_top_activations).
+    try:
+        stats["top_notified"] = await notify_pending_top_activations(session_factory, now)
+    except Exception as e:
+        logger.error(f"[SERVICES] Top activation notifications failed: {e}")
+        stats["top_notified"] = 0
     if partial_alerts:
         from app.services.alerts import send_admin_alert
         for alert_key, text in partial_alerts:

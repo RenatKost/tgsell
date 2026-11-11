@@ -1,13 +1,17 @@
 import { fmtNum } from '../../utils/money';
 import { useEffect, useState } from 'react';
+import { QRCodeSVG } from 'qrcode.react';
 import { servicesAPI } from '../../services/api';
 import { btnPrimary, btnSecondary } from '../Cabinet/ui';
+import { formatCountdown, formatKyivDateTime } from '../../utils/topFunnel';
+import { copyText } from './AwaitingInvoices';
 
 let catalogCache = null;
 export const loadCatalog = () => {
 	if (!catalogCache) catalogCache = servicesAPI.catalog().then((r) => r.data).catch(() => { catalogCache = null; return null; });
 	return catalogCache;
 };
+export const invalidateServicesCatalog = () => { catalogCache = null; };
 export const useServicesCatalog = () => {
 	const [cat, setCat] = useState(null);
 	useEffect(() => { let on = true; loadCatalog().then((c) => on && setCat(c)); return () => { on = false; }; }, []);
@@ -22,17 +26,22 @@ export const availableServices = (cat, channel) => (cat?.items || []).filter(
 
 /**
  * Service picker + existing order flow (POST /services/orders → USDT TRC-20 address).
- * `initialKind` jumps straight to a service; otherwise the user picks from the list.
+ * `initialKind` jumps straight to a service; `existingOrder` shows a known invoice
+ * (from GET /services/orders/my) so closing the dialog and reopening does not 400.
  */
-const PromoteDialog = ({ channel, initialKind = null, onClose, onCabinet }) => {
+const PromoteDialog = ({ channel, initialKind = null, existingOrder = null, onClose, onCabinet }) => {
 	const cat = useServicesCatalog();
 	const items = availableServices(cat, channel);
 	const [kind, setKind] = useState(initialKind);
-	const [order, setOrder] = useState(null);
+	const [order, setOrder] = useState(existingOrder || null);
 	const [err, setErr] = useState('');
 	const [busy, setBusy] = useState(false);
-	const pick = items.find((i) => i.kind === kind) || null;
+	const [copied, setCopied] = useState(false);
+	const [now, setNow] = useState(() => Date.now());
+	const pick = items.find((i) => i.kind === kind) || (order ? { kind: order.kind, title: order.title, price_usdt: order.price_usdt, terms: '', refundable: true } : null);
 	const published = channel?.status === 'approved';
+
+	useEffect(() => { setOrder(existingOrder || null); }, [existingOrder]);
 
 	useEffect(() => {
 		const onKey = (e) => e.key === 'Escape' && onClose?.();
@@ -40,11 +49,28 @@ const PromoteDialog = ({ channel, initialKind = null, onClose, onCabinet }) => {
 		return () => window.removeEventListener('keydown', onKey);
 	}, [onClose]);
 
+	useEffect(() => {
+		if (!order) return undefined;
+		const t = setInterval(() => setNow(Date.now()), 30000);
+		return () => clearInterval(t);
+	}, [order]);
+
 	const buy = async () => {
+		if (order) return;
 		setBusy(true); setErr('');
-		try { const r = await servicesAPI.order({ channel_id: channel.id, kind: pick.kind }); setOrder(r.data); }
-		catch (ex) { setErr(errText(ex)); } finally { setBusy(false); }
+		try {
+			const r = await servicesAPI.order({ channel_id: channel.id, kind: pick.kind });
+			setOrder(r.data);
+			invalidateServicesCatalog();
+		} catch (ex) {
+			setErr(errText(ex));
+		} finally { setBusy(false); }
 	};
+
+	const deadlineHint = order
+		? (formatCountdown(order.payment_deadline_at, now)
+			+ (order.payment_deadline_at ? ` · до ${formatKyivDateTime(order.payment_deadline_at)} (Київ)` : ''))
+		: '';
 
 	return (
 		<div className='fixed inset-0 z-[60] bg-black/70 backdrop-blur-sm flex items-end sm:items-center justify-center p-0 sm:p-4' onClick={onClose}>
@@ -53,13 +79,13 @@ const PromoteDialog = ({ channel, initialKind = null, onClose, onCabinet }) => {
 				onClick={(e) => e.stopPropagation()}>
 				<div className='flex items-start justify-between gap-3'>
 					<div className='min-w-0'>
-						<h3 className='text-lg font-bold text-gray-900 dark:text-white'>{pick ? `${SERVICE_ICON[pick.kind]} ${pick.title}` : '🚀 Просунути лот'}</h3>
+						<h3 className='text-lg font-bold text-gray-900 dark:text-white'>{pick ? `${SERVICE_ICON[pick.kind] || '🚀'} ${pick.title}` : '🚀 Просунути лот'}</h3>
 						<p className='text-sm text-gray-500 dark:text-gray-400 mt-0.5 truncate'>Лот: <b className='text-gray-800 dark:text-gray-200'>{channel?.channel_name}</b></p>
 					</div>
 					<button type='button' onClick={onClose} aria-label='Закрити' className='w-9 h-9 shrink-0 rounded-lg text-gray-400 hover:text-white hover:bg-white/5 text-xl leading-none'>×</button>
 				</div>
 
-				{!cat ? (
+				{!cat && !order ? (
 					<p className='text-sm text-gray-400'>Завантажуємо послуги…</p>
 				) : !pick ? (
 					<div className='space-y-2'>
@@ -78,19 +104,37 @@ const PromoteDialog = ({ channel, initialKind = null, onClose, onCabinet }) => {
 					</div>
 				) : (
 					<>
-						<p className='text-sm text-gray-600 dark:text-gray-300'>{pick.terms}</p>
-						{pick.kind === 'top' && !order && <p className='text-xs text-gray-400'>Вільних місць у Топі: {cat.top_slots_free}</p>}
-						{!pick.refundable && <p className='text-xs font-semibold text-amber-600 dark:text-amber-400'>Оплата не повертається у разі відмови.</p>}
+						{pick.terms ? <p className='text-sm text-gray-600 dark:text-gray-300'>{pick.terms}</p> : null}
+						{pick.kind === 'top' && !order && <p className='text-xs text-gray-400'>Вільних місць у Топі: {cat?.top_slots_free}</p>}
+						{pick.refundable === false && <p className='text-xs font-semibold text-amber-600 dark:text-amber-400'>Оплата не повертається у разі відмови.</p>}
 						<p className='text-2xl font-bold text-gray-900 dark:text-white'>{pick.price_usdt} <span className='text-accent'>USDT</span></p>
 						{order ? (
 							<div className='space-y-2'>
-								<p className='text-sm text-gray-600 dark:text-gray-300'>Надішліть рівно <b>{order.price_usdt} USDT</b> (мережа TRC-20) на адресу:</p>
-								<input readOnly value={order.escrow_wallet_address} onFocus={(e) => e.target.select()} className='w-full text-xs bg-gray-50 dark:bg-slate-900 border border-gray-200 dark:border-card-border rounded-xl px-3 py-2.5 text-gray-800 dark:text-gray-100' />
-								<p className='text-xs text-gray-400'>Оплату буде зараховано автоматично протягом кількох хвилин. Неоплачена заявка скасовується через 24 год.</p>
+								<p className='text-sm text-gray-600 dark:text-gray-300'>Надішліть рівно <b>{order.price_usdt} USDT</b> (мережа {order.network || 'TRC-20'}) на адресу:</p>
+								{order.escrow_wallet_address && (
+									<div className='flex justify-center'>
+										<div className='bg-white p-2 rounded-xl'>
+											<QRCodeSVG value={order.escrow_wallet_address} size={132} />
+										</div>
+									</div>
+								)}
+								<input readOnly value={order.escrow_wallet_address || ''} onFocus={(e) => e.target.select()} className='w-full text-xs bg-gray-50 dark:bg-slate-900 border border-gray-200 dark:border-card-border rounded-xl px-3 py-2.5 text-gray-800 dark:text-gray-100' />
+								<button type='button' className={btnSecondary + ' w-full'} onClick={async () => {
+									const ok = await copyText(order.escrow_wallet_address);
+									if (ok) { setCopied(true); setTimeout(() => setCopied(false), 2000); }
+								}}>{copied ? 'Скопійовано' : 'Скопіювати'}</button>
+								<p className='text-xs text-gray-400'>
+									Оплату буде зараховано автоматично протягом кількох хвилин.
+									{deadlineHint ? ` ${deadlineHint}.` : ' Неоплачена заявка скасовується, якщо оплату не отримаємо вчасно.'}
+									{' '}Адресу збережено в кабінеті — розділ «Очікують оплату».
+								</p>
+								{order.status && order.status !== 'awaiting_payment' && (
+									<p className='text-sm font-semibold text-emerald-600 dark:text-accent'>{order.status_label || order.status}</p>
+								)}
 							</div>
 						) : !published ? (
 							<p className='text-sm text-amber-600 dark:text-amber-300 bg-amber-500/10 border border-amber-500/30 rounded-xl px-3 py-2.5'>
-								Оплатити послугу можна одразу після модерації лота. Ми повідомимо, коли його схвалять, — кнопка «Просунути» буде на картці лота в кабінеті.
+								Оплатити послугу можна одразу після модерації лота. Ми повідомимо, коли його схвалять, — кнопка «Підняти в Топ» буде на картці лота в кабінеті.
 							</p>
 						) : err ? <p className='text-sm text-red-500'>{err}</p> : null}
 					</>

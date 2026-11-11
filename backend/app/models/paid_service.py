@@ -37,6 +37,8 @@ class PaidServiceOrder(Base):
     received_usdt: Mapped[float | None] = mapped_column(Float, nullable=True)
     payment_deadline_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     paid_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    # Set after the seller is successfully notified that Top was activated (migration 0064).
+    seller_notified_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     active_until: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     admin_note: Mapped[str | None] = mapped_column(Text, nullable=True)
     handled_by_id: Mapped[int | None] = mapped_column(Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True)

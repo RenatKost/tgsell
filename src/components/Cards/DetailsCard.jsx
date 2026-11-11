@@ -1,4 +1,5 @@
 import { parseUtc } from '../../utils/datetime';
+import '../Services/topGlow.css';
 import { fmtNum } from '../../utils/money';
 import { faHeart } from '@fortawesome/free-solid-svg-icons';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
@@ -74,7 +75,7 @@ const DetailsCard = ({ channel, onBuy, onAuction, stats = [] }) => {
 	}
 
 	return (
-		<div className='bg-white dark:bg-card rounded-xl border border-gray-100 dark:border-card-border shadow-sm dark:shadow-neon'>
+		<div className={`bg-white dark:bg-card rounded-xl border border-gray-100 dark:border-card-border shadow-sm dark:shadow-neon${channel.is_top ? ' lot-top-glow' : ''}`}>
 			{/* Channel header */}
 			<div className='p-4'>
 				<div className='flex items-center gap-3'>
@@ -116,6 +117,9 @@ const DetailsCard = ({ channel, onBuy, onAuction, stats = [] }) => {
 						>
 							↗ Переглянути канал
 						</a>
+					)}
+					{channel.is_top && (
+						<span className='lot-top-badge'>🚀 Топ</span>
 					)}
 					{channel.category && (
 						<span className='bg-gray-50 dark:bg-card-inner text-gray-500 dark:text-gray-400 text-[11px] font-medium px-2.5 py-1.5 rounded-lg'>

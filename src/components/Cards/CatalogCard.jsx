@@ -10,6 +10,7 @@ import { QualityBadge } from '../Quality/QualityBadge';
 import { formatEr, reliableEr } from '../../utils/er';
 import BalanceBadges from '../Balance/BalanceBadges';
 import { parseUtc } from '../../utils/datetime';
+import '../Services/topGlow.css';
 
 /* ── Tooltip ─────────────────────────────────────────────────────── */
 const Tooltip = ({ children, text, desc }) => {
@@ -83,7 +84,7 @@ const CatalogCard = ({ channel }) => {
 	};
 
 	return (
-		<div className='group bg-white dark:bg-card rounded-xl border border-gray-100 dark:border-card-border shadow-sm dark:shadow-neon hover:dark:shadow-neon-lg transition-shadow duration-300 flex flex-col'>
+		<div className={`group bg-white dark:bg-card rounded-xl border border-gray-100 dark:border-card-border shadow-sm dark:shadow-neon hover:dark:shadow-neon-lg transition-shadow duration-300 flex flex-col${channel.is_top ? ' lot-top-glow' : ''}`}>
 
 			{/* ── Header ── */}
 			<div className='p-4 pb-3'>
@@ -127,7 +128,7 @@ const CatalogCard = ({ channel }) => {
 						</a>
 					)}
 					{channel.is_top && (
-						<span className='bg-orange-500/10 text-orange-500 text-[11px] font-bold px-2.5 py-1 rounded-lg border border-orange-500/40'>🚀 Топ</span>
+						<span className='lot-top-badge'>🚀 Топ</span>
 					)}
 					{channel.tgsell_verified && (
 						<span title='Канал пройшов ручну перевірку TgSell' className='bg-green-500/10 text-green-500 text-[11px] font-bold px-2.5 py-1 rounded-lg border border-green-500/40'>✅ Перевірено TgSell</span>

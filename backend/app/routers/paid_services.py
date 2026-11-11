@@ -52,7 +52,13 @@ async def services_catalog(db: AsyncSession = Depends(get_db)):
     from app.utils.timeutil import utcnow_naive
     cfg = await svc.get_settings(db)
     taken = await svc.top_slots_taken(db, utcnow_naive())
-    return {"items": svc.public_catalog(cfg), "top_slots_free": max(0, int(cfg["service_top_max_slots"]) - taken)}
+    slots_max = int(cfg["service_top_max_slots"])
+    return {
+        "items": svc.public_catalog(cfg),
+        "top_slots_free": max(0, slots_max - taken),
+        "top_slots_max": slots_max,
+        "top_days": int(cfg["service_top_days"]),
+    }
 
 
 @router.post("/orders", status_code=201)
