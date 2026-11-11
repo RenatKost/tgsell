@@ -16,6 +16,11 @@ class ChannelStatus(str, enum.Enum):
     rejected = "rejected"
     sold = "sold"
     removed = "removed"  # admin "Зняти з біржі" (soft delete, migration 0034)
+    needs_clarification = "needs_clarification"  # moderator asked the seller a question (0063)
+
+
+# Statuses that sit in the moderation queue (staff can approve / reject / ask again).
+MODERATION_STATUSES = (ChannelStatus.pending, ChannelStatus.needs_clarification)
 
 
 class ListingType(str, enum.Enum):
@@ -136,6 +141,28 @@ class Channel(Base):
     posts = relationship("ChannelPost", back_populates="channel", cascade="all, delete-orphan", passive_deletes=True)
     deals = relationship("Deal", back_populates="channel", passive_deletes=True)
     auction = relationship("Auction", back_populates="channel", uselist=False, passive_deletes=True)
+    clarification_requests = relationship(
+        "ChannelClarification", back_populates="channel",
+        cascade="all, delete-orphan", order_by="ChannelClarification.id",
+    )
+
+
+class ChannelClarification(Base):
+    """One moderator question (and optional seller reply) about a lot. History is kept."""
+    __tablename__ = "channel_clarifications"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    channel_id: Mapped[int] = mapped_column(ForeignKey("channels.id", ondelete="CASCADE"), index=True)
+    question: Mapped[str] = mapped_column(Text)
+    asked_by_id: Mapped[int] = mapped_column(ForeignKey("users.id"))
+    asked_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+    answer: Mapped[str | None] = mapped_column(Text, nullable=True)
+    answered_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    answered_by_id: Mapped[int | None] = mapped_column(ForeignKey("users.id"), nullable=True)
+
+    channel = relationship("Channel", back_populates="clarification_requests")
+    asked_by = relationship("User", foreign_keys=[asked_by_id])
+    answered_by = relationship("User", foreign_keys=[answered_by_id])
 
 
 class ChannelStats(Base):

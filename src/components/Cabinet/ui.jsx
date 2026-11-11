@@ -28,12 +28,7 @@ export const Badge = ({ tone = 'gray', children, dot = true, className = '' }) =
 	</span>
 );
 
-export const LISTING_STATUS = {
-	pending: { text: 'На модерації', tone: 'yellow' },
-	approved: { text: 'Опубліковано', tone: 'green' },
-	rejected: { text: 'Відхилено', tone: 'red' },
-	sold: { text: 'Продано', tone: 'gray' },
-};
+export { LISTING_STATUS } from '../../utils/listingStatus.js';
 
 export const DEAL_STATUS = {
 	created: { text: 'Підтвердження готовності', tone: 'yellow' },

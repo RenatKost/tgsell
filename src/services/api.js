@@ -112,6 +112,9 @@ export const channelsAPI = {
 
 	delete: (id) =>
 		api.delete(`/channels/${id}`),
+
+	replyClarification: (id, data) =>
+		api.post(`/channels/${id}/clarification-reply`, data),
 };
 
 // ===== Deals =====
@@ -229,6 +232,9 @@ export const adminAPI = {
 
 	rejectChannel: (id, reason) =>
 		api.post(`/admin/channels/${id}/reject`, { reason }),
+
+	clarifyChannel: (id, question) =>
+		api.post(`/admin/channels/${id}/clarify`, { question }),
 
 	updateChannel: (id, data) =>
 		api.put(`/admin/channels/${id}`, data),

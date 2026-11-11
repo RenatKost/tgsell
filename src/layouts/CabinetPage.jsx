@@ -44,6 +44,7 @@ const STATUS_FILTERS = [
 	{ text: 'Усі', value: null, dot: 'bg-gray-400' },
 	{ text: 'Опубліковані', value: 'approved', dot: 'bg-green-500' },
 	{ text: 'На модерації', value: 'pending', dot: 'bg-yellow-500' },
+	{ text: 'Очікують уточнення', value: 'needs_clarification', dot: 'bg-orange-500' },
 	{ text: 'Відхилені', value: 'rejected', dot: 'bg-red-500' },
 ];
 
@@ -198,6 +199,7 @@ const CabinetPage = () => {
 		all: channels.length,
 		approved: channels.filter(c => c.status === 'approved').length,
 		pending: channels.filter(c => c.status === 'pending').length,
+		needs_clarification: channels.filter(c => c.status === 'needs_clarification').length,
 		rejected: channels.filter(c => c.status === 'rejected').length,
 	};
 
@@ -302,7 +304,7 @@ const CabinetPage = () => {
 						),
 						<div className='esc-cab-list grid grid-cols-1 lg:grid-cols-2 2xl:grid-cols-3 gap-4 sm:gap-5'>
 							{filteredChannels.map(channel => (
-								<CabinetCard key={channel.id} channel={channel} onDelete={handleDelete} />
+								<CabinetCard key={channel.id} channel={channel} onDelete={handleDelete} onUpdated={updated => setChannels(prev => prev.map(c => c.id === updated.id ? { ...c, ...updated } : c))} />
 							))}
 						</div>,
 					)}

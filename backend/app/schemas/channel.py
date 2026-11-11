@@ -64,6 +64,28 @@ class ChannelUpdate(BaseModel):
     def _max_price(cls, v):
         return check_max_price(v)
 
+class ClarificationItem(BaseModel):
+    id: int
+    question: str
+    asked_at: UTCDateTime
+    asked_by_id: int
+    asked_by_name: str | None = None
+    answer: str | None = None
+    answered_at: UTCDateTime | None = None
+    answered_by_id: int | None = None
+
+    model_config = {"from_attributes": True}
+
+
+class ChannelClarifyRequest(BaseModel):
+    question: str = Field(min_length=5, max_length=2000)
+
+
+class ChannelClarificationReply(ChannelUpdate):
+    """Seller edits the same lot and optionally leaves a comment for moderators."""
+    answer: str | None = Field(default=None, max_length=2000)
+
+
 class ChannelResponse(BaseModel):
     id: int
     seller_id: int
@@ -123,6 +145,8 @@ class ChannelResponse(BaseModel):
     ton_balance: float | None = None
     # Admin-set warning for buyers (migration 0046)
     buyer_warning: str | None = None
+    # Owner/staff only: history of «Запитати уточнення» (empty on public catalog).
+    clarifications: list[ClarificationItem] = []
     # Paid services (migration 0051)
     is_top: bool = False
     top_source: str | None = None

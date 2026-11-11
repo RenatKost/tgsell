@@ -137,7 +137,7 @@ def channel_meta(channel) -> dict:
     """Per-channel meta for /channel/:id. channel=None → unknown lot (noindex).
 
     Only publicly visible facts (name, subscribers, price, avatar) — never internal
-    methodology. Unpublished lots (pending/rejected/removed) get a generic noindex
+    methodology. Unpublished lots (pending/needs_clarification/rejected/removed) get a generic noindex
     page without any details.
     """
     from app.services.listing_visibility import channel_is_public
