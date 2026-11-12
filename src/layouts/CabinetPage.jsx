@@ -65,7 +65,7 @@ const CabinetPage = () => {
 	const { user, favoriteIds } = useAuth();
 	const navigate = useNavigate();
 	const [searchParams, setSearchParams] = useSearchParams();
-	const { orders } = useMyServiceOrders(!!user?.id);
+	const { orders, refresh: refreshOrders } = useMyServiceOrders(!!user?.id);
 	const [topOpenFor, setTopOpenFor] = useState(null);
 	const [topOpenTick, setTopOpenTick] = useState(0);
 	const openTopFor = (channel) => {
@@ -368,7 +368,7 @@ const CabinetPage = () => {
 						),
 						<div className='esc-cab-list grid grid-cols-1 lg:grid-cols-2 2xl:grid-cols-3 gap-4 sm:gap-5'>
 							{filteredChannels.map(channel => (
-								<CabinetCard key={channel.id} channel={channel} onDelete={handleDelete} onUpdated={updated => setChannels(prev => prev.map(c => c.id === updated.id ? { ...c, ...updated } : c))} orders={orders} openTopRequest={topOpenFor === channel.id ? topOpenTick : 0} />
+								<CabinetCard key={channel.id} channel={channel} onDelete={handleDelete} onUpdated={updated => setChannels(prev => prev.map(c => c.id === updated.id ? { ...c, ...updated } : c))} orders={orders} openTopRequest={topOpenFor === channel.id ? topOpenTick : 0} onOrdered={refreshOrders} />
 							))}
 						</div>,
 					)}
