@@ -1,5 +1,7 @@
 /** Client-side bounds for a price offer. The server remains the source of truth. */
 
+import { fmtUsdt } from './money.js';
+
 export const OFFER_MIN_FRACTION = 0.5;
 
 export function offerBounds(lotPrice) {
@@ -19,7 +21,7 @@ export function validateOfferAmount(amount, lotPrice) {
 	if (!Number.isFinite(n) || n <= 0) return 'Вкажіть суму в USDT';
 	const cents = Math.round(n * 100);
 	if (Math.abs(n * 100 - cents) > 1e-6) return 'Сума має бути з точністю до 0,01 USDT';
-	if (cents > Math.round(bounds.max * 100)) return 'Пропозиція має бути нижчою за ціну лота';
-	if (cents < Math.round(bounds.min * 100)) return 'Пропозиція має бути не нижчою за 50% ціни лота';
+	if (cents > Math.round(bounds.max * 100)) return `Сума має бути нижчою за ціну лота (${fmtUsdt(bounds.price)} USDT)`;
+	if (cents < Math.round(bounds.min * 100)) return `Мінімум — ${fmtUsdt(bounds.min)} USDT (50% ціни лота)`;
 	return null;
 }

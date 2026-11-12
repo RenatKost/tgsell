@@ -1,4 +1,5 @@
 import { fmtUsdt, fmtNum } from '../utils/money';
+import { dealTitle } from '../utils/dealTitle';
 import DealChat from '../components/DealChat/DealChat';
 import { useEffect, useRef, useState } from 'react';
 import { useParams } from 'react-router-dom';
@@ -246,7 +247,7 @@ const DealPage = () => {
 							{heroLabel(viewer)}
 						</p>
 						<h1 className='text-lg sm:text-xl md:text-2xl font-bold truncate'>
-							{deal.channel_name || `Канал #${deal.channel_id}`}
+							{dealTitle(deal)}
 						</h1>
 						<p className='text-blue-200 text-sm mt-0.5'>
 							{heroCounterpart(viewer, deal)} · {new Date(deal.created_at).toLocaleDateString('uk-UA')}

@@ -1,4 +1,5 @@
 import { parseUtc } from '../utils/datetime';
+import { dealTitle } from '../utils/dealTitle';
 import { fmtUsdt, fmtNum, MAX_PRICE_USDT, MAX_PRICE_HINT } from '../utils/money';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { NavLink, useNavigate, useSearchParams } from 'react-router-dom';
@@ -538,7 +539,7 @@ const CabinetPage = () => {
 										<div className='flex flex-col sm:flex-row sm:items-start justify-between gap-2 sm:gap-4 mb-4'>
 											<div className='min-w-0'>
 												<h3 className='font-bold text-gray-900 dark:text-white text-base sm:text-lg leading-snug line-clamp-2 break-words'>
-													{deal.channel_name || `Канал #${deal.channel_id}`}
+													{dealTitle(deal)}
 												</h3>
 												<p className='text-gray-500 dark:text-gray-400 text-sm mt-1'>
 													Угода #{deal.id} · {isBuyer ? 'ви покупець' : 'ви продавець'}

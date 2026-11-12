@@ -10,7 +10,7 @@ const BuyConfirmModal = ({ channel, open, onClose, onConfirm, busy, error, amoun
 	return (
 		<div
 			onClick={(e) => { if (e.target === e.currentTarget && !busy) onClose(); }}
-			className='fixed inset-0 flex items-center justify-center bg-black/60 backdrop-blur-sm z-50 p-4'
+			className='fixed inset-0 flex items-center justify-center bg-black/60 backdrop-blur-sm z-[80] p-4'
 			role='dialog'
 			aria-modal='true'
 			aria-labelledby='buy-confirm-title'

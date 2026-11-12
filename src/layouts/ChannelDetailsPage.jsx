@@ -10,6 +10,8 @@ import PriceOfferModal from '../components/Buy/PriceOfferModal';
 import { savePendingBuy, peekPendingBuy, clearPendingBuy, markPendingBuyLoggedIn } from '../utils/buyIntent';
 import { savePendingOffer, peekPendingOffer, clearPendingOffer, markPendingOfferLoggedIn } from '../utils/offerIntent';
 import { offerBounds } from '../utils/offerAmount';
+import { loginModalCopy } from '../utils/loginCopy';
+import { offerLinkNotice } from '../utils/offerLink';
 import { IcoSignal } from '../components/Icon3D';
 import DetailsCard from '../components/Cards/DetailsCard';
 import ChannelHealth from '../components/ChanelDetails/ChannelHealth';
@@ -101,6 +103,7 @@ const ChannelDetailsPage = () => {
 	}, [channel]);
 
 	const [showAuth, setShowAuth] = useState(false);
+	const [authIntent, setAuthIntent] = useState('buy');
 	const [showConfirm, setShowConfirm] = useState(false);
 	const [buying, setBuying] = useState(false);
 	const [buyError, setBuyError] = useState(null);
@@ -110,7 +113,9 @@ const ChannelDetailsPage = () => {
 		if (!channel) return;
 		trackEvent('buy_click', { channel_id: channel.id });
 		if (!isAuthenticated) {
+			clearPendingOffer();
 			savePendingBuy(channel.id, { needLogin: true });
+			setAuthIntent('buy');
 			trackEvent('login_prompt_open', { channel_id: channel.id });
 			setShowAuth(true);
 			return;
@@ -164,11 +169,17 @@ const ChannelDetailsPage = () => {
 	const [offerError, setOfferError] = useState(null);
 	const [acceptedOffer, setAcceptedOffer] = useState(null);
 	const [offerSent, setOfferSent] = useState(false);
+	const [offerNotice, setOfferNotice] = useState(null);
 	useEffect(() => {
 		if (!offerSent) return;
 		const t = setTimeout(() => setOfferSent(false), 5000);
 		return () => clearTimeout(t);
 	}, [offerSent]);
+	useEffect(() => {
+		if (!offerNotice) return;
+		const t = setTimeout(() => setOfferNotice(null), 7000);
+		return () => clearTimeout(t);
+	}, [offerNotice]);
 	const loginFromOfferTracked = useRef(false);
 
 	const handleOffer = () => {
@@ -177,6 +188,7 @@ const ChannelDetailsPage = () => {
 		if (!isAuthenticated) {
 			clearPendingBuy();
 			savePendingOffer(channel.id, { needLogin: true });
+			setAuthIntent('offer');
 			trackEvent('login_prompt_open', { channel_id: channel.id });
 			setShowAuth(true);
 			return;
@@ -207,17 +219,33 @@ const ChannelDetailsPage = () => {
 		const offerId = Number(raw);
 		if (!(offerId > 0) || !isAuthenticated) return;
 		let cancelled = false;
+		const clearOfferParam = () => {
+			const next = new URLSearchParams(searchParams);
+			next.delete('offer');
+			setSearchParams(next, { replace: true });
+		};
 		(async () => {
 			try {
 				const { data } = await priceOffersAPI.get(offerId);
 				if (cancelled) return;
-				if (data.channel_id !== Number(id) || !data.can_create_deal) return;
+				const notice = offerLinkNotice(data, { channelId: id });
+				if (notice) {
+					setOfferNotice(notice);
+					clearOfferParam();
+					return;
+				}
+				if (data.channel_id !== Number(id) || !data.can_create_deal) {
+					clearOfferParam();
+					return;
+				}
 				setAcceptedOffer(data);
 				setShowConfirm(true);
-				const next = new URLSearchParams(searchParams);
-				next.delete('offer');
-				setSearchParams(next, { replace: true });
-			} catch { /* 403/404: ignore */ }
+				clearOfferParam();
+			} catch (err) {
+				if (cancelled) return;
+				setOfferNotice(offerLinkNotice(null, { channelId: id, error: err }));
+				clearOfferParam();
+			}
 		})();
 		return () => { cancelled = true; };
 	}, [isAuthenticated, id, searchParams, setSearchParams]);
@@ -394,8 +422,8 @@ const ChannelDetailsPage = () => {
 			<AuthModal
 				show={showAuth}
 				setShow={setShowAuth}
-				title='Увійдіть, щоб купити канал'
-				subtitle='Вхід через Telegram займає кілька секунд. Кошти будуть під захистом гаранта (ескроу), доки ви не підтвердите угоду.'
+				title={loginModalCopy(authIntent).title}
+				subtitle={loginModalCopy(authIntent).subtitle}
 			/>
 			<BuyConfirmModal
 				channel={channel}
@@ -418,8 +446,13 @@ const ChannelDetailsPage = () => {
 				error={offerError}
 			/>
 			{offerSent && (
-				<div role='status' className='fixed bottom-4 left-1/2 -translate-x-1/2 z-50 max-w-sm w-[calc(100%-2rem)] rounded-xl bg-emerald-600 text-white text-sm font-medium px-4 py-3 shadow-lg'>
+				<div role='status' className='fixed bottom-4 left-1/2 -translate-x-1/2 z-[80] max-w-sm w-[calc(100%-2rem)] rounded-xl bg-emerald-600 text-white text-sm font-medium px-4 py-3 shadow-lg'>
 					Пропозицію надіслано продавцю. Відповідь прийде в Telegram-бот і зʼявиться у кабінеті.
+				</div>
+			)}
+			{offerNotice && (
+				<div role='status' className='fixed bottom-4 left-1/2 -translate-x-1/2 z-[80] max-w-sm w-[calc(100%-2rem)] rounded-xl bg-slate-800 text-white text-sm font-medium px-4 py-3 shadow-lg'>
+					{offerNotice}
 				</div>
 			)}
 		</section>
