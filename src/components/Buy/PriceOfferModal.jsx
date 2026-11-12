@@ -30,13 +30,13 @@ const PriceOfferModal = ({ channel, open, onClose, onSubmit, busy, error }) => {
 	return (
 		<div
 			onClick={(e) => { if (e.target === e.currentTarget && !busy) onClose(); }}
-			className='fixed inset-0 flex items-center justify-center bg-black/60 backdrop-blur-sm z-50 p-4'
+			className='fixed inset-0 flex items-center justify-center bg-black/60 backdrop-blur-sm z-[80] p-4'
 			role='dialog'
 			aria-modal='true'
 			aria-labelledby='price-offer-title'
 		>
 			<div className='bg-white dark:bg-slate-800 rounded-2xl shadow-2xl z-[51] mx-auto max-w-[420px] w-full overflow-hidden lot-top-glow'>
-				<form onSubmit={submit} className='p-6 sm:p-7'>
+				<form noValidate onSubmit={submit} className='p-6 sm:p-7'>
 					<p className='text-[11px] font-semibold uppercase tracking-wider text-accent mb-2'>Ваша пропозиція</p>
 					<h2 id='price-offer-title' className='text-xl font-bold text-gray-900 dark:text-white leading-snug'>
 						Запропонувати свою ціну

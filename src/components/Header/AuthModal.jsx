@@ -177,6 +177,16 @@ const AuthModal = ({ show, setShow, title, subtitle }) => {
 		// eslint-disable-next-line react-hooks/exhaustive-deps
 	}, []);
 
+	// Close on Esc. The × button sits near the fixed header (z-[60]), so the overlay must stack above it.
+	useEffect(() => {
+		if (!show) return undefined;
+		const onKey = (e) => {
+			if (e.key === 'Escape') setShow(false);
+		};
+		window.addEventListener('keydown', onKey);
+		return () => window.removeEventListener('keydown', onKey);
+	}, [show, setShow]);
+
 	// Called synchronously from the <a> click — the browser itself follows href, no window.open.
 	const handleBotLinkClick = () => {
 		trackFunnel('login_click');
@@ -241,19 +251,23 @@ const AuthModal = ({ show, setShow, title, subtitle }) => {
 
 	return (
 		<div
+			role='dialog'
+			aria-modal='true'
 			onClick={(e) => {
 				if (e.target === e.currentTarget) setShow(false);
 			}}
-			className='fixed inset-0 flex items-center justify-center bg-black/60 backdrop-blur-sm z-50 p-4'
+			className='fixed inset-0 flex items-center justify-center bg-black/60 backdrop-blur-sm z-[80] p-4'
 		>
 			<div className={`bg-white dark:bg-slate-800 rounded-2xl shadow-2xl z-[51] mx-auto text-center max-w-[400px] w-full overflow-hidden animate-fadeIn${title ? ' lot-top-glow' : ''}`}>
 				{/* Close button */}
-				<div className='flex justify-end p-3 pb-0'>
+				<div className='relative z-10 flex justify-end p-3 pb-0'>
 					<button
-						onClick={() => setShow(false)}
-						className='text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 w-8 h-8 flex items-center justify-center rounded-full hover:bg-gray-100 dark:hover:bg-slate-700 duration-200'
+						type='button'
+						aria-label='Закрити'
+						onClick={(e) => { e.preventDefault(); e.stopPropagation(); setShow(false); }}
+						className='relative z-10 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 w-8 h-8 flex items-center justify-center rounded-full hover:bg-gray-100 dark:hover:bg-slate-700 duration-200'
 					>
-						<FontAwesomeIcon icon={faXmark} className='text-lg' />
+						<FontAwesomeIcon icon={faXmark} className='text-lg pointer-events-none' />
 					</button>
 				</div>
 

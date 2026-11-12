@@ -1,4 +1,5 @@
 import { fmtUsdt } from '../utils/money';
+import { dealTitle } from '../utils/dealTitle';
 import { useAuth } from '../context/AppContext';
 import { useEffect, useState } from 'react';
 import { NavLink } from 'react-router-dom';
@@ -81,7 +82,7 @@ const ProfilePage = () => {
 								<div>
 									<p className='font-bold'>Угода #{deal.id}</p>
 									<p className='text-gray-500 text-sm'>
-										{deal.channel_name || `Канал #${deal.channel_id}`}
+										{dealTitle(deal)}
 									</p>
 								</div>
 								<div className='text-right'>

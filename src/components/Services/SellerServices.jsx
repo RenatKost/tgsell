@@ -4,7 +4,7 @@ import './topGlow.css';
 import { topOfferFromCatalog, topButtonLabel, slotsLine, findOpenOrder, inTopUntilLabel } from '../../utils/topFunnel';
 
 /** «Підняти в Топ» on an approved cabinet card + quieter entry to other paid services. */
-const SellerServices = ({ channel, orders = [], onOpenTop, openTopRequest = 0 }) => {
+const SellerServices = ({ channel, orders = [], onOpenTop, openTopRequest = 0, onOrdered }) => {
 	const cat = useServicesCatalog();
 	const [open, setOpen] = useState(null); // 'top' | 'other' | null
 	const offer = topOfferFromCatalog(cat);
@@ -28,7 +28,7 @@ const SellerServices = ({ channel, orders = [], onOpenTop, openTopRequest = 0 })
 					className='w-full inline-flex items-center justify-center gap-2 min-h-[44px] px-4 rounded-xl bg-accent/10 border border-accent/40 text-accent font-semibold text-sm hover:bg-accent hover:text-black transition-all'>
 					🚀 Просунути <span className='font-normal opacity-80'>· від {min} USDT</span>
 				</button>
-				{open && <PromoteDialog channel={channel} initialKind={open === 'top' ? 'top' : null} existingOrder={openInvoice} onClose={() => setOpen(null)} />}
+				{open && <PromoteDialog channel={channel} initialKind={open === 'top' ? 'top' : null} existingOrder={openInvoice} onClose={() => setOpen(null)} onOrdered={onOrdered} />}
 			</div>
 		);
 	}
@@ -63,6 +63,7 @@ const SellerServices = ({ channel, orders = [], onOpenTop, openTopRequest = 0 })
 					initialKind={open === 'top' ? 'top' : null}
 					existingOrder={open === 'top' ? openInvoice : null}
 					onClose={() => setOpen(null)}
+					onOrdered={onOrdered}
 				/>
 			)}
 		</div>

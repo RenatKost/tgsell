@@ -1,4 +1,5 @@
 import { parseUtc } from '../utils/datetime';
+import { dealTitle } from '../utils/dealTitle';
 import { siteViewsLabel } from '../utils/siteViews';
 import { fmtUsdt, fmtNum } from '../utils/money';
 import { formatEr } from '../utils/er';
@@ -1337,7 +1338,7 @@ const ModerCabinet = () => {
 												<div>
 													<h3 className='font-bold text-gray-800 dark:text-white text-lg'>
 														<FontAwesomeIcon icon={faHandshake} className='mr-2 text-blue-400' />
-														Угода #{deal.id} — {deal.channel_name || ('Канал #' + deal.channel_id)}
+														Угода #{deal.id} — {dealTitle(deal)}
 														{dealUnread[deal.id] > 0 && <span className='ml-2 align-middle bg-blue-500 text-white text-xs px-2 py-0.5 rounded-full'>💬 {dealUnread[deal.id]}</span>}
 													</h3>
 													<p className='text-gray-500 dark:text-gray-400 text-sm mt-1'>
@@ -1419,7 +1420,7 @@ const ModerCabinet = () => {
 											<span className='text-xs font-semibold text-yellow-700 dark:text-yellow-400 bg-yellow-100 dark:bg-yellow-900/30 px-3 py-1 rounded-full'>Спір</span>
 										</div>
 										<p className='text-gray-600 dark:text-gray-300 mb-2'>
-											<span className='font-semibold'>Канал:</span> {deal.channel_name || ('#' + deal.channel_id)} · <span className='font-semibold'>Сума:</span> {fmtUsdt(deal.amount_usdt)} USDT
+											<span className='font-semibold'>Канал:</span> {dealTitle(deal)} · <span className='font-semibold'>Сума:</span> {fmtUsdt(deal.amount_usdt)} USDT
 										</p>
 										{balanceText(deal.balance_stars, deal.balance_ton) && (
 											<p className='text-gray-600 dark:text-gray-300 mb-2'>

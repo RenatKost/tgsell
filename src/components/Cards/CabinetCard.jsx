@@ -110,7 +110,7 @@ const ClarificationPanel = ({ channel, onUpdated }) => {
 	);
 };
 
-const CabinetCard = ({ channel, onDelete, onUpdated, orders = [], openTopRequest = 0 }) => {
+const CabinetCard = ({ channel, onDelete, onUpdated, orders = [], openTopRequest = 0, onOrdered }) => {
 	const status = LISTING_STATUS[channel.status] || LISTING_STATUS.pending;
 	const [avatarError, setAvatarError] = useState(false);
 
@@ -216,7 +216,7 @@ const CabinetCard = ({ channel, onDelete, onUpdated, orders = [], openTopRequest
 					</div>
 				</div>
 			</div>
-			{onDelete && <SellerServices channel={channel} orders={orders} openTopRequest={openTopRequest} />}
+			{onDelete && <SellerServices channel={channel} orders={orders} openTopRequest={openTopRequest} onOrdered={onOrdered} />}
 		</article>
 	);
 };

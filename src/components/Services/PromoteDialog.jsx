@@ -29,7 +29,7 @@ export const availableServices = (cat, channel) => (cat?.items || []).filter(
  * `initialKind` jumps straight to a service; `existingOrder` shows a known invoice
  * (from GET /services/orders/my) so closing the dialog and reopening does not 400.
  */
-const PromoteDialog = ({ channel, initialKind = null, existingOrder = null, onClose, onCabinet }) => {
+const PromoteDialog = ({ channel, initialKind = null, existingOrder = null, onClose, onCabinet, onOrdered }) => {
 	const cat = useServicesCatalog();
 	const items = availableServices(cat, channel);
 	const [kind, setKind] = useState(initialKind);
@@ -62,6 +62,7 @@ const PromoteDialog = ({ channel, initialKind = null, existingOrder = null, onCl
 			const r = await servicesAPI.order({ channel_id: channel.id, kind: pick.kind });
 			setOrder(r.data);
 			invalidateServicesCatalog();
+			onOrdered?.(r.data);
 		} catch (ex) {
 			setErr(errText(ex));
 		} finally { setBusy(false); }
@@ -73,7 +74,7 @@ const PromoteDialog = ({ channel, initialKind = null, existingOrder = null, onCl
 		: '';
 
 	return (
-		<div className='fixed inset-0 z-[60] bg-black/70 backdrop-blur-sm flex items-end sm:items-center justify-center p-0 sm:p-4' onClick={onClose}>
+		<div className='fixed inset-0 z-[80] bg-black/70 backdrop-blur-sm flex items-end sm:items-center justify-center p-0 sm:p-4' onClick={onClose}>
 			<div role='dialog' aria-modal='true' aria-label='Просунути лот'
 				className='bg-white dark:bg-card w-full sm:max-w-md max-h-[92vh] overflow-y-auto rounded-t-2xl sm:rounded-2xl p-5 sm:p-6 space-y-4 border border-gray-200 dark:border-card-border text-left'
 				onClick={(e) => e.stopPropagation()}>
