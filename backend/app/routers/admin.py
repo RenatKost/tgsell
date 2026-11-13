@@ -265,8 +265,9 @@ async def reject_channel(
         channel.status = ChannelStatus.rejected
         channel.moderator_id = admin.id
         channel.moderated_at = datetime.utcnow()
+        prev_status = channel.status.value
         channel.rejection_reason = reason
-        audit(db, admin, "channel.reject", "channel", channel.id, reason=reason)
+        audit(db, admin, "channel.reject", "channel", channel.id, reason=reason, prev_status=prev_status)
         await db.commit()
         await db.refresh(channel)
         return ChannelResponse.model_validate(channel)
@@ -2132,11 +2133,13 @@ async def reject_bundle(
     bundle.rejection_reason = reason
     audit(db, admin, "bundle.reject", "bundle", bundle.id, reason=reason)
     for ch in await _pending_bundle_channels(db, bundle.id):
+        prev_status = ch.status.value
         ch.status = ChannelStatus.rejected
         ch.moderator_id = admin.id
         ch.moderated_at = bundle.moderated_at
         ch.rejection_reason = reason
-        audit(db, admin, "channel.reject", "channel", ch.id, via_bundle=bundle.id, reason=reason)
+        audit(db, admin, "channel.reject", "channel", ch.id, via_bundle=bundle.id, reason=reason,
+              prev_status=prev_status)
     await db.commit()
 
     # Notify seller
@@ -2360,33 +2363,104 @@ async def unpublish_channel(
     return {"id": channel.id, "status": channel.status.value, "reason": reason, "prev_status": prev}
 
 
+# Admin actions that take a lot off the catalog; their audit details carry prev_status.
+_TAKEDOWN_ACTIONS = ("channel.delete", "channel.remove", "channel.unpublish", "channel.reject")
+# Statuses a takedown can be undone to (rejected/removed are takedown states themselves).
+_RESTORABLE_STATUSES = (ChannelStatus.approved, ChannelStatus.pending, ChannelStatus.needs_clarification)
+_LIVE_STATUSES = (ChannelStatus.approved, ChannelStatus.pending, ChannelStatus.needs_clarification)
+
+
+async def _status_before_takedown(db: AsyncSession, channel: Channel) -> tuple[ChannelStatus, str]:
+    """Status the lot had before it was taken down, and where that answer came from.
+
+    Walks this channel's takedown audit entries newest → oldest and takes the first
+    restorable prev_status (e.g. approved → unpublish → delete: the delete records
+    'rejected', the unpublish before it records 'approved'). Without a usable entry:
+    'approved' only if the lot was ever approved (first_approved_at or a channel.approve
+    entry), otherwise 'pending' — republish must never skip moderation.
+    """
+    from app.models.user import AdminAuditLog
+
+    rows = (await db.execute(
+        select(AdminAuditLog.details).where(
+            AdminAuditLog.target_type == "channel",
+            AdminAuditLog.target_id == channel.id,
+            AdminAuditLog.action.in_(_TAKEDOWN_ACTIONS),
+        ).order_by(AdminAuditLog.id.desc())
+    )).scalars().all()
+    restorable = {s.value for s in _RESTORABLE_STATUSES}
+    for details in rows:
+        prev = (details or {}).get("prev_status")
+        if prev in restorable:
+            return ChannelStatus(prev), "audit_log"
+    if channel.first_approved_at is not None:
+        return ChannelStatus.approved, "first_approved_at"
+    ever_approved = (await db.execute(
+        select(AdminAuditLog.id).where(
+            AdminAuditLog.target_type == "channel",
+            AdminAuditLog.target_id == channel.id,
+            AdminAuditLog.action == "channel.approve",
+        ).limit(1)
+    )).scalar_one_or_none()
+    if ever_approved is not None:
+        return ChannelStatus.approved, "approve_log"
+    return ChannelStatus.pending, "never_approved"
+
+
+async def _live_duplicate_id(db: AsyncSession, channel: Channel) -> int | None:
+    """Another live lot (approved / in moderation) for the same Telegram channel link."""
+    from app.services.promo_top import link_key
+
+    key = link_key(channel.telegram_link)
+    if not key:
+        return None
+    rows = (await db.execute(
+        select(Channel.id, Channel.telegram_link).where(
+            Channel.id != channel.id, Channel.status.in_(_LIVE_STATUSES),
+        )
+    )).all()
+    for other_id, other_link in rows:
+        if link_key(other_link) == key:
+            return other_id
+    return None
+
+
 @router.post("/channels/{channel_id}/republish")
 async def republish_channel(
     channel_id: int,
     admin: User = Depends(get_admin_user),
     db: AsyncSession = Depends(get_db),
 ):
-    """Restore a lot unpublished by admin (rejected/removed) back to approved. Audited."""
+    """Undo an admin takedown (rejected/removed): restore the status the lot had before it
+    (approved / pending / needs_clarification), never approving a lot that was never approved.
+    Refused while another live lot has the same channel link. Audited."""
     channel = (await db.execute(select(Channel).where(Channel.id == channel_id).with_for_update())).scalar_one_or_none()
     if channel is None:
         raise HTTPException(status_code=404, detail="Channel not found")
-    if channel.status == ChannelStatus.approved:
+    if channel.status in _LIVE_STATUSES:
         return {"id": channel.id, "status": channel.status.value}
     if channel.status not in (ChannelStatus.rejected, ChannelStatus.removed):
         raise HTTPException(status_code=400, detail=f"Лот у статусі {channel.status.value} — відновлення неможливе")
+    dup = await _live_duplicate_id(db, channel)
+    if dup is not None:
+        raise HTTPException(status_code=409, detail=f"Цей канал уже є на біржі (лот #{dup}) — відновлення неможливе")
+    restored, source = await _status_before_takedown(db, channel)
     prev = channel.status.value
     prev_reason = channel.rejection_reason if prev == "rejected" else channel.removed_reason
-    channel.status = ChannelStatus.approved
+    channel.status = restored
     channel.rejection_reason = None
     channel.removed_at = None
     channel.removed_by_id = None
     channel.removed_reason = None
-    channel.moderator_id = admin.id
-    channel.moderated_at = utcnow_naive()
-    audit(db, admin, "channel.republish", "channel", channel.id, prev_status=prev, prev_reason=prev_reason)
+    if restored == ChannelStatus.approved:
+        channel.moderator_id = admin.id
+        channel.moderated_at = utcnow_naive()
+    audit(db, admin, "channel.republish", "channel", channel.id, prev_status=prev, prev_reason=prev_reason,
+          restored_status=restored.value, restored_from=source)
     await db.commit()
-    logger.info(f"[ADMIN] Channel #{channel.id} republished by admin #{admin.id}")
-    await _notify_seller_channel(db, channel, "republish")
+    logger.info(f"[ADMIN] Channel #{channel.id} restored to {restored.value} ({source}) by admin #{admin.id}")
+    if restored == ChannelStatus.approved:
+        await _notify_seller_channel(db, channel, "republish")  # «знову опубліковано» only when it is
     return {"id": channel.id, "status": channel.status.value, "prev_status": prev}
 
 
