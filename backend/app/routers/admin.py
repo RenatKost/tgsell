@@ -998,6 +998,8 @@ async def admin_delete_channel(
         auc.deleted_at = now
     audit(db, admin, "channel.delete", "channel", channel.id, prev_status=prev,
           reason=channel.removed_reason)
+    from app.services.seller_notices import KIND_DELETE, enqueue_takedown
+    enqueue_takedown(db, channel, KIND_DELETE, channel.removed_reason)
     await db.commit()
 
 
@@ -2281,6 +2283,8 @@ async def remove_channel_from_market(
     channel.removed_reason = (body.reason or channel.check_error or "Канал неактивний")[:500]
     audit(db, admin, "channel.remove", "channel", channel.id, prev_status=prev,
           reason=channel.removed_reason, check_error=channel.check_error)
+    from app.services.seller_notices import KIND_REMOVE, enqueue_takedown
+    enqueue_takedown(db, channel, KIND_REMOVE, channel.removed_reason)
     await db.commit()
     logger.info(f"[ADMIN] Channel #{channel.id} removed from market by admin #{admin.id}: {channel.removed_reason}")
     return {"id": channel.id, "status": channel.status.value}
@@ -2357,9 +2361,10 @@ async def unpublish_channel(
     channel.moderator_id = admin.id
     channel.moderated_at = utcnow_naive()
     audit(db, admin, "channel.unpublish", "channel", channel.id, prev_status=prev, reason=reason)
+    from app.services.seller_notices import KIND_UNPUBLISH, enqueue_takedown
+    enqueue_takedown(db, channel, KIND_UNPUBLISH, reason)  # delivered (with retries) by the outbox loop
     await db.commit()
     logger.info(f"[ADMIN] Channel #{channel.id} unpublished by admin #{admin.id}")
-    await _notify_seller_channel(db, channel, "unpublish", reason)
     return {"id": channel.id, "status": channel.status.value, "reason": reason, "prev_status": prev}
 
 
@@ -2479,5 +2484,7 @@ async def set_buyer_warning(
     prev = channel.buyer_warning
     channel.buyer_warning = value
     audit(db, admin, "channel.buyer_warning", "channel", channel.id, prev=prev, value=value)
+    from app.services.seller_notices import enqueue_buyer_warning
+    enqueue_buyer_warning(db, channel, prev, value)  # only on set / changed text
     await db.commit()
     return {"id": channel.id, "buyer_warning": value}

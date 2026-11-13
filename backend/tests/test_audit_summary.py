@@ -246,6 +246,9 @@ async def test_aggregates_and_no_pii(audit):
     assert body["paid_services"]["unpaid_top_invoices"] == 2
     assert body["paid_services"]["unpaid_top_past_deadline"] == 2
 
+    assert body["seller_notifications"] == {"pending": 0, "sent_24h": 0, "failed_24h": 0,
+                                            "oldest_pending_hours": None}
+
     errs = body["errors"]
     assert errs["installed"] is True
     g = next(g for g in errs["groups"] if g["logger"] == "tests.audit.http")

@@ -16,6 +16,7 @@ from app.models.deal import Deal, DealChecklistItem, Transaction  # noqa: F401
 from app.models.activity import UserEvent, UserSession  # noqa: F401
 from app.models.saved_search import SavedSearch, SavedSearchMatch  # noqa: F401
 from app.models.price_offer import PriceOffer  # noqa: F401
+from app.models.seller_notification import SellerNotification  # noqa: F401
 from app.models.auction import Auction, AuctionBid  # noqa: F401
 from app.models.settings import TelethonSession  # noqa: F401
 from app.models.bundle import ChannelBundle, BundleChannel  # noqa: F401

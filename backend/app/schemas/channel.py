@@ -155,6 +155,10 @@ class ChannelResponse(BaseModel):
     # Owner/staff only: honest TgSell channel_view counts (omitted in public API).
     site_views_7d: int | None = None
     site_views_total: int | None = None
+    # Owner/staff only: why the lot is off the catalog (rejected → rejection_reason,
+    # removed → removed_reason) and when. Not ORM attribute names → never auto-filled.
+    takedown_reason: str | None = None
+    takedown_at: UTCDateTime | None = None
 
     @model_validator(mode="after")
     def _sanitize_avatar(self):
@@ -170,6 +174,9 @@ class ChannelResponse(BaseModel):
             data.pop("site_views_7d", None)
         if data.get("site_views_total") is None:
             data.pop("site_views_total", None)
+        for key in ("takedown_reason", "takedown_at"):
+            if data.get(key) is None:
+                data.pop(key, None)
         return data
 
     model_config = {"from_attributes": True}

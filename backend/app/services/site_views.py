@@ -79,6 +79,22 @@ async def counts_for(
     return out
 
 
+def attach_takedown(responses: list[ChannelResponse], allowed: list[Channel]) -> None:
+    """Owner/staff only: reason + time a lot was rejected / removed (cabinet shows it)."""
+    by_id = {c.id: c for c in allowed}
+    for resp in responses:
+        c = by_id.get(resp.id)
+        if c is None:
+            continue
+        status = getattr(c.status, "value", c.status)
+        if status == "rejected":
+            resp.takedown_reason = c.rejection_reason or None
+            resp.takedown_at = c.moderated_at
+        elif status == "removed":
+            resp.takedown_reason = c.removed_reason or None
+            resp.takedown_at = c.removed_at
+
+
 async def attach(
     db: AsyncSession,
     responses: list[ChannelResponse],
@@ -87,10 +103,11 @@ async def attach(
     *,
     now: datetime | None = None,
 ) -> list[ChannelResponse]:
-    """Fill site-view counts on responses the viewer may see (owner or staff)."""
+    """Fill owner/staff-only data (site-view counts, takedown reason) on responses the viewer may see."""
     allowed = [c for c in channels if can_view_unpublished(viewer, c.seller_id)]
     if not allowed:
         return responses
+    attach_takedown(responses, allowed)
     counts = await counts_for(db, [c.id for c in allowed], now=now)
     by_id = {c.id: c for c in allowed}
     for resp in responses:

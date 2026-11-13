@@ -389,4 +389,9 @@ async def run_service_payment_checker(interval_seconds: int = 60):
             await check_orders_once(async_session)
         except Exception as e:
             logger.error(f"Paid services checker error: {e}")
+        try:  # seller alerts about admin actions on a lot (outbox, migration 0067)
+            from app.services.seller_notices import process_due
+            await process_due(async_session)
+        except Exception as e:
+            logger.error(f"Seller notices error: {type(e).__name__}")
         await asyncio.sleep(interval_seconds)
