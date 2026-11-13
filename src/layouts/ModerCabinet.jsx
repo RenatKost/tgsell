@@ -418,10 +418,11 @@ const ModerCabinet = () => {
 	};
 
 	const handleRepublishChannel = async (id) => {
-		if (!confirm('Повернути лот у публічний каталог?')) return;
+		if (!confirm('Відновити лот у статус до зняття? Лот, який ще не був схвалений, повернеться на модерацію.')) return;
 		try {
 			const { data } = await adminAPI.republishChannel(id);
 			patchChannel(id, { status: data.status, rejection_reason: null });
+			if (data.status !== 'approved') alert('Лот повернуто на модерацію (до зняття він ще не був опублікований).');
 		} catch (err) { alert(err.response?.data?.detail || 'Помилка відновлення'); }
 	};
 
