@@ -36,6 +36,8 @@ from app.utils.logging_setup import setup_logging  # noqa: E402
 setup_logging()  # INFO → stdout, WARNING+ → stderr
 from app.utils.log_redact import setup_log_hygiene  # noqa: E402
 setup_log_hygiene()  # no bot tokens in logs (httpx logs full request URLs at INFO)
+from app.utils.error_buffer import install_error_buffer  # noqa: E402
+install_error_buffer()  # WARNING+ ring buffer for GET /api/audit/summary (redacted, in-memory)
 logger = logging.getLogger(__name__)
 
 background_tasks: list[asyncio.Task] = []
@@ -193,6 +195,8 @@ app.include_router(saved_searches_router.router, prefix="/api")
 app.include_router(wanted_router.router, prefix="/api")
 app.include_router(wanted_router.admin_router, prefix="/api")
 app.include_router(price_offers_router.router, prefix="/api")
+from app.routers import audit as audit_router  # noqa: E402
+app.include_router(audit_router.router, prefix="/api")
 
 from app.routers import seo as seo_router  # noqa: E402
 
