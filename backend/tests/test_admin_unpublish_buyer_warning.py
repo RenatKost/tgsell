@@ -67,9 +67,12 @@ async def test_unpublish_with_reason_then_republish(env):
     assert c.status == env.CS.rejected and c.rejection_reason == "Менше 100 підписників"
     rows = await _audit(env, "channel.unpublish")
     assert len(rows) == 1 and rows[0].details["reason"] == "Менше 100 підписників"
-    env.notify.assert_awaited()
-    assert env.notify.await_args.args[2] == "unpublish"
-    assert env.notify.await_args.args[3] == "Менше 100 підписників"
+    # seller alert is queued in the outbox (same transaction), not sent inline
+    env.notify.assert_not_awaited()
+    from app.models.seller_notification import SellerNotification
+    async with env.orm.session() as db:
+        q = (await db.execute(select(SellerNotification).where(SellerNotification.channel_id == cid))).scalars().all()
+    assert [(n.kind, n.payload) for n in q] == [("unpublish", {"reason": "Менше 100 підписників"})]
 
     # second unpublish refused (not published anymore)
     with pytest.raises(HTTPException) as e:

@@ -10,6 +10,7 @@ import { Badge, LISTING_STATUS, surface, btnSecondary, btnDanger, btnPrimary } f
 import SellerServices from '../Services/SellerServices';
 import '../Services/topGlow.css';
 import { channelsAPI } from '../../services/api';
+import { takedownInfo } from '../../utils/takedown';
 
 
 const formatAsked = (iso) => {
@@ -112,6 +113,7 @@ const ClarificationPanel = ({ channel, onUpdated }) => {
 
 const CabinetCard = ({ channel, onDelete, onUpdated, orders = [], openTopRequest = 0, onOrdered }) => {
 	const status = LISTING_STATUS[channel.status] || LISTING_STATUS.pending;
+	const takedown = takedownInfo(channel);
 	const [avatarError, setAvatarError] = useState(false);
 
 	const formatAge = (months) => {
@@ -190,10 +192,17 @@ const CabinetCard = ({ channel, onDelete, onUpdated, orders = [], openTopRequest
 			)}
 
 			<div className='p-4 sm:p-5 mt-auto'>
-				{channel.rejection_reason && channel.status === 'rejected' && (
-					<p className='mb-3 px-3 py-2 text-sm text-red-700 dark:text-red-300 bg-red-50 dark:bg-red-900/20 rounded-xl border border-red-100 dark:border-red-900/40'>
-						<span className='font-semibold'>Причина відхилення:</span> {channel.rejection_reason}
-					</p>
+				{takedown && (
+					<div className='mb-3 px-3 py-2 text-sm text-red-700 dark:text-red-300 bg-red-50 dark:bg-red-900/20 rounded-xl border border-red-100 dark:border-red-900/40 break-words'>
+						<p><span className='font-semibold'>{takedown.label}:</span> <span className='whitespace-pre-line'>{takedown.reason}</span></p>
+						{takedown.hint && <p className='mt-1 text-xs text-red-600/90 dark:text-red-300/80'>{takedown.hint}</p>}
+					</div>
+				)}
+				{channel.buyer_warning && (
+					<div className='mb-3 px-3 py-2 text-sm text-amber-900 dark:text-amber-200 bg-amber-50 dark:bg-amber-900/20 rounded-xl border border-amber-200 dark:border-amber-800/60 break-words'>
+						<p><span className='font-semibold'>⚠️ Попередження для покупців:</span> <span className='whitespace-pre-line'>{channel.buyer_warning}</span></p>
+						<p className='mt-1 text-xs text-amber-800/90 dark:text-amber-300/80'>Його бачать покупці на сторінці лота. Якщо вважаєте це помилкою або усунули причину — напишіть у підтримку <a href='https://t.me/tgsell_support_bot' target='_blank' rel='noopener noreferrer' className='underline font-semibold'>@tgsell_support_bot</a>.</p>
+					</div>
 				)}
 				<ClarificationPanel channel={channel} onUpdated={onUpdated} />
 				<div className='flex items-center justify-between gap-3'>

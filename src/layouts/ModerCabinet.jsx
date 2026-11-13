@@ -1188,9 +1188,9 @@ const ModerCabinet = () => {
 												</button>
 											</div>
 										</div>
-										{channel.status === 'rejected' && channel.rejection_reason && (
+										{['rejected', 'removed'].includes(channel.status) && (channel.rejection_reason || channel.takedown_reason) && (
 											<p className='mb-3 text-sm bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-300 p-2.5 rounded-xl'>
-												<span className='font-semibold'>Причина зняття:</span> {channel.rejection_reason}
+												<span className='font-semibold'>Причина зняття:</span> {channel.rejection_reason || channel.takedown_reason}
 											</p>
 										)}
 										<ClarificationHistory items={channel.clarifications} />

@@ -24,6 +24,7 @@ from app.models.channel import Channel, ChannelClarification, ChannelStatus, MOD
 from app.models.deal import ACTIVE_DEAL_STATUSES, Deal, DealMessage, DealStatus, Transaction
 from app.models.paid_service import PaidServiceOrder
 from app.models.price_offer import PriceOffer, PriceOfferStatus
+from app.models.seller_notification import SellerNotification
 from app.utils.error_buffer import PROCESS_STARTED_AT, get_error_buffer, redact_sample
 from app.utils.timeutil import utcnow_naive
 
@@ -285,6 +286,21 @@ async def _offers_and_services(db: AsyncSession, now: datetime) -> tuple[dict, d
     return offers, services
 
 
+async def _seller_notifications(db: AsyncSession, now: datetime) -> dict:
+    """Outbox of seller alerts (0067): queue depth and last-24h outcomes (counts only)."""
+    since = now - timedelta(hours=24)
+    pending = (await db.execute(select(func.count(SellerNotification.id)).where(
+        SellerNotification.sent_at.is_(None), SellerNotification.failed_at.is_(None)))).scalar_one()
+    sent = (await db.execute(select(func.count(SellerNotification.id)).where(
+        SellerNotification.sent_at >= since))).scalar_one()
+    failed = (await db.execute(select(func.count(SellerNotification.id)).where(
+        SellerNotification.failed_at >= since))).scalar_one()
+    oldest = (await db.execute(select(func.min(SellerNotification.created_at)).where(
+        SellerNotification.sent_at.is_(None), SellerNotification.failed_at.is_(None)))).scalar_one()
+    return {"pending": pending, "sent_24h": sent, "failed_24h": failed,
+            "oldest_pending_hours": _hours(now, oldest)}
+
+
 def _runtime() -> dict:
     try:
         from app.services.channel_stats import get_telethon_health
@@ -326,6 +342,7 @@ async def audit_summary(
         moderation = await _moderation(db, now)
         deals, escrow = await _deals_and_escrow(db, now)
         offers, services = await _offers_and_services(db, now)
+        notices = await _seller_notifications(db, now)
     finally:
         await db.rollback()
     return {
@@ -335,6 +352,7 @@ async def audit_summary(
         "escrow": escrow,
         "price_offers": offers,
         "paid_services": services,
+        "seller_notifications": notices,
         "errors": _errors(),
         "runtime": _runtime(),
     }
