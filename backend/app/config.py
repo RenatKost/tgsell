@@ -1,5 +1,9 @@
 from pydantic_settings import BaseSettings
 
+# SHA-256 (hex) of the x-audit-key used by GET /api/audit/summary. Only the hash lives in
+# code; the key itself is kept outside the repo. Rotate: new key + PR changing this hash.
+AUDIT_KEY_SHA256 = "c690b6443a26c6e80b0d9ee97f1871869a0168c8b19cef975c983c037dd09ae7"
+
 
 class Settings(BaseSettings):
     # Telegram Bots (split by function)
@@ -8,6 +12,8 @@ class Settings(BaseSettings):
     bot_token_stats: str = ""      # tgsell_stats_bot — Bot API stats (getChat, etc.)
     bot_token_support: str = ""    # tgsell_support_bot — user support inbox (aiogram)
     support_queue_secret: str = ""  # x-support-secret for Support TgSell agent queue API
+    # Optional env override (AUDIT_KEY_SHA256) of the audit key hash; default = code constant.
+    audit_key_sha256: str = AUDIT_KEY_SHA256
     telegram_api_id: int = 0
     telegram_api_hash: str = ""
     telegram_phone: str = ""
