@@ -177,6 +177,28 @@ async def test_cannot_post_to_terminal_deals(env, chat):
 
 
 @pytest.mark.asyncio
+async def test_staff_can_post_to_terminal_deals_parties_cannot(env, chat):
+    from app.models.deal import Deal
+
+    admin = await _user(env, role="admin", tg=7010)
+    mod = await _user(env, role="moderator", tg=7011)
+    for status, staff in ((env.S.completed, admin), (env.S.cancelled, mod)):
+        deal_id, _ = await env.make_deal(status)
+        m = await send(env, chat, deal_id, staff.id, "Пояснення від гаранта")
+        assert m["text"] == "Пояснення від гаранта"
+        assert m["sender_role"] == "guarantor"
+        p = await poll(env, chat, deal_id, env.ids.buyer)
+        assert any(x["id"] == m["id"] for x in p["messages"])
+        for party in (env.ids.buyer, env.ids.seller):
+            with pytest.raises(HTTPException) as e:
+                await send(env, chat, deal_id, party, "відповідь сторони")
+            assert e.value.status_code == 409
+            assert "лише для читання" in e.value.detail
+        async with env.orm.session() as db:
+            assert (await db.get(Deal, deal_id)).status == status
+
+
+@pytest.mark.asyncio
 async def test_blocked_party_reads_but_cannot_post(env, chat):
     import importlib
 

@@ -78,6 +78,9 @@ def ensure_can_post(user: User, deal: Deal) -> None:
     from app.services.moderation import ensure_deal_action_allowed
 
     if deal.status in TERMINAL:
+        # Staff (admin/moderator = guarantor) may still write; parties stay read-only.
+        if is_staff(user):
+            return
         raise HTTPException(status_code=409, detail="Угоду закрито — чат лише для читання")
     ensure_deal_action_allowed(user, deal)
 
