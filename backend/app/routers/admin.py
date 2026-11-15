@@ -1,6 +1,7 @@
 import asyncio
 import logging
 from datetime import datetime, timedelta, timezone
+from typing import Annotated
 import os
 from app.utils.timeutil import to_utc_iso
 
@@ -46,6 +47,53 @@ async def _refuse_if_active_escrow(db: AsyncSession, channel_id: int) -> None:
             status_code=409,
             detail="Неможливо видалити: угода " + ", ".join(f"#{d}" for d in ids) + " має активне ескроу",
         )
+
+
+
+async def _attach_removed_by(db: AsyncSession, items: list) -> list:
+    """Fill ChannelResponse.removed_by from removed_by_id (admin channel list)."""
+    actor_ids = {r.removed_by_id for r in items if getattr(r, "removed_by_id", None)}
+    if not actor_ids:
+        return items
+    names = {}
+    for u in (await db.execute(select(User).where(User.id.in_(actor_ids)))).scalars():
+        names[u.id] = u.username or u.first_name
+    for r in items:
+        if getattr(r, "removed_by_id", None):
+            r.removed_by = names.get(r.removed_by_id)
+    return items
+
+
+async def _audit_history(
+    db: AsyncSession, target_type: str, target_id: int, limit: int = 200,
+) -> dict:
+    """Staff-facing audit entries for a single lot or auction (newest first)."""
+    from app.models.user import AdminAuditLog
+
+    filters = (
+        AdminAuditLog.target_type == target_type,
+        AdminAuditLog.target_id == target_id,
+    )
+    total = (await db.execute(
+        select(func.count()).select_from(AdminAuditLog).where(*filters)
+    )).scalar() or 0
+    rows = (await db.execute(
+        select(AdminAuditLog).where(*filters)
+        .order_by(AdminAuditLog.id.desc()).limit(limit)
+    )).scalars().all()
+    actor_ids = {r.actor_id for r in rows if r.actor_id}
+    names = {}
+    if actor_ids:
+        for u in (await db.execute(select(User).where(User.id.in_(actor_ids)))).scalars():
+            names[u.id] = u.username or u.first_name
+    return {
+        "items": [{
+            "id": r.id, "actor_id": r.actor_id, "actor": names.get(r.actor_id),
+            "action": r.action, "target_type": r.target_type, "target_id": r.target_id,
+            "details": r.details, "created_at": to_utc_iso(r.created_at),
+        } for r in rows],
+        "total": total, "limit": limit,
+    }
 
 
 @router.post("/setup")
@@ -933,7 +981,21 @@ async def list_all_channels(
     from app.services.clarifications import attach
     from app.services.site_views import attach as attach_site_views
     items = await attach(db, [ChannelResponse.model_validate(c) for c in channels], channels, admin)
-    return await attach_site_views(db, items, channels, admin)
+    items = await attach_site_views(db, items, channels, admin)
+    return await _attach_removed_by(db, items)
+
+
+@router.get("/channels/{channel_id}/history")
+async def channel_history(
+    channel_id: int,
+    admin: User = Depends(get_admin_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Audit trail of a single lot, visible to all staff (not only superadmins)."""
+    exists = (await db.execute(select(Channel.id).where(Channel.id == channel_id))).scalar_one_or_none()
+    if exists is None:
+        raise HTTPException(status_code=404, detail="Channel not found")
+    return await _audit_history(db, "channel", channel_id)
 
 
 @router.put("/channels/{channel_id}", response_model=ChannelResponse)
@@ -994,8 +1056,11 @@ async def admin_delete_channel(
         Auction.not_deleted(),
     ))).scalars().all()
     for auc in live_auctions:
+        auc_prev = auc.status
         auc.status = "cancelled"
         auc.deleted_at = now
+        audit(db, admin, "auction.delete", "auction", auc.id, prev_status=auc_prev,
+              via="channel.delete")
     audit(db, admin, "channel.delete", "channel", channel.id, prev_status=prev,
           reason=channel.removed_reason)
     from app.services.seller_notices import KIND_DELETE, enqueue_takedown
@@ -1246,11 +1311,14 @@ async def check_escrow_balances(
 
 @router.get("/auctions")
 async def admin_list_auctions(
-    status_filter: str = Query("", alias="status"),
+    status_filter: Annotated[str, Query(alias="status")] = "",
+    deleted: Annotated[bool, Query()] = False,
     admin: User = Depends(get_admin_user),
     db: AsyncSession = Depends(get_db),
 ):
-    """List all auctions for admin panel."""
+    """List auctions for admin panel. Soft-deleted rows are hidden unless deleted=true."""
+    from app.models.user import AdminAuditLog
+
     query = (
         select(Auction)
         .options(selectinload(Auction.channel), selectinload(Auction.seller), selectinload(Auction.winner))
@@ -1258,9 +1326,38 @@ async def admin_list_auctions(
     )
     if status_filter:
         query = query.where(Auction.status == status_filter)
+    if deleted:
+        query = query.where(Auction.deleted_at.is_not(None))
+    else:
+        query = query.where(Auction.not_deleted())
 
     result = await db.execute(query)
     auctions = result.scalars().all()
+
+    deleted_meta: dict[int, dict] = {}
+    deleted_ids = [a.id for a in auctions if a.deleted_at is not None]
+    if deleted_ids:
+        rows = (await db.execute(
+            select(AdminAuditLog).where(
+                AdminAuditLog.target_type == "auction",
+                AdminAuditLog.target_id.in_(deleted_ids),
+                AdminAuditLog.action == "auction.delete",
+            ).order_by(AdminAuditLog.id.desc())
+        )).scalars().all()
+        actor_ids = {r.actor_id for r in rows if r.actor_id}
+        names = {}
+        if actor_ids:
+            for u in (await db.execute(select(User).where(User.id.in_(actor_ids)))).scalars():
+                names[u.id] = u.username or u.first_name
+        for r in rows:
+            if r.target_id in deleted_meta:
+                continue
+            details = r.details or {}
+            deleted_meta[r.target_id] = {
+                "deleted_by_id": r.actor_id,
+                "deleted_by": names.get(r.actor_id),
+                "deleted_reason": details.get("reason") or details.get("via"),
+            }
 
     items = []
     for a in auctions:
@@ -1287,6 +1384,9 @@ async def admin_list_auctions(
             "winner_name": a.winner.first_name if a.winner else None,
             "created_at": to_utc_iso(a.created_at),
             "deleted_at": to_utc_iso(a.deleted_at),
+            "deleted_by_id": deleted_meta.get(a.id, {}).get("deleted_by_id"),
+            "deleted_by": deleted_meta.get(a.id, {}).get("deleted_by"),
+            "deleted_reason": deleted_meta.get(a.id, {}).get("deleted_reason"),
         })
     return {"items": items, "total": len(items)}
 
@@ -1378,6 +1478,86 @@ async def admin_delete_auction(
     auction.deleted_at = utcnow_naive()
     audit(db, admin, "auction.delete", "auction", auction.id, prev_status=prev)
     await db.commit()
+
+
+@router.post("/auctions/{auction_id}/restore")
+async def admin_restore_auction(
+    auction_id: int,
+    admin: User = Depends(get_admin_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Undo a soft-delete: clear deleted_at and restore the pre-delete status from the audit log.
+
+    A live (scheduled/active) status is restored only while the lot itself is live and the
+    auction's window has not ended; otherwise the row is undeleted as ended. Refused if
+    another live auction already exists for the same lot.
+    """
+    from app.models.user import AdminAuditLog
+
+    auction = (await db.execute(
+        select(Auction).where(Auction.id == auction_id).with_for_update()
+    )).scalar_one_or_none()
+    if not auction:
+        raise HTTPException(status_code=404, detail="Auction not found")
+    if auction.deleted_at is None:
+        return {"ok": True, "auction_id": auction_id, "status": auction.status}
+
+    details = (await db.execute(
+        select(AdminAuditLog.details).where(
+            AdminAuditLog.target_type == "auction",
+            AdminAuditLog.target_id == auction.id,
+            AdminAuditLog.action == "auction.delete",
+        ).order_by(AdminAuditLog.id.desc()).limit(1)
+    )).scalar_one_or_none()
+    prev = (details or {}).get("prev_status") if isinstance(details, dict) else None
+    desired = prev or auction.status
+    now = utcnow_naive()
+
+    if desired in ("active", "scheduled"):
+        channel = (await db.execute(select(Channel).where(Channel.id == auction.channel_id))).scalar_one_or_none()
+        if channel is None or channel.status not in _LIVE_STATUSES:
+            raise HTTPException(
+                status_code=409,
+                detail="Спочатку відновіть лот — без живого лота аукціон не можна повернути в активні",
+            )
+        other = (await db.execute(
+            select(Auction.id).where(
+                Auction.channel_id == auction.channel_id,
+                Auction.id != auction.id,
+                Auction.not_deleted(),
+                Auction.status.in_(("scheduled", "active")),
+            ).limit(1)
+        )).scalar_one_or_none()
+        if other is not None:
+            raise HTTPException(
+                status_code=409,
+                detail=f"У цього лота вже є активний аукціон #{other}",
+            )
+        if desired == "scheduled" and auction.starts_at <= now:
+            desired = "active" if auction.ends_at > now else "ended"
+        if desired == "active" and auction.ends_at <= now:
+            desired = "ended"
+
+    auction.status = desired
+    auction.deleted_at = None
+    audit(db, admin, "auction.restore", "auction", auction.id,
+          prev_status=prev, restored_status=desired)
+    await db.commit()
+    logger.info(f"[ADMIN] Auction #{auction.id} restored to {desired} by admin #{admin.id}")
+    return {"ok": True, "auction_id": auction_id, "status": desired, "prev_status": prev}
+
+
+@router.get("/auctions/{auction_id}/history")
+async def auction_history(
+    auction_id: int,
+    admin: User = Depends(get_admin_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Audit trail of a single auction, visible to all staff."""
+    exists = (await db.execute(select(Auction.id).where(Auction.id == auction_id))).scalar_one_or_none()
+    if exists is None:
+        raise HTTPException(status_code=404, detail="Auction not found")
+    return await _audit_history(db, "auction", auction_id)
 
 
 # ── Channel Stats Management ──

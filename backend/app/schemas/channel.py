@@ -159,6 +159,11 @@ class ChannelResponse(BaseModel):
     # removed → removed_reason) and when. Not ORM attribute names → never auto-filled.
     takedown_reason: str | None = None
     takedown_at: UTCDateTime | None = None
+    # Soft-delete metadata (filled from ORM / admin attach; omitted when empty).
+    removed_at: UTCDateTime | None = None
+    removed_reason: str | None = None
+    removed_by_id: int | None = None
+    removed_by: str | None = None  # actor display name, not an ORM attribute
 
     @model_validator(mode="after")
     def _sanitize_avatar(self):
@@ -174,7 +179,8 @@ class ChannelResponse(BaseModel):
             data.pop("site_views_7d", None)
         if data.get("site_views_total") is None:
             data.pop("site_views_total", None)
-        for key in ("takedown_reason", "takedown_at"):
+        for key in ("takedown_reason", "takedown_at", "removed_at", "removed_reason",
+                    "removed_by_id", "removed_by"):
             if data.get(key) is None:
                 data.pop(key, None)
         return data

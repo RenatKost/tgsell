@@ -253,6 +253,9 @@ export const adminAPI = {
 	deleteChannel: (id) =>
 		api.delete(`/admin/channels/${id}`),
 
+	channelHistory: (id) =>
+		api.get(`/admin/channels/${id}/history`),
+
 	getAllDeals: (params = {}) =>
 		api.get('/admin/deals', { params }),
 
@@ -289,6 +292,12 @@ export const adminAPI = {
 
 	deleteAuction: (id) =>
 		api.delete(`/admin/auctions/${id}`),
+
+	restoreAuction: (id) =>
+		api.post(`/admin/auctions/${id}/restore`),
+
+	auctionHistory: (id) =>
+		api.get(`/admin/auctions/${id}/history`),
 
 	// Channel stats
 	refreshChannelStats: (channelId) =>
