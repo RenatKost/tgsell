@@ -57,12 +57,18 @@ export function isDealChatReadOnly(deal) {
 export function dealChatComposer(user, deal) {
 	const closed = isDealChatReadOnly(deal);
 	const v = dealViewer(user, deal);
-	const asGuarantor = !closed && v.isStaffObserver;
+	const staffCanPost = isStaffRole(user?.role);
+	const readOnly = closed && !staffCanPost;
+	const asGuarantor = !readOnly && v.isStaffObserver;
 	return {
-		readOnly: closed,
-		hint: closed ? 'Угоду закрито — чат лише для читання' : null,
+		readOnly,
+		hint: closed
+			? (readOnly
+				? 'Угоду закрито — чат лише для читання'
+				: 'Угоду закрито — ви можете написати сторонам')
+			: null,
 		asGuarantor,
-		placeholder: closed
+		placeholder: readOnly
 			? 'Угоду закрито — чат лише для читання'
 			: (asGuarantor ? 'Написати як гарант TgSell…' : 'Написати…'),
 	};

@@ -314,3 +314,22 @@ async def test_api_responses_not_cacheable():
         return JSONResponse({}, headers={"Cache-Control": "public, max-age=86400"})
 
     assert (await m._api_no_store(req, media)).headers["cache-control"] == "public, max-age=86400"
+
+@pytest.mark.asyncio
+async def test_staff_message_on_terminal_deal_notifies_parties(env, chat, br):
+    """Staff post on cancelled/completed deals uses the same TG forward path as an active deal."""
+    from app.models.deal import Deal
+
+    mod = await _user(env, role="moderator", tg=7201)
+    for status in (env.S.cancelled, env.S.completed):
+        deal_id, _ = await env.make_deal(status)
+        await send(env, chat, deal_id, mod.id, "Повідомлення гаранта")
+        bot = FakeBot()
+        bot._n = 2000 + deal_id * 10  # unique fake tg message ids per deal
+        assert await br.forward_pending(env.orm.session, bot) == 2
+        assert sorted(s.chat_id for s in bot.sent) == [9101, 9102]
+        assert all(f"Угода #{deal_id}" in s.text and "Гарант" in s.text for s in bot.sent)
+        assert await br.forward_pending(env.orm.session, bot) == 0
+        async with env.orm.session() as db:
+            assert (await db.get(Deal, deal_id)).status == status
+

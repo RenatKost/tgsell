@@ -1,6 +1,7 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { dealsAPI } from '../../services/api';
-import { isDealChatReadOnly, messageRoleLabel } from '../../utils/dealViewer';
+import { dealChatComposer, messageRoleLabel } from '../../utils/dealViewer';
+import { useAuth } from '../../context/AppContext';
 import useDealChat from './useDealChat';
 
 const STATUS_LABELS = {
@@ -204,7 +205,9 @@ const Composer = ({ disabled, placeholder, hint, onSend, onUpload, onTyping }) =
  *        asGuarantor? (moderator cabinet: staff messages are sent and shown as «TgSell · Гарант»)
  */
 const DealChat = ({ dealId, userId, onCallAdmin, compact = false, height = 'h-[60vh] sm:h-[28rem]', canPost = true, asGuarantor = false }) => {
+	const { user } = useAuth();
 	const chat = useDealChat(dealId, { asGuarantor });
+	const composer = dealChatComposer(user, chat.deal);
 	const listRef = useRef(null);
 	const nearBottomRef = useRef(true);
 	const [newBelow, setNewBelow] = useState(0);
@@ -331,11 +334,9 @@ const DealChat = ({ dealId, userId, onCallAdmin, compact = false, height = 'h-[6
 			)}
 			{chat.error && <div className='text-xs text-red-600 px-4 py-1 bg-red-50'>{chat.error}</div>}
 			<Composer
-				disabled={!canPost || isDealChatReadOnly(chat.deal)}
-				placeholder={isDealChatReadOnly(chat.deal)
-					? 'Угоду закрито — чат лише для читання'
-					: (asGuarantor ? 'Написати як гарант TgSell…' : 'Написати…')}
-				hint={isDealChatReadOnly(chat.deal) ? 'Угоду закрито — чат лише для читання' : null}
+				disabled={!canPost || composer.readOnly}
+				placeholder={composer.placeholder}
+				hint={composer.hint}
 				onSend={chat.send} onUpload={chat.upload} onTyping={chat.notifyTyping} />
 		</div>
 	);

@@ -59,6 +59,22 @@ test('closed deal (completed or cancelled) is read-only chat', () => {
 	assert.equal(isDealChatReadOnly(deal({ status: 'paid' })), false);
 });
 
+test('staff can write in a closed deal; parties stay read-only', () => {
+	const d = deal({ status: 'cancelled' });
+	const staff = dealChatComposer(admin, d);
+	assert.equal(isDealChatReadOnly(d), true);
+	assert.equal(staff.readOnly, false);
+	assert.equal(staff.asGuarantor, true);
+	assert.equal(staff.hint, 'Угоду закрито — ви можете написати сторонам');
+	assert.equal(staff.placeholder, 'Написати як гарант TgSell…');
+	const partyStaff = dealChatComposer({ id: 20, role: 'admin' }, deal({ status: 'completed' }));
+	assert.equal(partyStaff.readOnly, false);
+	assert.equal(partyStaff.asGuarantor, false);
+	assert.equal(partyStaff.hint, 'Угоду закрито — ви можете написати сторонам');
+	assert.equal(partyStaff.placeholder, 'Написати…');
+	assert.equal(dealChatComposer({ id: 10, role: 'user' }, d).readOnly, true);
+});
+
 test('staff non-party on an open deal writes as guarantor', () => {
 	const c = dealChatComposer(admin, deal({ status: 'paid' }));
 	assert.equal(c.readOnly, false);
