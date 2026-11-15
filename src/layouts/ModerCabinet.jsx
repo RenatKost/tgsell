@@ -83,6 +83,7 @@ const STATUS_FILTERS = [
 	{ text: 'Очікують уточнення', value: 'needs_clarification', dot: 'bg-orange-500' },
 	{ text: 'Опубліковані', value: 'approved', dot: 'bg-green-500' },
 	{ text: 'Відхилені', value: 'rejected', dot: 'bg-red-500' },
+	{ text: 'Видалені', value: 'removed', dot: 'bg-gray-500' },
 	{ text: 'Продані', value: 'sold', dot: 'bg-blue-500' },
 ];
 
@@ -102,6 +103,7 @@ const AUCTION_STATUS_FILTERS = [
 	{ text: 'Заплановані', value: 'scheduled', dot: 'bg-yellow-500' },
 	{ text: 'Завершені', value: 'ended', dot: 'bg-blue-500' },
 	{ text: 'Скасовані', value: 'cancelled', dot: 'bg-red-500' },
+	{ text: 'Видалені', value: 'deleted', dot: 'bg-gray-500' },
 ];
 
 const DEAL_STATUS_LABELS = {
@@ -139,6 +141,27 @@ const AUCTION_STATUS_LABELS = {
 	scheduled: { text: 'Запланований', color: 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400' },
 	ended: { text: 'Завершений', color: 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400' },
 	cancelled: { text: 'Скасований', color: 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400' },
+};
+
+const HISTORY_ACTION_LABELS = {
+	'channel.delete': 'Видалення лота',
+	'channel.remove': 'Зняття з біржі',
+	'channel.unpublish': 'Зняття з публікації',
+	'channel.republish': 'Відновлення публікації',
+	'channel.approve': 'Схвалення',
+	'channel.reject': 'Відхилення',
+	'channel.buyer_warning': 'Попередження для покупця',
+	'channel.notify': 'Сповіщення продавця',
+	'channel.clarify': 'Запит уточнення',
+	'auction.delete': 'Видалення аукціону',
+	'auction.restore': 'Відновлення аукціону',
+	'auction.cancel': 'Скасування аукціону',
+};
+
+const lotStatusLabel = (ch) => {
+	const reason = ch.removed_reason || ch.takedown_reason || '';
+	if (ch.status === 'removed' && reason.toLowerCase().includes('адміністратором')) return 'Видалено';
+	return STATUS_LABELS[ch.status] || ch.status;
 };
 
 const FilterPills = ({ items, active, onChange }) => (
@@ -271,6 +294,7 @@ const ModerCabinet = () => {
 	const [auctionFilter, setAuctionFilter] = useState('');
 	const [extendId, setExtendId] = useState(null);
 	const [extendHours, setExtendHours] = useState(24);
+	const [history, setHistory] = useState(null);
 
 	const [escrowWallets, setEscrowWallets] = useState([]);
 	const [escrowTotal, setEscrowTotal] = useState(0);
@@ -350,7 +374,9 @@ const ModerCabinet = () => {
 				const { data } = await adminAPI.getAllDeals({ deal_status: 'disputed' });
 				setDisputes(Array.isArray(data) ? data : data.items || []);
 			} else if (section === 'auctions') {
-				const params = auctionFilter ? { status: auctionFilter } : {};
+				const params = auctionFilter === 'deleted'
+					? { deleted: true }
+					: (auctionFilter ? { status: auctionFilter } : {});
 				const { data } = await adminAPI.getAuctions(params);
 				setAuctions(data.items || []);
 			} else if (section === 'activity') {
@@ -421,7 +447,15 @@ const ModerCabinet = () => {
 		if (!confirm('Відновити лот у статус до зняття? Лот, який ще не був схвалений, повернеться на модерацію.')) return;
 		try {
 			const { data } = await adminAPI.republishChannel(id);
-			patchChannel(id, { status: data.status, rejection_reason: null });
+			if (statusFilter === 'removed' && data.status !== 'removed') {
+				setAllChannels(prev => prev.filter(c => c.id !== id));
+			} else {
+				patchChannel(id, {
+					status: data.status, rejection_reason: null,
+					removed_at: null, removed_by: null, removed_by_id: null, removed_reason: null,
+					takedown_reason: null, takedown_at: null,
+				});
+			}
 			if (data.status !== 'approved') alert('Лот повернуто на модерацію (до зняття він ще не був опублікований).');
 		} catch (err) { alert(err.response?.data?.detail || 'Помилка відновлення'); }
 	};
@@ -566,6 +600,29 @@ const ModerCabinet = () => {
 			await adminAPI.deleteAuction(id);
 			setAuctions(prev => prev.filter(a => a.id !== id));
 		} catch (err) { alert(err.response?.data?.detail || 'Помилка'); }
+	};
+
+	const handleRestoreAuction = async (id) => {
+		if (!confirm('Відновити аукціон? Якщо строк уже минув, він не стане знову активним.')) return;
+		try {
+			const { data } = await adminAPI.restoreAuction(id);
+			if (auctionFilter === 'deleted') {
+				setAuctions(prev => prev.filter(a => a.id !== id));
+			} else {
+				setAuctions(prev => prev.map(a => a.id === id ? { ...a, status: data.status, deleted_at: null, deleted_by: null, deleted_by_id: null, deleted_reason: null } : a));
+			}
+		} catch (err) { alert(err.response?.data?.detail || 'Помилка відновлення'); }
+	};
+
+	const openHistory = async (kind, id, title) => {
+		setHistory({ title, items: [], loading: true, err: '' });
+		try {
+			const fn = kind === 'auction' ? adminAPI.auctionHistory : adminAPI.channelHistory;
+			const { data } = await fn(id);
+			setHistory({ title, items: data.items || [], loading: false, err: '' });
+		} catch (err) {
+			setHistory({ title, items: [], loading: false, err: err.response?.data?.detail || 'Помилка завантаження історії' });
+		}
 	};
 
 	const handleSweep = async (dealId) => {
@@ -1152,7 +1209,7 @@ const ModerCabinet = () => {
 											</div>
 											<div className='flex flex-wrap items-center gap-2'>
 												<span className={`text-xs px-3 py-1 rounded-full font-semibold ${STATUS_COLORS[channel.status] || 'bg-gray-100 dark:bg-gray-700'}`}>
-													{STATUS_LABELS[channel.status] || channel.status}
+													{lotStatusLabel(channel)}
 												</span>
 												<button
 													onClick={() => handleRefreshStats(channel.id)}
@@ -1177,18 +1234,32 @@ const ModerCabinet = () => {
 												)}
 												{['rejected', 'removed'].includes(channel.status) && (
 													<button onClick={() => handleRepublishChannel(channel.id)} className='text-xs px-3 py-1.5 rounded-lg bg-green-100 text-green-700 hover:bg-green-200 dark:bg-green-900/30 dark:text-green-300 font-semibold duration-300' title='Повернути в каталог'>
-														Відновити публікацію
+														{channel.status === 'removed' ? 'Відновити' : 'Відновити публікацію'}
 													</button>
 												)}
+												<button onClick={() => openHistory('channel', channel.id, channel.channel_name || ('Лот #' + channel.id))} className='text-xs px-3 py-1.5 rounded-lg bg-gray-100 text-gray-700 hover:bg-gray-200 dark:bg-slate-700 dark:text-gray-200 dark:hover:bg-slate-600 font-semibold duration-300' title='Історія дій по лоту'>
+													Історія
+												</button>
 												<button onClick={() => { setWarnId(warnId === channel.id ? null : channel.id); setWarnText(channel.buyer_warning || ''); }} className={`p-2 rounded-lg duration-300 ${channel.buyer_warning ? 'text-amber-500' : 'text-gray-400'} hover:text-amber-600 hover:bg-amber-50 dark:hover:bg-amber-900/20`} title='Попередження для покупця'>
 													⚠️
 												</button>
+												{channel.status !== 'removed' && (
 												<button onClick={() => handleDeleteChannel(channel.id)} className='text-gray-400 hover:text-red-500 p-2 rounded-lg hover:bg-red-50 dark:hover:bg-red-900/20 duration-300' title='Зняти з каталогу (можна відновити)'>
 													<FontAwesomeIcon icon={faTrash} />
 												</button>
+												)}
 											</div>
 										</div>
-										{['rejected', 'removed'].includes(channel.status) && (channel.rejection_reason || channel.takedown_reason) && (
+										{channel.status === 'removed' && (
+											<p className='mb-3 text-sm bg-gray-50 dark:bg-slate-700/60 text-gray-700 dark:text-gray-200 p-2.5 rounded-xl'>
+												<span className='font-semibold'>
+													{channel.removed_by ? `Видалив ${channel.removed_by}` : 'Видалено'}
+													{channel.removed_at || channel.takedown_at ? ` ${fmtDate(channel.removed_at || channel.takedown_at)}` : ''}
+												</span>
+												{(channel.removed_reason || channel.takedown_reason) ? ` · Причина: ${channel.removed_reason || channel.takedown_reason}` : ''}
+											</p>
+										)}
+										{channel.status === 'rejected' && (channel.rejection_reason || channel.takedown_reason) && (
 											<p className='mb-3 text-sm bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-300 p-2.5 rounded-xl'>
 												<span className='font-semibold'>Причина зняття:</span> {channel.rejection_reason || channel.takedown_reason}
 											</p>
@@ -1486,9 +1557,14 @@ const ModerCabinet = () => {
 														<p className='text-gray-500 dark:text-gray-400 text-sm'>Продавець: {auction.seller_name || '—'}</p>
 													</div>
 												</div>
+												<div className='flex flex-wrap items-center gap-2'>
 												<span className={`text-xs px-3 py-1 rounded-full font-semibold ${statusInfo.color}`}>
 													{statusInfo.text}
 												</span>
+												{auction.deleted_at && (
+													<span className='text-xs px-3 py-1 rounded-full font-semibold bg-gray-200 text-gray-700 dark:bg-gray-700 dark:text-gray-300'>Видалено</span>
+												)}
+												</div>
 											</div>
 											<div className='grid grid-cols-2 md:grid-cols-5 gap-2 text-sm mb-4'>
 												<div className='bg-gray-50 dark:bg-slate-700/60 p-2.5 rounded-xl'>
@@ -1517,6 +1593,14 @@ const ModerCabinet = () => {
 													<span className='font-semibold'>Переможець:</span> {auction.winner_name} (ID: {auction.winner_id})
 												</p>
 											)}
+											{auction.deleted_at && (
+												<p className='text-sm bg-gray-50 dark:bg-slate-700/60 text-gray-700 dark:text-gray-200 p-2.5 rounded-xl mb-3'>
+													<span className='font-semibold'>
+														{auction.deleted_by ? `Видалив ${auction.deleted_by}` : 'Видалено'} {fmtDate(auction.deleted_at)}
+													</span>
+													{auction.deleted_reason ? ` · ${auction.deleted_reason === 'channel.delete' ? 'разом із лотом' : auction.deleted_reason}` : ''}
+												</p>
+											)}
 											{extendId === auction.id && (
 												<div className='flex items-center gap-3 bg-blue-50 dark:bg-blue-900/20 p-3 rounded-xl mb-3'>
 													<span className='text-sm text-gray-600 dark:text-gray-300'>Продовжити на:</span>
@@ -1527,7 +1611,7 @@ const ModerCabinet = () => {
 												</div>
 											)}
 											<div className='flex flex-wrap gap-2'>
-												{isActive && (
+												{isActive && !auction.deleted_at && (
 													<>
 														<button onClick={() => setExtendId(extendId === auction.id ? null : auction.id)} className='bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400 px-4 py-2 rounded-xl text-sm font-semibold hover:bg-blue-200 dark:hover:bg-blue-900/50 duration-300 flex items-center gap-2'>
 															<FontAwesomeIcon icon={faClock} /> Продовжити
@@ -1537,8 +1621,17 @@ const ModerCabinet = () => {
 														</button>
 													</>
 												)}
-												<button onClick={() => handleDeleteAuction(auction.id)} className='bg-gray-100 dark:bg-slate-700 text-gray-600 dark:text-gray-300 px-4 py-2 rounded-xl text-sm font-semibold hover:bg-gray-200 dark:hover:bg-slate-600 duration-300 flex items-center gap-2'>
-													<FontAwesomeIcon icon={faTrash} /> Видалити
+												{auction.deleted_at ? (
+													<button onClick={() => handleRestoreAuction(auction.id)} className='bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 px-4 py-2 rounded-xl text-sm font-semibold hover:bg-green-200 dark:hover:bg-green-900/50 duration-300'>
+														Відновити
+													</button>
+												) : (
+													<button onClick={() => handleDeleteAuction(auction.id)} className='bg-gray-100 dark:bg-slate-700 text-gray-600 dark:text-gray-300 px-4 py-2 rounded-xl text-sm font-semibold hover:bg-gray-200 dark:hover:bg-slate-600 duration-300 flex items-center gap-2'>
+														<FontAwesomeIcon icon={faTrash} /> Видалити
+													</button>
+												)}
+												<button onClick={() => openHistory('auction', auction.id, auction.channel_name || ('Аукціон #' + auction.id))} className='bg-gray-100 dark:bg-slate-700 text-gray-700 dark:text-gray-200 px-4 py-2 rounded-xl text-sm font-semibold hover:bg-gray-200 dark:hover:bg-slate-600 duration-300'>
+													Історія
 												</button>
 											</div>
 										</div>
@@ -1724,6 +1817,44 @@ const ModerCabinet = () => {
 
 				{chatDealId && (
 					<DealChatModal dealId={chatDealId} userId={user?.id} onClose={() => setChatDealId(null)} />
+				)}
+				{history && (
+					<div className='fixed inset-0 z-50 bg-black/50 flex items-end sm:items-center justify-center p-0 sm:p-4' onClick={() => setHistory(null)}>
+						<div className='w-full sm:max-w-2xl max-h-[80vh] bg-white dark:bg-slate-800 rounded-t-2xl sm:rounded-2xl overflow-hidden shadow-2xl flex flex-col' onClick={e => e.stopPropagation()}>
+							<div className='flex items-center justify-between px-5 py-3 border-b border-gray-100 dark:border-slate-700'>
+								<h2 className='font-bold text-gray-800 dark:text-white truncate pr-4'>Історія: {history.title}</h2>
+								<button onClick={() => setHistory(null)} className='text-gray-400 hover:text-gray-600 text-lg px-2' aria-label='Закрити'>✕</button>
+							</div>
+							<div className='overflow-y-auto p-4'>
+								{history.loading ? (
+									<Loader />
+								) : history.err ? (
+									<p className='text-sm text-red-600'>{history.err}</p>
+								) : !history.items.length ? (
+									<p className='text-sm text-gray-400'>Записів немає</p>
+								) : (
+									<ul className='space-y-3'>
+										{history.items.map(item => (
+											<li key={item.id} className='text-sm bg-gray-50 dark:bg-slate-700/60 rounded-xl p-3'>
+												<p className='font-semibold text-gray-800 dark:text-gray-100'>
+													{HISTORY_ACTION_LABELS[item.action] || item.action}
+												</p>
+												<p className='text-gray-500 dark:text-gray-400 text-xs mt-0.5'>
+													{item.created_at ? fmtDate(item.created_at) : ''}
+													{item.actor || item.actor_id ? ` · ${item.actor || ('#' + item.actor_id)}` : ''}
+												</p>
+												{item.details && Object.keys(item.details).length > 0 && (
+													<p className='text-xs text-gray-600 dark:text-gray-300 mt-1 break-all'>
+														{Object.entries(item.details).map(([k, v]) => `${k}: ${typeof v === 'object' ? JSON.stringify(v) : v}`).join(' · ')}
+													</p>
+												)}
+											</li>
+										))}
+									</ul>
+								)}
+							</div>
+						</div>
+					</div>
 				)}
 			</main>
 		</section>
