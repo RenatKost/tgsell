@@ -1388,10 +1388,27 @@ async def on_chat_bridge_read(callback: CallbackQuery):
     await callback.answer("Позначено прочитаним")
 
 
+async def _close_bot_session(bot: Bot | None) -> None:
+    if bot is None:
+        return
+    try:
+        await bot.session.close()
+    except Exception:
+        pass
+
+
 async def run_bots_background():
-    """Start Telegram bots as a background task (called from FastAPI lifespan)."""
+    """Start Telegram bots as a background task (called from FastAPI lifespan).
+
+    handle_signals=False: uvicorn already owns SIGTERM; aiogram must not steal it.
+    close_bot_session (aiogram default) plus the finally below abort getUpdates so a
+    new container does not overlap polling for long. CancelledError is re-raised so
+    the lifespan shutdown finishes cleanly.
+    """
     from bot.support import run_support_bot_background
 
+    alerts_bot: Bot | None = None
+    auth_bot: Bot | None = None
     try:
         alerts_bot = Bot(token=settings.bot_token_alerts)
         alerts_dp = Dispatcher(storage=MemoryStorage())
@@ -1404,15 +1421,19 @@ async def run_bots_background():
 
         logger.info("Telegram bots starting (alerts + auth + support)…")
         await asyncio.gather(
-            alerts_dp.start_polling(alerts_bot),
-            auth_dp.start_polling(auth_bot),
+            alerts_dp.start_polling(alerts_bot, handle_signals=False),
+            auth_dp.start_polling(auth_bot, handle_signals=False),
             run_support_bot_background(),
         )
     except asyncio.CancelledError:
         logger.info("Telegram bots stopped.")
+        raise
     except Exception as e:
         from app.utils.log_redact import redact
         logger.error(f"Telegram bots error: {redact(e)}")
+    finally:
+        await _close_bot_session(alerts_bot)
+        await _close_bot_session(auth_bot)
 
 
 async def start_bot():

@@ -11,6 +11,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
+from app.config import settings
 from app.models.chat import DealAttachment
 from app.models.deal import Deal, DealMessage
 from app.models.user import User
@@ -287,5 +288,6 @@ async def tg_notify_state(
         "telegram_bound": bool(user.telegram_id),
         "bot_started": bool(user.tg_bot_started_at),
         "bot_unreachable": bool(user.tg_bot_unreachable_at),
+        "bot_username": settings.alerts_bot_username.lstrip("@"),
         "deep_link": bridge.deep_link(deal_id),
     }

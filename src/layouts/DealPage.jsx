@@ -9,7 +9,9 @@ import { useAuth } from '../context/AppContext';
 import TransferChecklist from '../components/Deal/TransferChecklist';
 import DealPayBlock from '../components/Deal/DealPayBlock';
 import DealNextSteps from '../components/Deal/DealNextSteps';
+import DealBotNotifyBanner from '../components/Deal/DealBotNotifyBanner';
 import { dealViewer, heroLabel, heroCounterpart, readinessView, transferView } from '../utils/dealViewer';
+import { shouldShowDealBotBanner } from '../utils/dealBotBanner';
 import './escrow.css';
 import './premium.css';
 import './public.css';
@@ -588,19 +590,8 @@ const DealPage = () => {
 			)}
 
 			{/* Deal Chat */}
-			{tgNotify && (isBuyer || isSeller) && !['completed', 'cancelled'].includes(deal.status) && (tgNotify.bot_unreachable || !tgNotify.bot_started) && (
-				<div className={`rounded-2xl p-4 mb-4 flex flex-col sm:flex-row sm:items-center gap-3 border ${tgNotify.bot_unreachable ? 'bg-amber-50 border-amber-200 text-amber-800' : 'bg-blue-50 border-blue-200 text-blue-800'}`}>
-					<p className='text-sm flex-1'>
-						{tgNotify.bot_unreachable
-							? 'Не вдалося доставити повідомлення чату в Telegram — запустіть бота, щоб отримувати їх.'
-							: 'Отримуйте нові повідомлення цього чату в Telegram і відповідайте прямо з бота.'}
-						{!tgNotify.telegram_bound && ' Спершу увійдіть на сайт через Telegram.'}
-					</p>
-					<a href={tgNotify.deep_link} target='_blank' rel='noopener noreferrer'
-						className='shrink-0 text-center bg-[#2AABEE] text-white text-sm font-semibold px-4 py-2 rounded-xl hover:opacity-90'>
-						Отримувати повідомлення в Telegram
-					</a>
-				</div>
+			{shouldShowDealBotBanner({ isParty: isBuyer || isSeller, tgNotify }) && (
+				<DealBotNotifyBanner tgNotify={tgNotify} />
 			)}
 			<div id='chat' className='scroll-mt-24'>
 				<DealChat dealId={deal.id} userId={user?.id} onCallAdmin={handleCallAdmin} deal={deal} asGuarantor={viewer.isStaffObserver} />
