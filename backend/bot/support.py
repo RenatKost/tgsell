@@ -231,7 +231,7 @@ async def run_support_bot_background():
             dp = Dispatcher(storage=MemoryStorage())
             dp.include_router(support_router)
             logger.info("Support bot starting polling…")
-            await dp.start_polling(bot)
+            await dp.start_polling(bot, handle_signals=False)
         except asyncio.CancelledError:
             logger.info("Support bot stopped.")
             raise

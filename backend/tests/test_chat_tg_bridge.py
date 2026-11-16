@@ -333,3 +333,21 @@ async def test_staff_message_on_terminal_deal_notifies_parties(env, chat, br):
         async with env.orm.session() as db:
             assert (await db.get(Deal, deal_id)).status == status
 
+
+
+
+@pytest.mark.asyncio
+async def test_tg_notify_on_cancelled_and_completed_deals(env):
+    """Parties of a closed deal still get the banner payload (deep link + bot username)."""
+    from app.config import settings
+
+    r = importlib.import_module("app.routers.chat")
+    for status in (env.S.cancelled, env.S.completed):
+        deal_id, _ = await env.make_deal(status)
+        st = await call(env, r.tg_notify_state, deal_id, user=env.ids.buyer)
+        assert st["telegram_bound"] is True
+        assert st["bot_started"] is False
+        assert st["bot_unreachable"] is False
+        assert st["bot_username"] == settings.alerts_bot_username.lstrip("@")
+        assert st["deep_link"].endswith(f"?start=deal_{deal_id}")
+        assert settings.alerts_bot_username.lstrip("@") in st["deep_link"]
