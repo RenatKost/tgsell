@@ -26,6 +26,7 @@ from app.routers import paid_services as paid_services_router
 from app.tasks.payment_checker import run_payment_checker
 from app.tasks.payout_worker import run_payout_worker
 from app.tasks.stats_collector import run_stats_collector, run_view_tracker
+from app.services.stats_retry import run_stats_retry_loop
 from app.tasks.auction_manager import run_auction_manager
 from app.tasks.health_monitor import run_health_monitor
 from app.tasks.checklist_reminders import run_checklist_reminders
@@ -108,6 +109,7 @@ async def lifespan(app: FastAPI):
     background_tasks.append(loop.create_task(run_payment_checker(interval_seconds=30)))
     background_tasks.append(loop.create_task(run_payout_worker(interval_seconds=5)))
     background_tasks.append(loop.create_task(run_stats_collector(interval_hours=3)))
+    background_tasks.append(loop.create_task(run_stats_retry_loop(interval_sec=30)))
     background_tasks.append(loop.create_task(run_view_tracker(interval_hours=3)))
     background_tasks.append(loop.create_task(run_auction_manager(interval_seconds=60)))
     background_tasks.append(loop.create_task(run_bots_background()))

@@ -14,6 +14,7 @@ from aiogram.types import Message
 from sqlalchemy import select
 
 from app.config import settings
+from app.utils.polling_watch import POLLING_START_KWARGS, build_polling_bot
 from app.database import async_session
 from app.models.support import DELIVERY_SENT, SupportMessage
 from app.services.support_logic import (
@@ -227,11 +228,11 @@ async def run_support_bot_background():
     while True:
         bot: Bot | None = None
         try:
-            bot = Bot(token=settings.bot_token_support)
+            bot = build_polling_bot(settings.bot_token_support)
             dp = Dispatcher(storage=MemoryStorage())
             dp.include_router(support_router)
             logger.info("Support bot starting polling…")
-            await dp.start_polling(bot, handle_signals=False)
+            await dp.start_polling(bot, handle_signals=False, **POLLING_START_KWARGS)
         except asyncio.CancelledError:
             logger.info("Support bot stopped.")
             raise

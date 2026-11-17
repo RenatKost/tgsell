@@ -42,3 +42,6 @@ def setup_logging(level: int = logging.INFO) -> None:
         for h in list(lg.handlers):
             lg.removeHandler(h)
         lg.propagate = True
+
+    from app.utils.polling_watch import install_polling_log_filter
+    install_polling_log_filter()
