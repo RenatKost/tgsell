@@ -20,6 +20,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import selectinload
 
 from app.config import settings
+from app.utils.polling_watch import POLLING_START_KWARGS, build_polling_bot
 from app.services.alerts import telegram_html_safe
 from html import escape as _html_escape
 
@@ -1410,19 +1411,19 @@ async def run_bots_background():
     alerts_bot: Bot | None = None
     auth_bot: Bot | None = None
     try:
-        alerts_bot = Bot(token=settings.bot_token_alerts)
+        alerts_bot = build_polling_bot(settings.bot_token_alerts)
         alerts_dp = Dispatcher(storage=MemoryStorage())
         alerts_dp.include_router(router)
         alerts_dp.include_router(chat_bridge_router)
 
-        auth_bot = Bot(token=settings.bot_token_auth)
+        auth_bot = build_polling_bot(settings.bot_token_auth)
         auth_dp = Dispatcher(storage=MemoryStorage())
         auth_dp.include_router(auth_router)
 
         logger.info("Telegram bots starting (alerts + auth + support)…")
         await asyncio.gather(
-            alerts_dp.start_polling(alerts_bot, handle_signals=False),
-            auth_dp.start_polling(auth_bot, handle_signals=False),
+            alerts_dp.start_polling(alerts_bot, handle_signals=False, **POLLING_START_KWARGS),
+            auth_dp.start_polling(auth_bot, handle_signals=False, **POLLING_START_KWARGS),
             run_support_bot_background(),
         )
     except asyncio.CancelledError:
@@ -1439,20 +1440,20 @@ async def run_bots_background():
 async def start_bot():
     """Start both Telegram bots (standalone entry point)."""
     # Alerts bot (deals, notifications)
-    alerts_bot = Bot(token=settings.bot_token_alerts)
+    alerts_bot = build_polling_bot(settings.bot_token_alerts)
     alerts_dp = Dispatcher(storage=MemoryStorage())
     alerts_dp.include_router(router)
     alerts_dp.include_router(chat_bridge_router)
 
     # Auth bot (login via deep link)
-    auth_bot = Bot(token=settings.bot_token_auth)
+    auth_bot = build_polling_bot(settings.bot_token_auth)
     auth_dp = Dispatcher(storage=MemoryStorage())
     auth_dp.include_router(auth_router)
 
     logger.info("Telegram bots starting (alerts + auth)…")
     await asyncio.gather(
-        alerts_dp.start_polling(alerts_bot),
-        auth_dp.start_polling(auth_bot),
+        alerts_dp.start_polling(alerts_bot, **POLLING_START_KWARGS),
+        auth_dp.start_polling(auth_bot, **POLLING_START_KWARGS),
     )
 
 

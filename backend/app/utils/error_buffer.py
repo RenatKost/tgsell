@@ -67,6 +67,8 @@ class ErrorRingBuffer(logging.Handler):
         self._buf_lock = threading.Lock()
 
     def emit(self, record: logging.LogRecord) -> None:
+        if getattr(record, "skip_error_buffer", False):
+            return
         try:
             try:
                 message = record.getMessage()

@@ -25,6 +25,8 @@ async def _refresh_open_channel(channel_id: int) -> tuple[str, bool]:
             return "skip", True
 
         stats = await collect_channel_stats(channel.telegram_link)
+        from app.services.stats_retry import note_telethon_stats_result
+        note_telethon_stats_result(channel_id, stats)
         telethon_ok = bool(stats.get("daily_stats"))
         check = stats.get("check")
         if check is not None:

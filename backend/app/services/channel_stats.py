@@ -211,10 +211,15 @@ async def _get_telethon_client():
         from telethon.sessions import StringSession
 
         session = StringSession(session_string)
+        # request_retries=0: one RPC attempt. Telethon's default is 5 retries +
+        # the initial try (6 back-to-back, 2s apart) on RpcCallFailError.
+        # Channel stats instead schedule 5→15→60 min retries (stats_retry).
+        # connection_retries is left at the default so the session is not affected.
         client = TelegramClient(
             session,
             settings.telegram_api_id,
             settings.telegram_api_hash,
+            request_retries=0,
         )
         await client.connect()
         if not await client.is_user_authorized():
@@ -387,6 +392,8 @@ async def _save_session_to_db(session_string: str) -> None:
 
 # username(lower) → last availability error text of the current check (Bot API / Telethon).
 last_check_errors: dict[str, str] = {}
+# Last Telethon failure for collect_channel_stats (retry classification).
+_last_telethon_stats_fail: dict[str, dict] = {}
 
 
 async def get_channel_info_bot_api(channel_username: str) -> dict | None:
@@ -628,7 +635,11 @@ async def get_channel_stats_telethon(channel_username: str, message_limit: int =
             "posts": posts_data,
         }
     except Exception as e:
-        logger.error(f"Telethon stats failed for @{channel_username}: {e}")
+        from app.services.stats_retry import classify_telethon_stats_error
+        info = classify_telethon_stats_error(e)
+        _last_telethon_stats_fail[channel_username.lower()] = info
+        log = logger.warning if info["telethon_retryable"] else logger.error
+        log(f"Telethon stats failed for @{channel_username}: {type(e).__name__}: {e}")
         prev = last_check_errors.get(channel_username.lower())
         last_check_errors[channel_username.lower()] = (f"{prev}; " if prev else "") + f"Telethon: {e}"[:200]
         return None
@@ -695,6 +706,7 @@ async def collect_channel_stats(telegram_link: str, message_limit: int = 5000) -
 
     # Step 1: Bot API (safe, always works)
     last_check_errors.pop(username.lower(), None)
+    _last_telethon_stats_fail.pop(username.lower(), None)
     bot_info = await get_channel_info_bot_api(username)
     if bot_info:
         result["channel_name"] = bot_info["name"] or username
@@ -706,6 +718,11 @@ async def collect_channel_stats(telegram_link: str, message_limit: int = 5000) -
 
     # Step 2: Telethon (deeper stats, may fail)
     telethon_stats = await get_channel_stats_telethon(username, message_limit=message_limit)
+    fail = _last_telethon_stats_fail.pop(username.lower(), None)
+    if fail:
+        result["telethon_error"] = fail.get("telethon_error")
+        result["telethon_retryable"] = fail.get("telethon_retryable", False)
+        result["telethon_flood_wait_sec"] = fail.get("telethon_flood_wait_sec") or 0
     if telethon_stats:
         result["subscribers_count"] = telethon_stats["subscribers"]
         result["avg_views"] = telethon_stats["avg_views"]
