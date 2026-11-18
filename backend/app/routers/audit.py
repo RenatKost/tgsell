@@ -314,9 +314,15 @@ def _runtime() -> dict:
         loop = loop_lag_snapshot()
     except Exception:
         loop = None
+    try:
+        from app.services.stats_retry import breaker, scheduler
+        stats_telethon = {**breaker.snapshot(), "pending_retries": scheduler.pending_count()}
+    except Exception:
+        stats_telethon = None
     started = PROCESS_STARTED_AT
     return {
         "telethon": tele,
+        "stats_telethon": stats_telethon,
         "loop": loop,
         "process_started_at": started.isoformat(),
         "uptime_hours": round((datetime.now(timezone.utc) - started).total_seconds() / 3600, 2),

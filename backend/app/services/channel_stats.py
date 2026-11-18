@@ -211,15 +211,20 @@ async def _get_telethon_client():
         from telethon.sessions import StringSession
 
         session = StringSession(session_string)
-        # request_retries=0: one RPC attempt. Telethon's default is 5 retries +
-        # the initial try (6 back-to-back, 2s apart) on RpcCallFailError.
-        # Channel stats instead schedule 5→15→60 min retries (stats_retry).
+        # request_retries=1: at most 2 RPC attempts. Telethon's default is 5
+        # retries + the initial try (6 back-to-back, 2s apart) on RpcCallFailError.
+        # With 0, a short FloodWait that Telethon sleeps through ended the only
+        # attempt and surfaced as ValueError("Request was unsuccessful 1 time(s)").
+        # raise_last_call_error=True raises the real error (RpcCallFailError,
+        # FloodWaitError with .seconds…) instead of that generic ValueError.
+        # Channel stats schedule 5→15→60 min retries (stats_retry).
         # connection_retries is left at the default so the session is not affected.
         client = TelegramClient(
             session,
             settings.telegram_api_id,
             settings.telegram_api_hash,
-            request_retries=0,
+            request_retries=1,
+            raise_last_call_error=True,
         )
         await client.connect()
         if not await client.is_user_authorized():
@@ -396,6 +401,34 @@ last_check_errors: dict[str, str] = {}
 _last_telethon_stats_fail: dict[str, dict] = {}
 
 
+# Last Bot API failure reason per channel (token-free text for logs).
+_last_bot_api_fail: dict[str, str] = {}
+
+_BOT_API_TOKEN_STATUSES = {401, 404}  # Bot API answers 401/404 for a wrong or revoked token
+
+
+def describe_bot_api_failure(status_code: int | None, description: str | None) -> str:
+    """Concrete, token-free reason for a failed Bot API stats call.
+
+    e.g. "401 Unauthorized — check BOT_TOKEN_STATS". Never includes the token value.
+    """
+    from app.utils.log_redact import redact
+
+    desc = redact(str(description or "").strip())[:200] or "no description"
+    if status_code is None:
+        return f"network error: {desc}"
+    head = desc if desc.startswith(str(status_code)) else f"{status_code} {desc}"
+    if status_code in _BOT_API_TOKEN_STATUSES:
+        return f"{head} — check BOT_TOKEN_STATS"
+    if status_code == 429:
+        return f"{head} — rate limited by Bot API"
+    if status_code >= 500:
+        return f"{head} — Telegram Bot API server error"
+    if status_code in (400, 403):
+        return f"{head} — channel not reachable by the stats bot"
+    return head
+
+
 async def get_channel_info_bot_api(channel_username: str) -> dict | None:
     """Get basic channel info using Bot API (safe, no user account needed).
 
@@ -403,6 +436,10 @@ async def get_channel_info_bot_api(channel_username: str) -> dict | None:
     """
     import httpx
 
+    if not settings.bot_token_stats:
+        _last_bot_api_fail[channel_username.lower()] = "BOT_TOKEN_STATS is not set — check BOT_TOKEN_STATS"
+        last_check_errors[channel_username.lower()] = "Bot API: stats token not configured"
+        return None
     base_url = f"https://api.telegram.org/bot{settings.bot_token_stats}"
 
     try:
@@ -415,6 +452,7 @@ async def get_channel_info_bot_api(channel_username: str) -> dict | None:
                 except Exception:
                     desc = f"HTTP {resp.status_code}"
                 last_check_errors[channel_username.lower()] = f"Bot API: {desc}"[:300]
+                _last_bot_api_fail[channel_username.lower()] = describe_bot_api_failure(resp.status_code, desc)
                 return None
             chat_data = resp.json().get("result", {})
 
@@ -442,7 +480,9 @@ async def get_channel_info_bot_api(channel_username: str) -> dict | None:
             }
     except Exception as e:
         from app.utils.log_redact import redact
-        logger.error(f"Bot API channel info failed for @{channel_username}: {redact(e)}")
+        reason = describe_bot_api_failure(None, f"{type(e).__name__}: {redact(e)}")
+        _last_bot_api_fail[channel_username.lower()] = reason
+        logger.error(f"Bot API channel info failed for @{channel_username}: {reason}")
         return None
 
 
@@ -454,6 +494,14 @@ async def get_channel_stats_telethon(channel_username: str, message_limit: int =
               channel_age_months, daily_stats: [{date, views, subscribers}],
               posts: [{telegram_msg_id, date, text, media_type, link, views, forwards, reactions, comments}]}
     """
+    from app.services.stats_retry import CIRCUIT_OPEN, breaker, classify_telethon_stats_error
+
+    if breaker.is_open():
+        # Circuit open: do not touch the session; the caller defers this channel.
+        _last_telethon_stats_fail[channel_username.lower()] = classify_telethon_stats_error(CIRCUIT_OPEN)
+        logger.info(f"[STATS] @{channel_username} Telethon skipped — circuit open for {int(breaker.remaining_sec())}s")
+        return None
+
     client = await _get_telethon_client()
     if not client:
         logger.warning("Telethon client not available, skipping deep stats")
@@ -613,6 +661,7 @@ async def get_channel_stats_telethon(channel_username: str, message_limit: int =
                 "avg_reactions": sum(day_react) // len(day_react) if day_react else 0,
             })
 
+        breaker.record_success()
         # Add delay to avoid rate-limiting
         await asyncio.sleep(2)
 
@@ -635,9 +684,9 @@ async def get_channel_stats_telethon(channel_username: str, message_limit: int =
             "posts": posts_data,
         }
     except Exception as e:
-        from app.services.stats_retry import classify_telethon_stats_error
         info = classify_telethon_stats_error(e)
         _last_telethon_stats_fail[channel_username.lower()] = info
+        breaker.record_failure(e)
         log = logger.warning if info["telethon_retryable"] else logger.error
         log(f"Telethon stats failed for @{channel_username}: {type(e).__name__}: {e}")
         prev = last_check_errors.get(channel_username.lower())
@@ -707,6 +756,7 @@ async def collect_channel_stats(telegram_link: str, message_limit: int = 5000) -
     # Step 1: Bot API (safe, always works)
     last_check_errors.pop(username.lower(), None)
     _last_telethon_stats_fail.pop(username.lower(), None)
+    _last_bot_api_fail.pop(username.lower(), None)
     bot_info = await get_channel_info_bot_api(username)
     if bot_info:
         result["channel_name"] = bot_info["name"] or username
@@ -714,7 +764,8 @@ async def collect_channel_stats(telegram_link: str, message_limit: int = 5000) -
         result["avatar_url"] = bot_info["photo_url"]
         logger.info(f"[STATS] @{username} Bot API ✓ subs={bot_info['subscribers_count']}")
     else:
-        logger.warning(f"[STATS] @{username} Bot API failed — check BOT_TOKEN_STATS")
+        reason = _last_bot_api_fail.pop(username.lower(), None) or "no data returned"
+        logger.warning(f"[STATS] @{username} Bot API stats failed: {reason}")
 
     # Step 2: Telethon (deeper stats, may fail)
     telethon_stats = await get_channel_stats_telethon(username, message_limit=message_limit)

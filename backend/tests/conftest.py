@@ -10,3 +10,20 @@ for _k in [k for k in os.environ if k.upper().startswith("CATFEE_")]:
     os.environ.pop(_k, None)
 
 from tests.db_harness import db_url, orm, pg_orm  # noqa: E402,F401
+
+
+import pytest  # noqa: E402
+
+
+@pytest.fixture(autouse=True)
+def _reset_stats_breaker():
+    """The Telethon stats circuit breaker / retry scheduler are process-global: isolate tests."""
+    from app.services import stats_retry
+
+    stats_retry.breaker.reset()
+    stats_retry.scheduler.reset()
+    stats_retry.pass_running.clear()
+    yield
+    stats_retry.breaker.reset()
+    stats_retry.scheduler.reset()
+    stats_retry.pass_running.clear()
