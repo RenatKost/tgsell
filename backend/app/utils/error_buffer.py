@@ -1,4 +1,4 @@
-"""In-process ring buffer of recent WARNING+ log records (read by GET /api/audit/summary).
+"""In-process deduplicated buffer of recent WARNING+ log records (read by GET /api/audit/summary).
 
 Records are stored already redacted; nothing here is persisted or sent anywhere.
 """
@@ -7,11 +7,11 @@ from __future__ import annotations
 import logging
 import re
 import threading
-from collections import deque
+from collections import OrderedDict
 from datetime import datetime, timezone
 
 PROCESS_STARTED_AT = datetime.now(timezone.utc)
-BUFFER_SIZE = 200
+BUFFER_SIZE = 1000  # distinct (deduplicated) entries
 SAMPLE_MAX_LEN = 300
 
 # Order matters: key=value first (masks the whole value), then specific token shapes.
@@ -58,12 +58,29 @@ def _iso(ts: float) -> str:
     return datetime.fromtimestamp(ts, tz=timezone.utc).isoformat()
 
 
+_NUM_RE = re.compile(r"\d+")
+
+
+def dedup_key(logger_name: str, exc_type: str, message: str) -> str:
+    """Normalized key: logger + exception type + redacted message with numbers/ids collapsed."""
+    norm = _NUM_RE.sub("#", message or "")
+    return f"{logger_name}|{exc_type}|{norm}"
+
+
 class ErrorRingBuffer(logging.Handler):
-    """Keeps the last BUFFER_SIZE WARNING+ records as small redacted dicts."""
+    """Deduplicated buffer of recent WARNING+ records as small redacted dicts.
+
+    Identical messages (same logger, exception type and text up to numbers/ids)
+    share one entry with count / first_seen / last_seen, so a burst of one error
+    no longer pushes everything else out. Up to ``maxlen`` distinct entries are
+    kept; the least recently seen one is evicted first.
+    """
 
     def __init__(self, maxlen: int = BUFFER_SIZE):
         super().__init__(level=logging.WARNING)
-        self.records: deque[dict] = deque(maxlen=maxlen)
+        self.maxlen = maxlen
+        self.entries: OrderedDict[str, dict] = OrderedDict()
+        self.evicted = 0
         self._buf_lock = threading.Lock()
 
     def emit(self, record: logging.LogRecord) -> None:
@@ -75,23 +92,47 @@ class ErrorRingBuffer(logging.Handler):
             except Exception:
                 message = str(record.msg)
             template = record.msg if isinstance(record.msg, str) else type(record.msg).__name__
+            exc_type = ""
             if record.exc_info and record.exc_info[0] is not None:
-                message = f"{message} [{record.exc_info[0].__name__}]"
-            item = {
-                "logger": record.name,
-                "level": record.levelname,
-                "template": redact_sample(template)[:200],
-                "message": redact_sample(message),
-                "ts": record.created,
-            }
+                exc_type = record.exc_info[0].__name__
+                message = f"{message} [{exc_type}]"
+            message = redact_sample(message)
+            key = dedup_key(record.name, exc_type, message)
+            ts = record.created
             with self._buf_lock:
-                self.records.append(item)
+                item = self.entries.get(key)
+                if item is None:
+                    self.entries[key] = {
+                        "logger": record.name,
+                        "level": record.levelname,
+                        "template": redact_sample(template)[:200],
+                        "message": message,
+                        "ts": ts,
+                        "count": 1,
+                        "first_ts": ts,
+                    }
+                    while len(self.entries) > self.maxlen:
+                        self.entries.popitem(last=False)
+                        self.evicted += 1
+                else:
+                    item["count"] += 1
+                    item["message"] = message
+                    item["ts"] = max(item["ts"], ts)
+                    item["first_ts"] = min(item["first_ts"], ts)
+                    if record.levelno > logging.getLevelName(item["level"]):
+                        item["level"] = record.levelname
+                    self.entries.move_to_end(key)
         except Exception:  # never break logging
             pass
 
     def snapshot(self) -> list[dict]:
+        """Distinct entries, oldest-seen first. Each has count, first_seen, last_seen."""
         with self._buf_lock:
-            return list(self.records)
+            items = [dict(it) for it in self.entries.values()]
+        for it in items:
+            it["first_seen"] = _iso(it["first_ts"])
+            it["last_seen"] = _iso(it["ts"])
+        return items
 
     def summary(self) -> dict:
         items = self.snapshot()
@@ -105,29 +146,41 @@ class ErrorRingBuffer(logging.Handler):
                     "template": it["template"],
                     "level": it["level"],
                     "count": 0,
-                    "first_seen": _iso(it["ts"]),
-                    "last_seen": _iso(it["ts"]),
+                    "distinct": 0,
+                    "first_seen": it["first_seen"],
+                    "last_seen": it["last_seen"],
                     "sample": it["message"],
+                    "_first_ts": it["first_ts"],
                     "_last_ts": it["ts"],
                 }
-            g["count"] += 1
+            g["count"] += it["count"]
+            g["distinct"] += 1
             if logging.getLevelName(it["level"]) > logging.getLevelName(g["level"]):
                 g["level"] = it["level"]
+            if it["first_ts"] < g["_first_ts"]:
+                g["_first_ts"] = it["first_ts"]
+                g["first_seen"] = it["first_seen"]
             if it["ts"] >= g["_last_ts"]:
                 g["_last_ts"] = it["ts"]
-                g["last_seen"] = _iso(it["ts"])
+                g["last_seen"] = it["last_seen"]
                 g["sample"] = it["message"]
         out = sorted(groups.values(), key=lambda g: g["_last_ts"], reverse=True)
         for g in out:
             g.pop("_last_ts", None)
+            g.pop("_first_ts", None)
         by_level: dict[str, int] = {}
         for it in items:
-            by_level[it["level"]] = by_level.get(it["level"], 0) + 1
+            by_level[it["level"]] = by_level.get(it["level"], 0) + it["count"]
+        oldest = min((it["first_ts"] for it in items), default=None)
         return {
-            "buffer_size": self.records.maxlen,
-            "buffered": len(items),
+            "buffer_size": self.maxlen,
+            "buffered": sum(it["count"] for it in items),
             "by_level": by_level,
             "groups": out,
+            "dedup": True,
+            "distinct_entries": len(items),
+            "evicted_entries": self.evicted,
+            "oldest_seen": _iso(oldest) if oldest is not None else None,
         }
 
 

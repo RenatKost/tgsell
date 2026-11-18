@@ -96,6 +96,17 @@ async def _refresh_open_channel(channel_id: int) -> tuple[str, bool]:
 
 async def collect_stats_once():
     """Collect fresh stats for all active channels (pending + approved)."""
+    from app.services import stats_retry
+
+    # The deferred-retry loop waits while a full pass runs (one Telethon stream at a time).
+    stats_retry.pass_running.set()
+    try:
+        await _collect_stats_pass()
+    finally:
+        stats_retry.pass_running.clear()
+
+
+async def _collect_stats_pass():
     reset_telethon_retries()  # Allow fresh reconnect attempts each cycle
 
     async with async_session() as db:
@@ -116,15 +127,38 @@ async def collect_stats_once():
     # long time (rate-limited + Telethon flood waits), so a channel may get
     # deleted mid-run; isolating sessions keeps that from poisoning the rest
     # of the batch with a broken transaction.
-    for channel_id in channel_ids:
+    #
+    # Throttling (Task audit-18.11): pause after EVERY channel (failures too —
+    # previously only successes paused, so a failing session was hit back to
+    # back), small batches with a longer pause between them, and a circuit
+    # breaker: when Telethon fails for most channels in a row the pass stops
+    # and the rest is deferred to the retry loop instead of hammering the session.
+    from app.services.stats_retry import (
+        batch_pause_sec, batch_size, breaker, channel_pause_sec, scheduler,
+    )
+
+    size = batch_size()
+    deferred = 0
+    for idx, channel_id in enumerate(channel_ids):
+        if breaker.is_open():
+            rest = list(channel_ids[idx:])
+            delay = breaker.remaining_sec()
+            for cid in rest:
+                scheduler.defer(cid, delay)
+            deferred = len(rest)
+            telethon_ok = False
+            logger.warning(
+                f"[STATS] Telethon circuit open — pass paused, {deferred} channel(s) deferred by ≥{int(delay)}s"
+            )
+            break
+        if idx:
+            await asyncio.sleep(batch_pause_sec() if idx % size == 0 else channel_pause_sec())
         try:
             outcome, t_ok = await _refresh_open_channel(channel_id)
             if not t_ok:
                 telethon_ok = False
             if outcome == "ok":
                 success += 1
-                # Rate limit: wait between channels
-                await asyncio.sleep(3)
             elif outcome == "failed":
                 failed += 1
         except Exception as e:
@@ -271,8 +305,17 @@ async def update_post_views_once():
         links[channel_id] = link
 
     now = datetime.now(timezone.utc)
+    from app.services.stats_retry import breaker, channel_pause_sec, classify_telethon_stats_error
 
-    for channel_id, post_ids in by_channel.items():
+    for n, (channel_id, post_ids) in enumerate(by_channel.items()):
+        if breaker.is_open():
+            logger.warning(
+                f"[STATS] View tracking paused — Telethon circuit open for {int(breaker.remaining_sec())}s, "
+                f"{len(by_channel) - n} channel(s) left for the next run"
+            )
+            break
+        if n:
+            await asyncio.sleep(channel_pause_sec())  # also after failures
         try:
             link = links.get(channel_id)
             if not link:
@@ -326,11 +369,16 @@ async def update_post_views_once():
                         post.views_48h = post.views
 
                 await db.commit()
+            breaker.record_success()
             logger.info(f"View tracking updated for channel #{channel_id} ({len(post_ids)} posts)")
-            await asyncio.sleep(2)
 
         except Exception as e:
-            logger.error(f"View tracking failed for channel #{channel_id}: {e}")
+            info = classify_telethon_stats_error(e)
+            breaker.record_failure(e)
+            # Transient Telethon errors (RpcCallFail, "Request was unsuccessful", FloodWait…)
+            # are WARNING; the next run (6h) retries. Anything else stays ERROR.
+            log = logger.warning if info["telethon_retryable"] else logger.error
+            log(f"View tracking failed for channel #{channel_id}: {type(e).__name__}: {e}")
 
 
 async def run_view_tracker(interval_hours: int = 6):

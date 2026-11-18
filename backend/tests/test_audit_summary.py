@@ -56,10 +56,12 @@ def test_error_buffer_groups_by_template():
     finally:
         lg.removeHandler(buf)
     s = buf.summary()
-    assert s["buffered"] == 5 and s["buffer_size"] == 5  # ring buffer keeps the last 5
+    # Deduplicated: 6 identical (up to numbers) warnings + 1 error = 2 distinct entries.
+    assert s["buffered"] == 7 and s["buffer_size"] == 5 and s["distinct_entries"] == 2
+    assert s["dedup"] is True and s["by_level"] == {"WARNING": 6, "ERROR": 1}
     groups = {g["template"]: g for g in s["groups"]}
     g = groups["payout failed deal=%s token=***"]  # template is redacted too
-    assert g["count"] == 4 and g["level"] == "WARNING"
+    assert g["count"] == 6 and g["distinct"] == 1 and g["level"] == "WARNING"
     assert g["sample"] == "payout failed deal=12 token=***"
     assert g["first_seen"] <= g["last_seen"]
     assert groups["boom %s"]["level"] == "ERROR"

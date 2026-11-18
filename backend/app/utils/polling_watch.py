@@ -1,6 +1,7 @@
 """Aiogram getUpdates polling: timeouts, backoff, and quiet logging of transient errors.
 
-Isolated network timeouts and short-lived 409 conflicts must not fill the
+Isolated network timeouts, Telegram 5xx (Bad Gateway, TelegramServerError)
+and short-lived 409 conflicts must not fill the
 audit error buffer. One ERROR is emitted only when failures persist longer
 than POLLING_ERROR_EPISODE_MINUTES; INFO is logged when that episode recovers.
 """
@@ -52,6 +53,19 @@ _TRANSIENT_ERROR_NAMES = frozenset({
     "OSError",
 })
 _CONFLICT_ERROR_NAMES = frozenset({"TelegramConflictError"})
+# Telegram-side 5xx (Bad Gateway etc.): transient, same WARNING/episode handling.
+_SERVER_ERROR_NAMES = frozenset({"TelegramServerError", "RestartingTelegram"})
+# Error types that may carry an HTTP 5xx in their text (HTML 502 page → ClientDecodeError,
+# aiohttp ClientResponseError, TelegramBadRequest/TelegramAPIError with error_code 50x).
+_MAYBE_HTTP_ERROR_NAMES = frozenset({
+    "TelegramBadRequest", "TelegramAPIError", "ClientDecodeError",
+    "ClientResponseError", "ContentTypeError", "Unknown",
+})
+_SERVER_ERROR_PHRASES = (
+    "bad gateway", "service unavailable", "gateway timeout", "gateway time-out",
+    "internal server error", "telegram server says",
+)
+_HTTP_5XX_RE = re.compile(r"\b5(?:0[0-9]|2[0-9])\b")
 
 POLLING_START_KWARGS = {
     "polling_timeout": POLLING_TIMEOUT_SEC,
@@ -92,8 +106,23 @@ def is_transient_network_error(error_name: str, message: str = "") -> bool:
     return "request timeout" in lower or "timeout error" in lower or "timed out" in lower
 
 
+def is_server_error(error_name: str, message: str = "") -> bool:
+    """Telegram/HTTP 5xx: TelegramServerError, 502/503/504 Bad Gateway & co."""
+    name = (error_name or "").split(".")[-1]
+    if name in _SERVER_ERROR_NAMES:
+        return True
+    lower = (message or "").lower()
+    if any(p in lower for p in _SERVER_ERROR_PHRASES):
+        return True
+    return name in _MAYBE_HTTP_ERROR_NAMES and bool(_HTTP_5XX_RE.search(lower))
+
+
 def _is_quiet_failure(error_name: str, message: str) -> bool:
-    return is_conflict_error(error_name, message) or is_transient_network_error(error_name, message)
+    return (
+        is_conflict_error(error_name, message)
+        or is_transient_network_error(error_name, message)
+        or is_server_error(error_name, message)
+    )
 
 
 @dataclass
