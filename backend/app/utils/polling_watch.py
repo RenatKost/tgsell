@@ -2,8 +2,11 @@
 
 Isolated network timeouts, Telegram 5xx (Bad Gateway, TelegramServerError)
 and short-lived 409 conflicts must not fill the
-audit error buffer. One ERROR is emitted only when failures persist longer
-than POLLING_ERROR_EPISODE_MINUTES; INFO is logged when that episode recovers.
+audit error buffer. If getUpdates recovers on its own before
+POLLING_ERROR_EPISODE_MINUTES (default 20), a WARNING with the episode
+duration is logged. One ERROR is emitted only when failures persist longer
+than that threshold; INFO is logged when such a long episode recovers.
+Unauthorized and HTTP 400 stay immediate ERROR.
 """
 from __future__ import annotations
 
@@ -29,7 +32,7 @@ POLLING_TIMEOUT_SEC = 30
 SESSION_TIMEOUT_SEC = 60
 POLLING_BACKOFF = BackoffConfig(min_delay=1.0, max_delay=30.0, factor=1.5, jitter=0.1)
 
-_DEFAULT_EPISODE_MINUTES = 5
+_DEFAULT_EPISODE_MINUTES = 20
 # Deploy overlap: TelegramConflictError in the first minutes is expected.
 CONFLICT_WARNING_WINDOW_SEC = 180
 
@@ -74,7 +77,7 @@ POLLING_START_KWARGS = {
 
 
 def polling_error_episode_minutes() -> int:
-    """N minutes of consecutive failures before one ERROR. Env override, default 5."""
+    """N minutes of consecutive failures before one ERROR. Env override, default 20."""
     raw = os.getenv("POLLING_ERROR_EPISODE_MINUTES", "").strip()
     if not raw:
         return _DEFAULT_EPISODE_MINUTES
@@ -137,6 +140,7 @@ class FailureVerdict:
 class SuccessVerdict:
     emit_recovery_info: bool
     recovery_message: str | None = None
+    emit_recovery_warning: bool = False
 
 
 @dataclass
@@ -151,7 +155,7 @@ class _Episode:
 class PollingEpisodeTracker:
     """Pure consecutive-failure tracker, one episode per bot id."""
 
-    episode_minutes: int = _DEFAULT_EPISODE_MINUTES
+    episode_minutes: int = field(default_factory=polling_error_episode_minutes)
     conflict_warning_window_sec: int = CONFLICT_WARNING_WINDOW_SEC
     process_started_at: float | None = None
     now_fn: callable = time.time
@@ -228,15 +232,26 @@ class PollingEpisodeTracker:
             episode = self._episodes.pop(key, None)
         if episode is None:
             return SuccessVerdict(emit_recovery_info=False, recovery_message=None)
-        if not episode.error_emitted:
-            return SuccessVerdict(emit_recovery_info=False, recovery_message=None)
         ts = self._now(now)
         minutes = (ts - episode.started_at) / 60
-        text = (
-            f"Polling recovered for bot id={key} after {minutes:.1f} min "
-            f"(last error: {episode.last_error_name})"
-        )
-        return SuccessVerdict(emit_recovery_info=True, recovery_message=text)
+        if episode.error_emitted:
+            text = (
+                f"Polling recovered for bot id={key} after {minutes:.1f} min "
+                f"(last error: {episode.last_error_name})"
+            )
+            return SuccessVerdict(emit_recovery_info=True, recovery_message=text)
+        # Self-recovered quiet episode (timeouts / 5xx / short 409): WARNING with duration.
+        if _is_quiet_failure(episode.last_error_name, episode.last_error):
+            text = (
+                f"Polling getUpdates recovered after {minutes:.1f} min "
+                f"(bot id={key}, last error: {episode.last_error_name}: {episode.last_error})"
+            )
+            return SuccessVerdict(
+                emit_recovery_info=False,
+                recovery_message=text,
+                emit_recovery_warning=True,
+            )
+        return SuccessVerdict(emit_recovery_info=False, recovery_message=None)
 
     def reset(self) -> None:
         with self._lock:
@@ -307,8 +322,11 @@ def process_dispatcher_record(
     if "Connection established" in message and "bot id" in message:
         bot_id = parse_bot_id(message)
         verdict = tracker.record_success(bot_id, now=now)
-        if verdict.emit_recovery_info and verdict.recovery_message:
-            extras.append((logging.INFO, verdict.recovery_message))
+        if verdict.recovery_message:
+            if verdict.emit_recovery_warning:
+                extras.append((logging.WARNING, verdict.recovery_message))
+            elif verdict.emit_recovery_info:
+                extras.append((logging.INFO, verdict.recovery_message))
     return extras
 
 
