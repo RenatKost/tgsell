@@ -56,6 +56,12 @@ async def _seed(orm):
         return u
 
 
+async def _confirmed(client, body):
+    """Real send the way the admin UI does it: dry-run first, then echo its confirm_token."""
+    dry = (await client.post("/api/admin/broadcast", json=body | {"dry_run": True})).json()
+    return await client.post("/api/admin/broadcast", json=body | {"dry_run": False, "confirm_token": dry.get("confirm_token", "")})
+
+
 async def test_dry_run_lists_recipients_and_no_bot(orm, monkeypatch):
     bot = FakeBot()
     client, cur, svc = await _setup(orm, monkeypatch, bot)
@@ -92,7 +98,7 @@ async def test_send_once_verbatim_with_error_report(orm, monkeypatch):
     body = {"campaign_key": KEY, "segment": "relist_top7", "text": "інший текст", "dry_run": False}
     async with client:
         cur.user = u["adm"]
-        r = (await client.post("/api/admin/broadcast", json=body)).json()
+        r = (await _confirmed(client, body)).json()
         assert r["started"] and r["to_send"] == 6
         await svc._tasks[KEY]
         st = (await client.get(f"/api/admin/broadcast/{KEY}")).json()
@@ -100,7 +106,7 @@ async def test_send_once_verbatim_with_error_report(orm, monkeypatch):
         assert st["errors"][0]["username"] == "blk" and "blocked" in st["errors"][0]["error"]
         assert len(bot.sent) == 5 and all(t == svc.RELIST_TEXT for _, t in bot.sent)
         assert [c for c, _ in bot.sent].count(205) == 1  # multi-lot seller: one message
-        r = (await client.post("/api/admin/broadcast", json=body)).json()
+        r = (await _confirmed(client, body)).json()
         assert r["to_send"] == 0
         await svc._tasks[KEY]
         assert len(bot.sent) == 5

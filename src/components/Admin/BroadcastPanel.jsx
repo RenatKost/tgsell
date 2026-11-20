@@ -1,14 +1,25 @@
 import { useEffect, useState } from 'react';
 import { broadcastAPI } from '../../services/api';
+import { buildBroadcastBody, canSend, confirmText, dryRunFingerprint, NO_BOT_HINT } from '../../utils/broadcast';
 
 const box = 'bg-white dark:bg-slate-800 rounded-2xl border border-gray-100 dark:border-slate-700 p-5';
 const input = 'w-full rounded-xl border border-gray-200 dark:border-slate-600 bg-white dark:bg-slate-900 px-3 py-2 text-sm text-gray-800 dark:text-gray-100';
-const ids = (s) => s.split(',').map((x) => parseInt(x.trim(), 10)).filter((n) => Number.isInteger(n) && n > 0);
 const errText = (e) => { const d = e?.response?.data?.detail; return typeof d === 'string' ? d : 'Помилка запиту'; };
 
 const RELIST = { segment: 'relist_top7', key: 'relist_top7_2026_10_27' };
 const RELIST_TEXT = 'Вітаємо! До 1 листопада на TgSell діє акція: кожен новий лот, який схвалить модерація, отримує «Топ» на 7 днів безкоштовно (зазвичай це 10 USDT). Якщо ваш канал ще продається, виставте його знову: https://tgsell.me/sell. Розміщення безкоштовне, комісія 3% береться лише після угоди.';
 const sellerName = (i) => (i.username ? `@${i.username}` : `user #${i.user_id}`);
+const NoBotList = ({ items }) => (
+	<ul className='space-y-1 text-xs text-gray-700 dark:text-gray-200'>
+		{items.map((i) => (
+			<li key={i.user_id} className='flex flex-wrap gap-x-2'>
+				<span className='font-medium'>{sellerName(i)}</span>
+				<span className='text-gray-400'>{i.reason_label}</span>
+				{i.lots?.length > 0 && <span className='text-gray-400'>· лоти {i.lots.map((l) => `#${l.id}`).join(', ')}</span>}
+			</li>
+		))}
+	</ul>
+);
 const LotList = ({ items }) => (
 	<div className='overflow-x-auto'>
 		<table className='w-full text-xs text-left text-gray-700 dark:text-gray-200'>
@@ -31,31 +42,36 @@ const BroadcastPanel = () => {
 	const [key, setKey] = useState('');
 	const [exCh, setExCh] = useState('');
 	const [exB, setExB] = useState('');
+	const [targets, setTargets] = useState('');
+	const [tryNoBot, setTryNoBot] = useState(false);
 	const [count, setCount] = useState(null);
 	const [stats, setStats] = useState(null);
 	const [err, setErr] = useState('');
 	const [busy, setBusy] = useState(false);
 	const isRelist = segment === RELIST.segment;
+	const isTargeted = segment === 'targeted';
+	const form = { key, text, segment, exCh, exB, targets, tryNoBot };
 	const pickSegment = (v) => {
-		setSegment(v); setCount(null); setStats(null); setErr('');
+		setSegment(v); setCount(null); setStats(null); setErr(''); setTryNoBot(false);
 		if (v === RELIST.segment) { setKey(RELIST.key); setText(RELIST_TEXT); }
 	};
-	const body = (dry) => ({ campaign_key: key.trim(), text, segment, dry_run: dry, exclude_channel_ids: ids(exCh), exclude_bundle_ids: ids(exB) });
 
 	const calc = async () => {
 		setBusy(true); setErr('');
-		try { const r = await broadcastAPI.run(body(true)); setCount(r.data); return r.data; }
-		catch (e) { setErr(errText(e)); return null; } finally { setBusy(false); }
+		try {
+			const r = await broadcastAPI.run(buildBroadcastBody(form));
+			setCount({ ...r.data, fingerprint: dryRunFingerprint(form) });
+		} catch (e) { setErr(errText(e)); setCount(null); } finally { setBusy(false); }
 	};
 	const send = async () => {
 		if (!text.trim()) { setErr('Введіть текст повідомлення'); return; }
-		const c = await calc();
-		if (!c) return;
-		if (c.over_limit) { setErr(`Забагато отримувачів: ${c.recipients} (ліміт ${c.limit})`); return; }
-		if (!window.confirm(`Надіслати повідомлення ${c.to_send} отримувачам (кампанія «${c.campaign_key}»)?`)) return;
-		setBusy(true);
-		try { const r = await broadcastAPI.run(body(false)); setStats(r.data.stats); }
-		catch (e) { setErr(errText(e)); } finally { setBusy(false); }
+		if (!canSend(count, form)) { setErr('Спершу натисніть «Порахувати» і перевірте отримувачів'); return; }
+		if (!window.confirm(confirmText(count))) return;
+		setBusy(true); setErr('');
+		try {
+			const r = await broadcastAPI.run(buildBroadcastBody(form, { dry: false, confirmToken: count.confirm_token }));
+			setStats(r.data.stats); setCount(null);
+		} catch (e) { setErr(errText(e)); setCount(null); } finally { setBusy(false); }
 	};
 	useEffect(() => {
 		if (!stats?.running) return undefined;
@@ -70,11 +86,17 @@ const BroadcastPanel = () => {
 				<label className='block text-xs text-gray-400'>Сегмент
 					<select className={`${input} mt-1`} value={segment} onChange={(e) => pickSegment(e.target.value)}>
 						<option value='active_sellers'>Продавці з активним лотом</option>
+					<option value='targeted'>Адресна розсилка: вибрані користувачі або лоти</option>
 						<option value='relist_top7'>Акція «Топ 7 днів»: продавці знятих / неактивних / проданих лотів (relist_top7_2026_10_27)</option>
 					</select>
 				</label>
 				{isRelist && <p className='text-sm text-amber-600 dark:text-amber-400'>Кампанія з фіксованим текстом. Завжди виключено лоти #61, #94, #95, #96 і канали сітки #1 (15–18). Один продавець отримує одне повідомлення, навіть якщо в нього кілька лотів. Спочатку натисніть «Порахувати» й перевірте список.</p>}
-				<p className='text-sm text-gray-500 dark:text-gray-400'>Сегмент «активні»: продавці з активним (опублікованим) лотом, підписані на alert-бота. Ліміт — 500 отримувачів. Повторний запуск тієї самої кампанії не надсилає повідомлення вдруге.</p>
+				{isTargeted && (
+					<label className='block text-xs text-gray-400'>Отримувачі: ID користувача, @username або #ID лота (отримає продавець лота), через кому чи з нового рядка
+						<textarea rows={3} className={`${input} mt-1`} placeholder='12, @seller_name, #45' value={targets} onChange={(e) => setTargets(e.target.value)} />
+					</label>
+				)}
+				<p className='text-sm text-gray-500 dark:text-gray-400'>Спершу «Порахувати» (dry-run): нічого не надсилається, ви бачите отримувачів і тих, хто без бота. «Надіслати» стає доступним лише після перевірки, а будь-яка зміна вимагає нової. Ліміт — 500 отримувачів, повідомлення йдуть з паузою (~10 за секунду). Повторний запуск тієї самої кампанії не надсилає повідомлення вдруге.</p>
 				<label className='block text-xs text-gray-400'>Текст повідомлення (HTML Telegram)
 					<textarea rows={6} maxLength={4000} readOnly={isRelist} className={`${input} mt-1`} value={text} onChange={(e) => setText(e.target.value)} />
 				</label>
@@ -89,24 +111,36 @@ const BroadcastPanel = () => {
 						<input className={`${input} mt-1`} placeholder='5' value={exB} onChange={(e) => setExB(e.target.value)} />
 					</label>
 				</div>
+				<label className='flex items-start gap-2 text-sm text-gray-700 dark:text-gray-200'>
+					<input type='checkbox' className='mt-1' checked={tryNoBot} onChange={(e) => setTryNoBot(e.target.checked)} />
+					<span>Спробувати надіслати й тим, хто без бота <span className='text-gray-400'>(за замовчуванням вимкнено; повідомлення дійде, лише якщо людина колись писала боту і не заблокувала його)</span></span>
+				</label>
 				{err && <p className='text-sm text-red-500'>{err}</p>}
 				{count && (
-					<p className='text-sm text-gray-700 dark:text-gray-200'>
-						Отримувачів у сегменті (dry-run, нічого не надіслано): <b>{count.recipients}</b> · уже оброблено в цій кампанії: {count.already_processed} · буде надіслано: <b>{count.to_send}</b>
-						{count.over_limit && <span className='text-red-500'> · перевищено ліміт {count.limit}</span>}
-					</p>
-				)}
-				{count?.recipients_list && (
-					<div className='space-y-3'>
-						<h3 className='text-sm font-semibold text-gray-800 dark:text-white'>Отримувачі (підписані на alert-бота): {count.recipients_list.length}</h3>
-						<LotList items={count.recipients_list} />
-						<h3 className='text-sm font-semibold text-gray-800 dark:text-white'>Без бота (не отримають): {count.no_bot.length}</h3>
-						{count.no_bot.length ? <LotList items={count.no_bot} /> : <p className='text-xs text-gray-400'>Немає</p>}
+					<div className='space-y-3 rounded-xl bg-gray-50 dark:bg-slate-900/60 p-4'>
+						<p className='text-sm text-gray-700 dark:text-gray-200'>
+							Dry-run, нічого не надіслано. Отримувачів: <b>{count.recipients}</b> (з ботом: {count.subscribed}{count.try_no_bot ? `, спроба без бота: ${count.recipients - count.subscribed}` : ''}) · уже оброблено в цій кампанії: {count.already_processed} · буде надіслано: <b>{count.to_send}</b>
+							{count.over_limit && <span className='text-red-500'> · перевищено ліміт {count.limit}</span>}
+						</p>
+						{count.not_found?.length > 0 && <p className='text-xs text-amber-600'>Не знайдено: {count.not_found.join(', ')}</p>}
+						{count.invalid?.length > 0 && <p className='text-xs text-amber-600'>Не розпізнано: {count.invalid.join(', ')}</p>}
+						{count.excluded?.length > 0 && <p className='text-xs text-gray-400'>Виключено (заблоковані, неактивні або акаунти власників): {count.excluded.map((i) => `#${i}`).join(', ')}</p>}
+						{isRelist && count.recipients_list && (
+							<>
+								<h3 className='text-sm font-semibold text-gray-800 dark:text-white'>Отримувачі (підписані на alert-бота): {count.recipients_list.length}</h3>
+								<LotList items={count.recipients_list} />
+							</>
+						)}
+						{isTargeted && count.recipients_list?.length > 0 && (
+							<p className='text-xs text-gray-600 dark:text-gray-300'>З ботом: {count.recipients_list.map(sellerName).join(', ')}</p>
+						)}
+						<h3 className='text-sm font-semibold text-gray-800 dark:text-white'>Без бота{count.try_no_bot ? ' (спробуємо надіслати)' : ' (не отримають)'}: {count.no_bot_count}</h3>
+						{count.no_bot?.length ? (<><p className='text-xs text-gray-400'>{NO_BOT_HINT}</p><NoBotList items={count.no_bot} /></>) : <p className='text-xs text-gray-400'>Немає</p>}
 					</div>
 				)}
 				<div className='flex flex-wrap gap-2'>
 					<button disabled={busy || !key.trim()} onClick={calc} className='px-4 py-2 rounded-xl text-sm font-semibold bg-gray-100 dark:bg-slate-700 text-gray-700 dark:text-gray-200 disabled:opacity-50'>Порахувати</button>
-					<button disabled={busy || !key.trim()} onClick={send} className='px-4 py-2 rounded-xl text-sm font-semibold bg-[#3498db] text-white disabled:opacity-50'>Надіслати</button>
+					<button disabled={busy || !key.trim() || !canSend(count, form)} onClick={send} className='px-4 py-2 rounded-xl text-sm font-semibold bg-[#3498db] text-white disabled:opacity-50'>Надіслати</button>
 				</div>
 			</div>
 			{stats && (
@@ -119,7 +153,7 @@ const BroadcastPanel = () => {
 					</div>
 					{stats.errors?.length > 0 && (
 						<ul className='mt-4 space-y-1 text-xs text-red-500'>
-							{stats.errors.map((e) => <li key={e.user_id}>{sellerName(e)}: {e.error}</li>)}
+							{stats.errors.map((e) => <li key={e.user_id}>{sellerName(e)}: {e.reason_label ? `${e.reason_label} — ` : ''}{e.error}</li>)}
 						</ul>
 					)}
 				</div>

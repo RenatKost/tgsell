@@ -429,6 +429,64 @@ def describe_bot_api_failure(status_code: int | None, description: str | None) -
     return head
 
 
+# Bot API timeouts (ConnectTimeout / ReadTimeout / asyncio / aiohttp): short retry with backoff.
+# A timeout that recovers (after a retry or on the next channel) is a WARNING; ERROR only when
+# retries are exhausted for BOT_API_TIMEOUT_ERROR_STREAK channels in a row.
+BOT_API_TIMEOUT_RETRIES = 2
+BOT_API_TIMEOUT_BACKOFF_SEC = (1.0, 3.0)
+BOT_API_TIMEOUT_ERROR_STREAK = 3
+_bot_api_timeout_streak = 0
+
+
+def is_bot_api_timeout(e: BaseException) -> bool:
+    """httpx.TimeoutException family, asyncio/builtin TimeoutError, aiohttp ServerTimeoutError."""
+    if isinstance(e, (asyncio.TimeoutError, TimeoutError)):
+        return True
+    try:
+        import httpx
+        if isinstance(e, httpx.TimeoutException):
+            return True
+    except Exception:  # pragma: no cover
+        pass
+    return any(c.__name__ in ("ConnectTimeout", "ReadTimeout", "WriteTimeout", "PoolTimeout",
+                              "TimeoutException", "ServerTimeoutError", "ConnectionTimeoutError",
+                              "SocketTimeoutError")
+               for c in type(e).__mro__)
+
+
+def bot_api_timeout_log_level(exhausted: bool, streak: int) -> int:
+    """WARNING for a recovered or single timeout episode; ERROR only for repeated failures."""
+    if exhausted and streak >= BOT_API_TIMEOUT_ERROR_STREAK:
+        return logging.ERROR
+    return logging.WARNING
+
+
+async def _bot_api_get(http, url: str, params: dict, channel_username: str):
+    """GET with a short retry on timeouts only. Returns the response or raises the last error."""
+    global _bot_api_timeout_streak
+    attempt = 0
+    while True:
+        try:
+            resp = await http.get(url, params=params)
+        except Exception as e:
+            if not is_bot_api_timeout(e):
+                raise
+            if attempt >= BOT_API_TIMEOUT_RETRIES:
+                _bot_api_timeout_streak += 1
+                raise
+            delay = BOT_API_TIMEOUT_BACKOFF_SEC[min(attempt, len(BOT_API_TIMEOUT_BACKOFF_SEC) - 1)]
+            attempt += 1
+            logger.info(f"[STATS] Bot API {type(e).__name__} for @{channel_username}, retry {attempt}/"
+                        f"{BOT_API_TIMEOUT_RETRIES} in {delay:.0f}s")
+            await asyncio.sleep(delay)
+            continue
+        if attempt or _bot_api_timeout_streak:
+            logger.warning(f"[STATS] Bot API recovered for @{channel_username} after timeout "
+                           f"(retries={attempt}, previous failed channels in a row={_bot_api_timeout_streak})")
+        _bot_api_timeout_streak = 0
+        return resp
+
+
 async def get_channel_info_bot_api(channel_username: str) -> dict | None:
     """Get basic channel info using Bot API (safe, no user account needed).
 
@@ -445,7 +503,7 @@ async def get_channel_info_bot_api(channel_username: str) -> dict | None:
     try:
         async with httpx.AsyncClient() as http:
             # getChat
-            resp = await http.get(f"{base_url}/getChat", params={"chat_id": f"@{channel_username}"})
+            resp = await _bot_api_get(http, f"{base_url}/getChat", {"chat_id": f"@{channel_username}"}, channel_username)
             if resp.status_code != 200:
                 try:
                     desc = resp.json().get("description") or f"HTTP {resp.status_code}"
@@ -457,10 +515,8 @@ async def get_channel_info_bot_api(channel_username: str) -> dict | None:
             chat_data = resp.json().get("result", {})
 
             # getChatMemberCount
-            count_resp = await http.get(
-                f"{base_url}/getChatMemberCount",
-                params={"chat_id": f"@{channel_username}"},
-            )
+            count_resp = await _bot_api_get(
+                http, f"{base_url}/getChatMemberCount", {"chat_id": f"@{channel_username}"}, channel_username)
             members = count_resp.json().get("result", 0) if count_resp.status_code == 200 else 0
 
             # Store token-free file_id ref (public URL built at response time)
@@ -482,7 +538,12 @@ async def get_channel_info_bot_api(channel_username: str) -> dict | None:
         from app.utils.log_redact import redact
         reason = describe_bot_api_failure(None, f"{type(e).__name__}: {redact(e)}")
         _last_bot_api_fail[channel_username.lower()] = reason
-        logger.error(f"Bot API channel info failed for @{channel_username}: {reason}")
+        if is_bot_api_timeout(e):
+            level = bot_api_timeout_log_level(True, _bot_api_timeout_streak)
+            logger.log(level, f"Bot API channel info timed out for @{channel_username} after "
+                              f"{BOT_API_TIMEOUT_RETRIES} retries ({_bot_api_timeout_streak} channel(s) in a row): {reason}")
+        else:
+            logger.error(f"Bot API channel info failed for @{channel_username}: {reason}")
         return None
 
 
